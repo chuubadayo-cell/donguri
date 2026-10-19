@@ -35,13 +35,13 @@ final class NGFilterStore {
         } else {
             rules = []
         }
+        var hidden: [HiddenThread] = []
         if let data = UserDefaults.standard.data(forKey: Self.hiddenThreadsKey),
            let decoded = try? JSONDecoder().decode([HiddenThread].self, from: data) {
-            hiddenThreads = decoded
-        } else {
-            hiddenThreads = []
+            hidden = decoded
         }
-        hiddenKeys = Set(hiddenThreads.map(\.id))
+        hiddenThreads = hidden
+        hiddenKeys = Set(hidden.map(\.id))
     }
 
     // MARK: Threads
