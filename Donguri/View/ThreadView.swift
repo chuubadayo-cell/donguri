@@ -81,14 +81,10 @@ struct ThreadView: View {
 
     // Popup dictionary
     @Environment(UserConfig.self) private var userConfig
-    @State private var selectionData: SelectionData?
-    @State private var lookupResults: [LookupResult] = []
-    @State private var dictionaryStyles: [String: String] = [:]
-    @State private var showPopup = false
-    @State private var clearSelection = false
-    /// Bumped per lookup. The popup keeps one web view alive and swaps its
-    /// entries when this changes, instead of building a new web view per tap.
-    @State private var popupGeneration = 0
+    /// Open dictionary popups, as in Hoshi Reader: the first is the word
+    /// tapped in a post, and each word tapped inside a popup opens another
+    /// on top of it. Each popup is its own PopupView and web view.
+    @State private var popups: [PopupItem] = []
     /// Dictionary stylesheets, gathered once rather than on every lookup.
     @State private var stylesCache: [String: String]?
     /// Post text styling; reading it here redraws every post when the user
@@ -162,25 +158,8 @@ struct ThreadView: View {
                             }
                         }
                         .overlay {
-                            PopupView(
-                                userConfig: userConfig,
-                                isVisible: $showPopup,
-                                selectionData: selectionData,
-                                lookupResults: lookupResults,
-                                dictionaryStyles: dictionaryStyles,
-                                screenSize: geometry.size,
-                                isVertical: false,
-                                isFullWidth: userConfig.popupFullWidth,
-                                topInset: UIApplication.topSafeArea,
-                                bottomInset: UIApplication.bottomSafeArea,
-                                coverURL: nil,
-                                documentTitle: thread.title ?? posts.first?.threadTitle,
-                                clearSelection: clearSelection,
-                                generation: popupGeneration,
-                                onTextSelected: { handleTextSelection($0) },
-                                onTapOutside: { dismissPopup() },
-                                onSwipeDismiss: { dismissPopup() }
-                            )
+                            popupLayer(screenSize: geometry.size,
+                                       documentTitle: thread.title ?? posts.first?.threadTitle)
                         }
                 }
             }
@@ -230,6 +209,7 @@ struct ThreadView: View {
                 )
             }
             .task {
+                WebProcessWarmer.warm()
                 await loadThread(boardURL: boardURL, threadId: thread.id)
             }
             .refreshable {
@@ -291,7 +271,7 @@ struct ThreadView: View {
         }
         // Scrolling the thread closes the dictionary popup.
         .onScrollPhaseChange { _, phase in
-            if phase == .interacting, showPopup {
+            if phase == .interacting, !popups.isEmpty {
                 dismissPopup()
             }
             if phase == .idle, seen.maxSeen != maxSeenIndex {
@@ -895,18 +875,73 @@ struct ThreadView: View {
                              responseCount: newPosts.count)
     }
 
-    /// Runs a dictionary lookup for the tapped text and shows the popup.
-    /// Returns how many characters matched, so selection.js can highlight them.
+    // MARK: Dictionary popups (Hoshi Reader's model)
+
+    private func popupLayer(screenSize: CGSize, documentTitle: String?) -> some View {
+        ZStack {
+            ForEach($popups) { $popup in
+                let popupId = popup.id
+                PopupView(
+                    userConfig: userConfig,
+                    isVisible: $popup.showPopup,
+                    selectionData: popup.currentSelection,
+                    lookupResults: popup.lookupResults,
+                    dictionaryStyles: popup.dictionaryStyles,
+                    screenSize: screenSize,
+                    isVertical: false,
+                    isFullWidth: popup.isFullWidth,
+                    topInset: UIApplication.topSafeArea,
+                    bottomInset: UIApplication.bottomSafeArea,
+                    coverURL: nil,
+                    documentTitle: documentTitle,
+                    clearSelection: popup.clearSelection,
+                    onTextSelected: { selection in
+                        // A word tapped inside a popup opens a child popup on
+                        // top; anything already above this one closes first.
+                        if let index = popups.firstIndex(where: { $0.id == popupId }) {
+                            closeChildPopups(parent: index)
+                        }
+                        return lookUp(selection, isFullWidth: false)
+                    },
+                    onTapOutside: {
+                        if let index = popups.firstIndex(where: { $0.id == popupId }) {
+                            closeChildPopups(parent: index)
+                        }
+                    },
+                    onSwipeDismiss: {
+                        guard let index = popups.firstIndex(where: { $0.id == popupId }) else { return }
+                        if index == 0 {
+                            dismissPopup()
+                        } else {
+                            popups[index - 1].clearSelection.toggle()
+                            closeChildPopups(parent: index - 1)
+                        }
+                    }
+                )
+                .zIndex(Double(100 + (popups.firstIndex(where: { $0.id == popupId }) ?? 0)))
+            }
+        }
+    }
+
+    /// A word tapped in a post: close any popups, then look it up.
+    /// Returns how many characters matched, so the post can highlight them.
     private func handleTextSelection(_ selection: SelectionData) -> Int? {
+        closePopups()
+        let matched = lookUp(selection, isFullWidth: userConfig.popupFullWidth)
+        if matched == nil {
+            PostSelectionCenter.shared.clearAll()
+        }
+        return matched
+    }
+
+    /// Opens a popup for `selection` if the dictionaries know it.
+    private func lookUp(_ selection: SelectionData, isFullWidth: Bool) -> Int? {
         let results = LookupEngine.shared.lookup(
             selection.text,
             maxResults: userConfig.maxResults,
             scanLength: userConfig.scanLength
         )
-        guard let first = results.first else {
-            dismissPopup()
-            return nil
-        }
+        guard let first = results.first else { return nil }
 
         let styles: [String: String]
         if let stylesCache {
@@ -920,20 +955,52 @@ struct ThreadView: View {
             stylesCache = built
         }
 
-        selectionData = selection
-        lookupResults = results
-        dictionaryStyles = styles
-        popupGeneration += 1
-        // No animation: the popup should simply be there.
-        showPopup = true
+        let popup = PopupItem(showPopup: false,
+                              currentSelection: selection,
+                              lookupResults: results,
+                              dictionaryStyles: styles,
+                              isVertical: false,
+                              isFullWidth: isFullWidth,
+                              clearSelection: false)
+        popups.append(popup)
+        // Added hidden, then faded in: the popup appears where the word is
+        // rather than sliding there.
+        withAnimation(.default.speed(2.2)) {
+            if let index = popups.firstIndex(where: { $0.id == popup.id }) {
+                popups[index].showPopup = true
+            }
+        }
         return first.matched.count
     }
 
+    /// Closes every popup and clears the highlight in the post.
     private func dismissPopup() {
-        guard showPopup else { return }
-        showPopup = false
-        clearSelection.toggle()
         PostSelectionCenter.shared.clearAll()
+        closePopups()
+    }
+
+    private func closePopups() {
+        guard !popups.isEmpty else { return }
+        let ids = Set(popups.map(\.id))
+        withAnimation(.default.speed(2.4)) {
+            for index in popups.indices {
+                popups[index].showPopup = false
+            }
+        } completion: {
+            popups.removeAll { ids.contains($0.id) }
+        }
+    }
+
+    private func closeChildPopups(parent: Int) {
+        let ids = Set(popups.dropFirst(parent + 1).map(\.id))
+        guard !ids.isEmpty else { return }
+        withAnimation(.default.speed(2.4)) {
+            for index in popups.indices where ids.contains(popups[index].id) {
+                popups[index].showPopup = false
+            }
+        } completion: {
+            popups.removeAll { ids.contains($0.id) }
+        }
     }
 
     private func persistReadState(boardURL: String, threadId: Int) {
