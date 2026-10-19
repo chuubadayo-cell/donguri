@@ -25,7 +25,22 @@ struct ThreadView: View {
     @State private var errorMessage: String?
 
     @State private var threadRoute: ThreadRoute?
-    @State private var replyPreviewIndices: [Int] = []
+    /// Reply previews stack up, like Chance's reply pages: tapping `>>N`
+    /// inside a preview pushes a new card, and the back button pops it.
+    @State private var replyStack: [[Int]] = []
+    private var replyPreviewIndices: [Int] { replyStack.last ?? [] }
+
+    /// First post that's new since the last visit (unread count), for the
+    /// highlight and the "new posts" jump.
+    @State private var newPostsStart: Int?
+    /// The board's default name in this thread, hidden when that's enabled.
+    @State private var defaultName: String?
+    /// スレ内検索
+    @State private var postSearch = ""
+    // 次スレ
+    @State private var nextThread: Thread?
+    @State private var nextThreadSearched = false
+    @State private var findingNextThread = false
 
     // ID/trip → post indices, used to highlight every post from the same poster.
     @State private var idIndices: [String: [Int]] = [:]
@@ -66,9 +81,11 @@ struct ThreadView: View {
     @State private var dictionaryStyles: [String: String] = [:]
     @State private var showPopup = false
     @State private var clearSelection = false
-    // PopupView caches its rendered content in @State at init, so it needs a
-    // fresh identity per lookup — otherwise it keeps the empty first render.
+    /// Bumped per lookup. The popup keeps one web view alive and swaps its
+    /// entries when this changes, instead of building a new web view per tap.
     @State private var popupGeneration = 0
+    /// Dictionary stylesheets, gathered once rather than on every lookup.
+    @State private var stylesCache: [String: String]?
     /// Post text styling; reading it here redraws every post when the user
     /// changes fonts or colours in 外観.
     @State private var appearance = AppearanceSettings.shared
@@ -77,8 +94,19 @@ struct ThreadView: View {
 
     /// Indices of the posts the list shows, in thread order.
     private var visibleIndices: [Int] {
-        guard let popularThreshold else { return Array(posts.indices) }
-        return posts.indices.filter { Self.replyCount(of: posts[$0]) >= popularThreshold }
+        var indices = Array(posts.indices)
+        if let popularThreshold {
+            indices = indices.filter { Self.replyCount(of: posts[$0]) >= popularThreshold }
+        }
+        let query = postSearch.trimmingCharacters(in: .whitespaces)
+        if !query.isEmpty {
+            indices = indices.filter {
+                posts[$0].text.localizedCaseInsensitiveContains(query)
+                    || posts[$0].name.localizedCaseInsensitiveContains(query)
+                    || posts[$0].id == query
+            }
+        }
+        return indices
     }
 
     /// Distinct posts replying to this one (a post quoting `>>5` twice counts once).
@@ -109,165 +137,44 @@ struct ThreadView: View {
     var body: some View {
         if let thread, let boardURL {
             GeometryReader { geometry in
-            ScrollViewReader { proxy in
-                Group {
-                    if !posts.isEmpty {
-                        ZStack(alignment: .top) {
-                            List {
-                                ForEach(visibleIndices, id: \.self) { index in
-                                    let post = posts[index]
-                                    if post.isDeleted == true {
-                                        AbornPlaceholder(index: index, isDeletedOnServer: true)
-                                            .listRowBackground(Color.clear)
-                                            .id(index)
-                                    } else if ngFilter.hides(post) {
-                                        // Kept in place so >>N numbering stays correct.
-                                        AbornPlaceholder(index: index)
-                                            .listRowBackground(Color.clear)
-                                            .id(index)
-                                    } else {
-                                    PostView(index: index,
-                                             post: post,
-                                             idCount: post.id.flatMap { idIndices[$0]?.count } ?? 0,
-                                             tripCount: post.trip.flatMap { tripIndices[$0]?.count } ?? 0,
-                                             isIDHighlighted: post.id != nil && post.id == highlightedID,
-                                             isTripHighlighted: post.trip != nil && post.trip == highlightedTrip,
-                                             onThreadRoute: { route in
-                                        threadRoute = route
-                                    }, onPostReply: { postIndex in
-                                        replyPreviewIndices = [postIndex]
-                                    }, onShowReplies: { indices in
-                                        replyPreviewIndices = indices
-                                    }, onIDTap: { id in
-                                        toggleHighlightedID(id)
-                                    }, onTripTap: { trip in
-                                        toggleHighlightedTrip(trip)
-                                    }, onTextSelected: { selection in
-                                        handleTextSelection(selection)
-                                    }, onTapOutside: {
-                                        dismissPopup()
-                                    }, onReport: {
-                                        ReportService.report(
-                                            post: post,
-                                            index: index,
-                                            boardURL: boardURL,
-                                            threadId: thread.id,
-                                            threadTitle: thread.title ?? posts.first?.threadTitle
-                                        )
-                                    }, media: mediaByPost[index] ?? [],
-                                       onOpenMedia: { item in
-                                        openGallery(at: item)
-                                    }, textStyle: appearance.postStyle)
-                                    .listRowBackground(
-                                        highlightedIndices.contains(index)
-                                            ? Color.accentColor.opacity(0.15)
-                                            : Color.clear
-                                    )
-                                    .id(index)
-                                    .onAppear {
-                                        maxSeenIndex = max(maxSeenIndex, index)
-                                        prefetcher.rowAppeared(index, mediaByPost: mediaByPost)
-                                    }
-                                    }
+                ScrollViewReader { proxy in
+                    threadContent(thread: thread, boardURL: boardURL, proxy: proxy)
+                        .onChange(of: resumeIndex) { _, newValue in
+                            guard let newValue else { return }
+                            resumeIndex = nil
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                withAnimation(nil) {
+                                    proxy.scrollTo(newValue, anchor: .top)
                                 }
                             }
-                            .scrollContentBackground(appearance.threadBackground == nil ? .automatic : .hidden)
-                            .background(appearance.threadBackground ?? Color.clear)
-                            .safeAreaInset(edge: .top) {
-                                bannerStack
-                            }
-
-                            // Reply preview popup — shown for a >>N tap (single post) or
-                            // tapping a post's reply-count badge (that post's full reply list).
-                            if !replyPreviewIndices.isEmpty {
-                                Color.black.opacity(0.25)
-                                    .ignoresSafeArea()
-                                    .onTapGesture { replyPreviewIndices = [] }
-
-                                ReplyPreviewCard(
-                                    indices: replyPreviewIndices,
-                                    posts: posts,
-                                    idIndices: idIndices,
-                                    tripIndices: tripIndices,
-                                    onClose: { replyPreviewIndices = [] },
-                                    onJump: { index in
-                                        replyPreviewIndices = []
-                                        if popularThreshold != nil && !visibleIndices.contains(index) {
-                                            // The target is filtered out of the list, so there is
-                                            // no row to scroll to until the filter is lifted.
-                                            popularThreshold = nil
-                                            Task {
-                                                try? await Task.sleep(for: .milliseconds(200))
-                                                withAnimation(.snappy) {
-                                                    proxy.scrollTo(index, anchor: .top)
-                                                }
-                                            }
-                                        } else {
-                                            withAnimation(.snappy) {
-                                                proxy.scrollTo(index, anchor: .top)
-                                            }
-                                        }
-                                    },
-                                    onThreadRoute: { route in
-                                        replyPreviewIndices = []
-                                        threadRoute = route
-                                    },
-                                    onShowReplies: { indices in
-                                        replyPreviewIndices = indices
-                                    },
-                                    mediaByPost: mediaByPost,
-                                    onOpenMedia: { item in
-                                        replyPreviewIndices = []
-                                        openGallery(at: item)
-                                    }
-                                )
-                                .padding(.horizontal)
-                            }
                         }
-                        .animation(.snappy, value: replyPreviewIndices)
-                    } else if let errorMessage {
-                        ContentUnavailableView {
-                            Label("エラーが発生しました", systemImage: "exclamationmark.triangle")
-                        } description: {
-                            Text(errorMessage)
+                        .overlay {
+                            PopupView(
+                                userConfig: userConfig,
+                                isVisible: $showPopup,
+                                selectionData: selectionData,
+                                lookupResults: lookupResults,
+                                dictionaryStyles: dictionaryStyles,
+                                screenSize: geometry.size,
+                                isVertical: false,
+                                isFullWidth: userConfig.popupFullWidth,
+                                topInset: UIApplication.topSafeArea,
+                                bottomInset: UIApplication.bottomSafeArea,
+                                coverURL: nil,
+                                documentTitle: thread.title ?? posts.first?.threadTitle,
+                                clearSelection: clearSelection,
+                                generation: popupGeneration,
+                                onTextSelected: { handleTextSelection($0) },
+                                onTapOutside: { dismissPopup() },
+                                onSwipeDismiss: { dismissPopup() }
+                            )
                         }
-                    } else {
-                        ProgressView("しばらくお待ちください...")
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    }
-                }
-                .onChange(of: resumeIndex) { _, newValue in
-                    guard let newValue else { return }
-                    resumeIndex = nil
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        withAnimation(nil) {
-                            proxy.scrollTo(newValue, anchor: .top)
-                        }
-                    }
-                }
-                .overlay {
-                    PopupView(
-                        userConfig: userConfig,
-                        isVisible: $showPopup,
-                        selectionData: selectionData,
-                        lookupResults: lookupResults,
-                        dictionaryStyles: dictionaryStyles,
-                        screenSize: geometry.size,
-                        isVertical: false,
-                        isFullWidth: userConfig.popupFullWidth,
-                        topInset: UIApplication.topSafeArea,
-                        bottomInset: UIApplication.bottomSafeArea,
-                        coverURL: nil,
-                        documentTitle: thread.title ?? posts.first?.threadTitle,
-                        clearSelection: clearSelection,
-                        onTextSelected: { handleTextSelection($0) },
-                        onTapOutside: { dismissPopup() },
-                        onSwipeDismiss: { dismissPopup() }
-                    )
-                    .id(popupGeneration)
                 }
             }
-            }
+            .searchable(text: $postSearch,
+                        placement: .navigationBarDrawer(displayMode: .automatic),
+                        prompt: "スレ内を検索")
+            .themedScreen()
             .listStyle(.plain)
             .navigationTitle(thread.title ?? posts.first?.threadTitle ?? "無題")
             .navigationBarTitleDisplayMode(.inline)
@@ -321,6 +228,331 @@ struct ThreadView: View {
         } else {
             ContentUnavailableView("エラー：スレや板情報がありません", systemImage: "exclamationmark.triangle")
         }
+    }
+
+    // MARK: Thread content
+
+    @ViewBuilder
+    private func threadContent(thread: Thread, boardURL: String, proxy: ScrollViewProxy) -> some View {
+        if !posts.isEmpty {
+            ZStack(alignment: .top) {
+                postList(thread: thread, boardURL: boardURL, proxy: proxy)
+
+                if !replyPreviewIndices.isEmpty {
+                    replyOverlay(proxy: proxy)
+                }
+            }
+            .overlay(alignment: .bottomTrailing) {
+                if replyPreviewIndices.isEmpty {
+                    positionIndicator(proxy: proxy, boardURL: boardURL, threadId: thread.id)
+                }
+            }
+            .animation(.snappy, value: replyStack)
+        } else if let errorMessage {
+            ContentUnavailableView {
+                Label("エラーが発生しました", systemImage: "exclamationmark.triangle")
+            } description: {
+                Text(errorMessage)
+            }
+        } else {
+            ProgressView("しばらくお待ちください...")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    private func postList(thread: Thread, boardURL: String, proxy: ScrollViewProxy) -> some View {
+        List {
+            ForEach(visibleIndices, id: \.self) { index in
+                postRow(index: index, thread: thread, boardURL: boardURL)
+            }
+
+            if posts.count >= 1000 || nextThread != nil {
+                nextThreadRow(thread: thread, boardURL: boardURL)
+            }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(appearance.threadBackground == nil ? .automatic : .hidden)
+        .background(appearance.threadBackground ?? Color.clear)
+        .safeAreaInset(edge: .top) {
+            bannerStack
+        }
+        // Scrolling the thread closes the dictionary popup.
+        .onScrollPhaseChange { _, phase in
+            if phase == .interacting, showPopup {
+                dismissPopup()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func postRow(index: Int, thread: Thread, boardURL: String) -> some View {
+        let post = posts[index]
+        if post.isDeleted == true {
+            AbornPlaceholder(index: index, isDeletedOnServer: true)
+                .listRowBackground(Color.clear)
+                .id(index)
+        } else if ngFilter.hides(post) {
+            // Kept in place so >>N numbering stays correct.
+            AbornPlaceholder(index: index)
+                .listRowBackground(Color.clear)
+                .id(index)
+        } else {
+            PostView(index: index,
+                     post: post,
+                     idCount: post.id.flatMap { idIndices[$0]?.count } ?? 0,
+                     tripCount: post.trip.flatMap { tripIndices[$0]?.count } ?? 0,
+                     isIDHighlighted: post.id != nil && post.id == highlightedID,
+                     isTripHighlighted: post.trip != nil && post.trip == highlightedTrip,
+                     onThreadRoute: { route in
+                         threadRoute = route
+                     },
+                     onPostReply: { postIndex in
+                         dismissPopup()
+                         replyStack.append([postIndex])
+                     },
+                     onShowReplies: { indices in
+                         dismissPopup()
+                         replyStack.append(indices)
+                     },
+                     onIDTap: { id in
+                         toggleHighlightedID(id)
+                     },
+                     onTripTap: { trip in
+                         toggleHighlightedTrip(trip)
+                     },
+                     onTextSelected: { selection in
+                         handleTextSelection(selection)
+                     },
+                     onTapOutside: {
+                         dismissPopup()
+                     },
+                     onReport: {
+                         ReportService.report(
+                             post: post,
+                             index: index,
+                             boardURL: boardURL,
+                             threadId: thread.id,
+                             threadTitle: thread.title ?? posts.first?.threadTitle
+                         )
+                     },
+                     media: mediaByPost[index] ?? [],
+                     onOpenMedia: { item in
+                         dismissPopup()
+                         openGallery(at: item)
+                     },
+                     textStyle: appearance.postStyle,
+                     hidesName: appearance.hideDefaultNames && post.trip == nil
+                        && defaultName != nil && post.name == defaultName,
+                     threadTitle: index == 0 ? resolvedTitle : nil)
+            .listRowBackground(rowBackground(for: index))
+            .id(index)
+            .onAppear {
+                maxSeenIndex = max(maxSeenIndex, index)
+                prefetcher.rowAppeared(index, mediaByPost: mediaByPost)
+            }
+        }
+    }
+
+    /// ID/trip highlight first, then the new-since-last-visit tint, the way
+    /// Chance tints unseen posts.
+    private func rowBackground(for index: Int) -> Color {
+        if highlightedIndices.contains(index) {
+            return Color.accentColor.opacity(0.15)
+        }
+        if let newPostsStart, index >= newPostsStart {
+            return Color.accentColor.opacity(0.06)
+        }
+        return Color.clear
+    }
+
+    private func replyOverlay(proxy: ScrollViewProxy) -> some View {
+        ZStack {
+            Color.black.opacity(0.25)
+                .ignoresSafeArea()
+                .onTapGesture { replyStack.removeAll() }
+
+            ReplyPreviewCard(
+                indices: replyPreviewIndices,
+                posts: posts,
+                idIndices: idIndices,
+                tripIndices: tripIndices,
+                canGoBack: replyStack.count > 1,
+                onBack: { _ = replyStack.popLast() },
+                onClose: { replyStack.removeAll() },
+                onJump: { index in
+                    replyStack.removeAll()
+                    if !visibleIndices.contains(index) {
+                        // The target is filtered out of the list, so there is
+                        // no row to scroll to until the filters are lifted.
+                        popularThreshold = nil
+                        postSearch = ""
+                        Task {
+                            try? await Task.sleep(for: .milliseconds(200))
+                            withAnimation(.snappy) {
+                                proxy.scrollTo(index, anchor: .top)
+                            }
+                        }
+                    } else {
+                        withAnimation(.snappy) {
+                            proxy.scrollTo(index, anchor: .top)
+                        }
+                    }
+                },
+                onThreadRoute: { route in
+                    replyStack.removeAll()
+                    threadRoute = route
+                },
+                onShowReplies: { indices in
+                    replyStack.append(indices)
+                },
+                mediaByPost: mediaByPost,
+                onOpenMedia: { item in
+                    replyStack.removeAll()
+                    openGallery(at: item)
+                },
+                onTextSelected: { handleTextSelection($0) },
+                onTapOutside: { dismissPopup() }
+            )
+            .padding(.horizontal)
+        }
+    }
+
+    // MARK: Position indicator
+
+    /// Chance's thread position pill: how many posts are below, with the new
+    /// ones counted in red. Tap jumps to the new posts (or the bottom); hold
+    /// for top, new, bottom and refresh.
+    @ViewBuilder
+    private func positionIndicator(proxy: ScrollViewProxy, boardURL: String, threadId: Int) -> some View {
+        let lastIndex = visibleIndices.last ?? 0
+        let below = max(0, visibleIndices.filter { $0 > maxSeenIndex }.count)
+        let unseenNew = newPostsStart.map { start in
+            visibleIndices.filter { $0 >= start && $0 > maxSeenIndex }.count
+        } ?? 0
+
+        if posts.count > 15 {
+            Menu {
+                Button {
+                    scroll(proxy, to: visibleIndices.first ?? 0)
+                } label: {
+                    Label("一番上へ", systemImage: "arrow.up.to.line")
+                }
+                if let newPostsStart {
+                    Button {
+                        scroll(proxy, to: newPostsStart)
+                    } label: {
+                        Label("新着へ（>>\(newPostsStart + 1)）", systemImage: "arrow.down")
+                    }
+                }
+                Button {
+                    scroll(proxy, to: lastIndex)
+                } label: {
+                    Label("一番下へ", systemImage: "arrow.down.to.line")
+                }
+                Divider()
+                Button {
+                    Task { await loadThread(boardURL: boardURL, threadId: threadId) }
+                } label: {
+                    Label("更新", systemImage: "arrow.clockwise")
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    if unseenNew > 0 {
+                        Text(verbatim: "\(unseenNew)")
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 1)
+                            .background(Capsule().fill(Color.red))
+                    }
+                    if below > 0 {
+                        Text(verbatim: "\(below)")
+                            .foregroundStyle(.secondary)
+                    }
+                    Image(systemName: below > 0 ? "arrow.down" : "checkmark")
+                        .foregroundStyle(.secondary)
+                }
+                .font(.footnote.weight(.semibold).monospacedDigit())
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(.regularMaterial, in: Capsule())
+                .overlay(Capsule().stroke(Color.primary.opacity(0.08), lineWidth: 1))
+                .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
+            } primaryAction: {
+                if unseenNew > 0, let newPostsStart, newPostsStart > maxSeenIndex {
+                    scroll(proxy, to: newPostsStart)
+                } else {
+                    scroll(proxy, to: lastIndex)
+                }
+            }
+            .padding(.trailing, 14)
+            .padding(.bottom, 14)
+        }
+    }
+
+    private func scroll(_ proxy: ScrollViewProxy, to index: Int) {
+        dismissPopup()
+        withAnimation(.snappy) {
+            proxy.scrollTo(index, anchor: .top)
+        }
+    }
+
+    // MARK: 次スレ
+
+    private func nextThreadRow(thread: Thread, boardURL: String) -> some View {
+        Button {
+            if let nextThread {
+                threadRoute = ThreadRoute(boardURL: boardURL, threadId: nextThread.id)
+            } else {
+                Task { await findNextThread(boardURL: boardURL, current: thread) }
+            }
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: nextThread != nil ? "arrow.right.circle.fill" : "magnifyingglass.circle")
+                    .font(.title2)
+                    .foregroundStyle(Color.accentColor)
+                VStack(alignment: .leading, spacing: 2) {
+                    if let nextThread {
+                        Text("次スレ")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        Text(nextThread.title ?? String(localized: "無題"))
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.primary)
+                    } else if findingNextThread {
+                        Text("次スレを探しています…")
+                            .font(.subheadline)
+                    } else if nextThreadSearched {
+                        Text("次スレが見つかりませんでした（もう一度探す）")
+                            .font(.subheadline)
+                    } else {
+                        Text("次スレを探す")
+                            .font(.subheadline)
+                    }
+                }
+                Spacer()
+            }
+            .padding(.vertical, 8)
+        }
+        .buttonStyle(.plain)
+        .listRowBackground(Color.clear)
+        .onAppear {
+            if !nextThreadSearched, !findingNextThread {
+                Task { await findNextThread(boardURL: boardURL, current: thread) }
+            }
+        }
+    }
+
+    private func findNextThread(boardURL: String, current: Thread) async {
+        guard !findingNextThread else { return }
+        findingNextThread = true
+        defer {
+            findingNextThread = false
+            nextThreadSearched = true
+        }
+        guard let listing = try? await ThreadService().fetchThreads(boardURL: boardURL) else { return }
+        nextThread = NextThreadFinder.find(after: current.id,
+                                           title: resolvedTitle ?? "",
+                                           in: listing)
     }
 
     private func threadMenu(boardURL: String, thread: Thread) -> some View {
@@ -482,6 +714,14 @@ struct ThreadView: View {
                 if let saveFeedback {
                     HighlightBanner(text: saveFeedback, systemImage: "checkmark.circle")
                 }
+                if !postSearch.trimmingCharacters(in: .whitespaces).isEmpty {
+                    HighlightBanner(
+                        text: String(localized: "検索結果: \(visibleIndices.count)件"),
+                        systemImage: "magnifyingglass"
+                    ) {
+                        postSearch = ""
+                    }
+                }
                 if let popularThreshold {
                     HighlightBanner(
                         text: String(localized: "人気レス（返信\(popularThreshold)件以上）: \(visibleIndices.count)件"),
@@ -503,6 +743,7 @@ struct ThreadView: View {
     private var hasBanner: Bool {
         showingSavedCopy || mediaJob.isRunning || saveFeedback != nil
             || popularThreshold != nil || highlightBannerText != nil
+            || !postSearch.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
     private var highlightBannerText: String? {
@@ -583,9 +824,15 @@ struct ThreadView: View {
         highlightedID = nil
         highlightedTrip = nil
 
+        defaultName = Self.defaultName(in: newPosts)
+
         if isInitialLoad {
             maxSeenIndex = 0
             let key = ReadStateStore.key(boardURL: boardURL, threadId: threadId)
+            if let state = ReadStateStore.shared.state(for: key),
+               state.lastReadCount > 0, state.lastReadCount < newPosts.count {
+                newPostsStart = state.lastReadCount
+            }
             // Only resume if there's unread content below the saved position —
             // if the last visit already reached the end, scrolling the final row
             // to the top would have nothing below it to anchor against.
@@ -621,9 +868,16 @@ struct ThreadView: View {
             return nil
         }
 
-        var styles: [String: String] = [:]
-        for style in LookupEngine.shared.getStyles() {
-            styles[style.dictName] = style.styles
+        let styles: [String: String]
+        if let stylesCache {
+            styles = stylesCache
+        } else {
+            var built: [String: String] = [:]
+            for style in LookupEngine.shared.getStyles() {
+                built[style.dictName] = style.styles
+            }
+            styles = built
+            stylesCache = built
         }
 
         selectionData = selection
@@ -650,6 +904,17 @@ struct ThreadView: View {
         let key = ReadStateStore.key(boardURL: boardURL, threadId: threadId)
         ReadStateStore.shared.update(key: key, postCount: posts.count, readIndex: maxSeenIndex)
         favorites.readStateDidChange()
+    }
+
+    /// The board's default name is simply the most common name without a
+    /// tripcode, provided it's common enough to be the default.
+    private static func defaultName(in posts: [Post]) -> String? {
+        var counts: [String: Int] = [:]
+        for post in posts where post.trip == nil && post.isDeleted != true && !post.name.isEmpty {
+            counts[post.name, default: 0] += 1
+        }
+        guard let top = counts.max(by: { $0.value < $1.value }) else { return nil }
+        return top.value >= 3 && Double(top.value) >= Double(posts.count) * 0.3 ? top.key : nil
     }
 
     private static func buildHighlightIndices(posts: [Post]) -> (id: [String: [Int]], trip: [String: [Int]]) {
@@ -712,18 +977,36 @@ private struct ReplyPreviewCard: View {
     let posts: [Post]
     let idIndices: [String: [Int]]
     let tripIndices: [String: [Int]]
+    var canGoBack = false
+    var onBack: () -> Void = {}
     let onClose: () -> Void
     let onJump: (Int) -> Void
     let onThreadRoute: (ThreadRoute) -> Void
     let onShowReplies: ([Int]) -> Void
     var mediaByPost: [Int: [MediaItem]] = [:]
     var onOpenMedia: ((MediaItem) -> Void)? = nil
+    /// Dictionary lookups work inside previews too.
+    var onTextSelected: (SelectionData) -> Int? = { _ in nil }
+    var onTapOutside: () -> Void = {}
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Text(indices.count > 1 ? "返信 \(indices.count)件" : "返信")
-                    .font(.subheadline.weight(.semibold))
+            HStack(spacing: 10) {
+                if canGoBack {
+                    Button(action: onBack) {
+                        Image(systemName: "chevron.left")
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Text("戻る"))
+                }
+                if indices.count == 1, let only = indices.first {
+                    Text(verbatim: ">>\(only + 1)")
+                        .font(.subheadline.weight(.semibold))
+                } else {
+                    Text("返信 \(indices.count)件")
+                        .font(.subheadline.weight(.semibold))
+                }
                 Spacer()
                 Button(action: onClose) {
                     Image(systemName: "xmark.circle.fill")
@@ -763,6 +1046,8 @@ private struct ReplyPreviewCard: View {
                                          onShowReplies: onShowReplies,
                                          onIDTap: { _ in },
                                          onTripTap: { _ in },
+                                         onTextSelected: onTextSelected,
+                                         onTapOutside: onTapOutside,
                                          media: mediaByPost[index],
                                          onOpenMedia: onOpenMedia)
                             }
@@ -778,6 +1063,9 @@ private struct ReplyPreviewCard: View {
     }
 }
 
+/// One post, laid out the way Chance lays out imageboard posts: a header
+/// line (number, name, coloured ID, time), the thumbnail beside the text,
+/// and the reply count as a button under the post.
 struct PostView: View {
     var index: Int
     var post: Post
@@ -805,89 +1093,99 @@ struct PostView: View {
     /// Fonts and colours for the post text. Rows built without one (reply
     /// previews) read the current settings themselves.
     var textStyle: PostTextStyle? = nil
+    /// The name is the board's default (名無しさん etc.) and the user has
+    /// chosen to hide those.
+    var hidesName: Bool = false
+    /// Shown above the first post, in the theme's title colour.
+    var threadTitle: String? = nil
 
     @Environment(UserConfig.self) private var userConfig
+    @State private var appearance = AppearanceSettings.shared
     @State private var localGalleryItem: MediaItem?
     @State private var showTranslation = false
 
+    private var replyCount: Int {
+        Set(post.replies ?? []).count
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                Text("\(index + 1)")
-                    .font(.caption2.weight(.bold))
-                    .monospacedDigit()
-                    .foregroundStyle(Color.accentColor)
-                    .frame(minWidth: 18, minHeight: 18)
-                    .background(Circle().fill(Color.accentColor.opacity(0.14)))
+            if let threadTitle {
+                Text(threadTitle)
+                    .font(.headline)
+                    .foregroundStyle(titleColor)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
-                if let replies = post.replies, !replies.isEmpty {
+            header
+                // Taps on the header (outside its buttons) close the dictionary.
+                .contentShape(Rectangle())
+                .onTapGesture(perform: onTapOutside)
+
+            let mediaItems = resolvedMedia
+            HStack(alignment: .top, spacing: 10) {
+                if let first = mediaItems.first {
                     Button {
-                        onShowReplies(replies)
+                        open(first)
                     } label: {
-                        Chip(text: "\(replies.count)", systemImage: "message.fill", tint: .secondary, filled: false)
+                        MediaThumbnailView(item: first, side: 72, cornerRadius: 6)
+                            .overlay(alignment: .topTrailing) {
+                                if mediaItems.count > 1 {
+                                    Text(verbatim: "+\(mediaItems.count - 1)")
+                                        .font(.system(size: 10, weight: .bold).monospacedDigit())
+                                        .foregroundStyle(.white)
+                                        .padding(.horizontal, 4)
+                                        .padding(.vertical, 1)
+                                        .background(Capsule().fill(.black.opacity(0.6)))
+                                        .padding(3)
+                                }
+                            }
                     }
                     .buttonStyle(.plain)
                 }
 
-                nameView
+                // Native text with its own tap-to-lookup (see PostTextView).
+                PostTextView(
+                    text: post.text,
+                    scanNonJapaneseText: userConfig.scanNonJapaneseText,
+                    style: textStyle ?? appearance.postStyle,
+                    onTextSelected: onTextSelected,
+                    onTapOutside: onTapOutside,
+                    onPostReply: onPostReply,
+                    onThreadRoute: onThreadRoute
+                )
             }
 
-            // Native text with its own tap-to-lookup (see PostTextView).
-            PostTextView(
-                text: post.text,
-                scanNonJapaneseText: userConfig.scanNonJapaneseText,
-                style: textStyle ?? AppearanceSettings.shared.postStyle,
-                onTextSelected: onTextSelected,
-                onTapOutside: onTapOutside,
-                onPostReply: onPostReply,
-                onThreadRoute: onThreadRoute
-            )
-
-            let mediaItems = resolvedMedia
-            if !mediaItems.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(mediaItems) { item in
-                            Button {
-                                if let onOpenMedia {
-                                    onOpenMedia(item)
-                                } else {
-                                    withTransaction(Transaction.noAnimation) { localGalleryItem = item }
-                                }
-                            } label: {
-                                MediaThumbnailView(item: item)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
-            }
-
-            HStack {
-                Text(post.date)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-
-                Spacer()
-
-                if let id = post.id {
+            if replyCount > 0 {
+                HStack {
+                    Spacer()
                     Button {
-                        onIDTap(id)
+                        onShowReplies(post.replies ?? [])
                     } label: {
-                        Chip(text: idCount > 1 ? "ID:\(id)(\(idCount))" : "ID:\(id)",
-                             tint: isIDHighlighted ? .accentColor : .secondary)
+                        HStack(spacing: 3) {
+                            Image(systemName: "arrowshape.turn.up.left")
+                            Text("返信\(replyCount)件")
+                        }
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color.accentColor)
+                        .padding(.vertical, 2)
                     }
                     .buttonStyle(.plain)
                 }
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 6)
         .contextMenu {
             if !post.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Button {
                     showTranslation = true
                 } label: {
                     Label("翻訳", systemImage: "translate")
+                }
+                Button {
+                    UIPasteboard.general.string = post.text.asPlainPostText
+                } label: {
+                    Label("本文をコピー", systemImage: "doc.on.doc")
                 }
                 Divider()
             }
@@ -904,6 +1202,9 @@ struct PostView: View {
                 } label: {
                     Label("この名前をNGにする", systemImage: "hand.raised")
                 }
+            }
+            if !post.date.isEmpty {
+                Text(post.date)
             }
             if let onReport {
                 Divider()
@@ -925,30 +1226,124 @@ struct PostView: View {
         }
     }
 
-    private var resolvedMedia: [MediaItem] {
-        media ?? MediaItem.items(in: post, at: index)
+    // MARK: Header
+
+    private var header: some View {
+        HStack(alignment: .center, spacing: 6) {
+            Text(verbatim: "#\(index + 1)")
+                .font(.caption.weight(.semibold).monospacedDigit())
+                .foregroundStyle(.secondary)
+
+            nameView
+
+            if !post.email.isEmpty {
+                Text(verbatim: post.email)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+            }
+
+            if let id = post.id {
+                Button {
+                    onIDTap(id)
+                } label: {
+                    IDChip(id: id, count: idCount, isHighlighted: isIDHighlighted)
+                }
+                .buttonStyle(.plain)
+            }
+
+            Spacer(minLength: 4)
+
+            timeLabel
+        }
+        .lineLimit(1)
+    }
+
+    @ViewBuilder
+    private var timeLabel: some View {
+        if let date = PostDate.date(from: post.date) {
+            HStack(spacing: 4) {
+                Text(verbatim: PostDate.shortLabel(for: date))
+                if appearance.showRelativeTime {
+                    Text(verbatim: PostDate.relativeLabel(for: date))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .font(.caption2.monospacedDigit())
+            .foregroundStyle(.secondary)
+        } else if !post.date.isEmpty {
+            Text(verbatim: post.date)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
     }
 
     @ViewBuilder
     private var nameView: some View {
-        let label = post.name + " " + (!post.email.isEmpty ? "[\(post.email)]" : "")
-
         if let trip = post.trip {
             Button {
                 onTripTap(trip)
             } label: {
-                Text(.init(label))
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(isTripHighlighted ? Color.accentColor : Color.primary)
+                Text(.init(hidesName ? "◆" + trip : post.name))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(isTripHighlighted ? Color.accentColor : nameColor)
             }
             .buttonStyle(.plain)
-        } else {
-            Text(.init(label))
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.primary)
+        } else if !hidesName {
+            Text(.init(post.name))
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(nameColor)
         }
     }
 
+    private var nameColor: Color {
+        appearance.palette.map { Color(uiColor: $0.text) } ?? .primary
+    }
+
+    private var titleColor: Color {
+        appearance.palette.map { Color(uiColor: $0.title) } ?? .primary
+    }
+
+    private var resolvedMedia: [MediaItem] {
+        media ?? MediaItem.items(in: post, at: index)
+    }
+
+    private func open(_ item: MediaItem) {
+        if let onOpenMedia {
+            onOpenMedia(item)
+        } else {
+            withTransaction(Transaction.noAnimation) { localGalleryItem = item }
+        }
+    }
+}
+
+/// A poster ID in its hashed colour, with how many posts it has made.
+private struct IDChip: View {
+    let id: String
+    let count: Int
+    let isHighlighted: Bool
+
+    var body: some View {
+        let colors = IDColor.colors(for: id)
+        HStack(spacing: 2) {
+            Text(verbatim: id)
+            if count > 1 {
+                Text(verbatim: "(\(count))")
+                    .opacity(0.8)
+            }
+        }
+        .font(.system(size: 11, weight: .medium, design: .monospaced))
+        .foregroundStyle(colors.foreground)
+        .padding(.horizontal, 4)
+        .padding(.vertical, 1)
+        .background(RoundedRectangle(cornerRadius: 3, style: .continuous).fill(colors.background))
+        .overlay {
+            if isHighlighted {
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .stroke(Color.accentColor, lineWidth: 2)
+            }
+        }
+    }
 }
 
 /// Stands in for a post hidden by an NG rule, or deleted on the server.

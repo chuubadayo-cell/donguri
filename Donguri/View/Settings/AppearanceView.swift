@@ -88,6 +88,15 @@ struct AppearanceView: View {
             }
 
             Section {
+                Toggle("名無しを隠す", isOn: $appearance.hideDefaultNames)
+                Toggle("経過時間を表示", isOn: $appearance.showRelativeTime)
+            } header: {
+                Text("スレの表示")
+            } footer: {
+                Text("「名無しを隠す」は、そのスレで最も多い名前（名無しさん、風吹けば名無しなど）を表示しません。トリップ付きの名前は常に表示されます。")
+            }
+
+            Section {
                 NavigationLink {
                     FontPickerView(title: String(localized: "辞書のフォント"),
                                    selection: $appearance.dictionaryFontFamily,

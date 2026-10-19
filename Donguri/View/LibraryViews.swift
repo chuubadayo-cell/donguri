@@ -2,93 +2,124 @@
 //  LibraryViews.swift
 //  Donguri
 //
-//  The user's library on the board menu: favorite boards and threads, plus
-//  the browsing-history and saved-threads screens.
+//  The user's library: favorite boards (above the board menu), the 保存 tab
+//  (favorite threads and offline copies) and the 履歴 tab.
 //
 
 import SwiftUI
 
-/// Sections shown above the board menu.
-struct LibrarySections: View {
+/// Favorite boards, pinned above the board menu.
+struct FavoriteBoardsSection: View {
     @State private var favorites = FavoritesStore.shared
-    @State private var history = HistoryStore.shared
-    @State private var saved = SavedThreadStore.shared
 
     var body: some View {
-        if !favorites.boards.isEmpty {
-            Section {
-                ForEach(favorites.boards) { board in
-                    NavigationLink {
-                        BoardView(board: board.categoryContent)
-                    } label: {
-                        HStack(spacing: 10) {
-                            Image(systemName: "star.fill")
-                                .foregroundStyle(.yellow)
-                            Text(board.boardName)
-                                .foregroundStyle(.primary)
-                        }
-                    }
-                }
-                .onDelete { favorites.removeBoards(atOffsets: $0) }
-            } header: {
-                Text("お気に入りの板")
-            }
-        }
-
-        if !favorites.threads.isEmpty {
-            Section {
-                ForEach(favorites.threads) { favorite in
-                    NavigationLink {
-                        ThreadView(thread: favorite.thread,
-                                   boardURL: favorite.boardURL,
-                                   boardName: favorite.boardName)
-                    } label: {
-                        LibraryThreadRow(title: favorite.title,
-                                         boardName: favorite.boardName,
-                                         responseCount: favorite.responseCount,
-                                         unreadCount: favorites.unreadCount(for: favorite),
-                                         isArchived: favorite.isArchived)
-                    }
-                }
-                .onDelete { favorites.removeThreads(atOffsets: $0) }
-            } header: {
-                HStack(spacing: 6) {
-                    Text("お気に入りのスレ")
-                    if favorites.isRefreshing {
-                        ProgressView()
-                            .controlSize(.mini)
-                    }
-                }
-            }
-        }
-
         Section {
-            NavigationLink {
-                HistoryView()
-            } label: {
-                LabeledContent {
-                    Text("\(history.entries.count)")
-                        .monospacedDigit()
+            ForEach(favorites.boards) { board in
+                NavigationLink {
+                    BoardView(board: board.categoryContent)
                 } label: {
-                    Label("閲覧履歴", systemImage: "clock.arrow.circlepath")
+                    HStack(spacing: 10) {
+                        Image(systemName: "star.fill")
+                            .foregroundStyle(.yellow)
+                        Text(board.boardName)
+                            .foregroundStyle(.primary)
+                    }
                 }
+                .themedRow()
             }
-            NavigationLink {
-                SavedThreadsView()
-            } label: {
-                LabeledContent {
-                    Text("\(saved.entries.count)")
-                        .monospacedDigit()
-                } label: {
-                    Label("保存したスレ", systemImage: "arrow.down.circle")
-                }
-            }
+            .onDelete { favorites.removeBoards(atOffsets: $0) }
         } header: {
-            Text("ライブラリ")
+            Text("お気に入りの板")
         } footer: {
-            if favorites.boards.isEmpty && favorites.threads.isEmpty {
+            if favorites.boards.isEmpty {
                 Text("板やスレを長押し、または右にスワイプすると、お気に入りに追加できます。")
             }
+        }
+    }
+}
+
+/// The 保存 tab, like Chance's Saved tab: favorite threads with their new
+/// replies, and threads kept for offline reading.
+struct SavedTabView: View {
+    enum Segment: String, CaseIterable, Identifiable {
+        case favorites, offline
+        var id: String { rawValue }
+    }
+
+    @State private var favorites = FavoritesStore.shared
+    @AppStorage("donguri.savedTabSegment") private var segmentRaw = Segment.favorites.rawValue
+
+    private var segment: Segment { Segment(rawValue: segmentRaw) ?? .favorites }
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                switch segment {
+                case .favorites:
+                    FavoriteThreadsList()
+                case .offline:
+                    SavedThreadsView()
+                }
+            }
+            .safeAreaInset(edge: .top) {
+                Picker("表示", selection: $segmentRaw) {
+                    Text("お気に入り").tag(Segment.favorites.rawValue)
+                    Text("オフライン保存").tag(Segment.offline.rawValue)
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal)
+                .padding(.vertical, 6)
+                .background(.bar)
+            }
+        }
+    }
+}
+
+/// Favorite threads, refreshed for new replies when shown.
+struct FavoriteThreadsList: View {
+    @State private var favorites = FavoritesStore.shared
+
+    var body: some View {
+        Group {
+            if favorites.threads.isEmpty {
+                ContentUnavailableView("お気に入りのスレはありません",
+                                       systemImage: "star",
+                                       description: Text("スレの☆をタップするか、一覧でスレを右にスワイプすると追加できます。"))
+            } else {
+                List {
+                    ForEach(favorites.threads) { favorite in
+                        NavigationLink {
+                            ThreadView(thread: favorite.thread,
+                                       boardURL: favorite.boardURL,
+                                       boardName: favorite.boardName)
+                        } label: {
+                            LibraryThreadRow(title: favorite.title,
+                                             boardName: favorite.boardName,
+                                             responseCount: favorite.responseCount,
+                                             unreadCount: favorites.unreadCount(for: favorite),
+                                             isArchived: favorite.isArchived)
+                        }
+                    }
+                    .onDelete { favorites.removeThreads(atOffsets: $0) }
+                }
+                .listStyle(.plain)
+                .refreshable {
+                    await favorites.refreshThreadCounts()
+                }
+            }
+        }
+        .navigationTitle("お気に入り")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                if favorites.isRefreshing {
+                    ProgressView()
+                }
+            }
+        }
+        .themedScreen()
+        .task {
+            await favorites.refreshThreadCounts()
         }
     }
 }
@@ -180,6 +211,7 @@ struct HistoryView: View {
                 .listStyle(.plain)
             }
         }
+        .themedScreen()
         .navigationTitle("閲覧履歴")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -247,6 +279,7 @@ struct SavedThreadsView: View {
                 .listStyle(.insetGrouped)
             }
         }
+        .themedScreen()
         .navigationTitle("保存したスレ")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {

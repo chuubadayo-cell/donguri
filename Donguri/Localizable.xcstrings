@@ -363,6 +363,22 @@
         }
       }
     },
+    "「名無しを隠す」は、そのスレで最も多い名前（名無しさん、風吹けば名無しなど）を表示しません。トリップ付きの名前は常に表示されます。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“Hide Default Names” hides the most common name in each thread (名無しさん, 風吹けば名無し …). Names with a tripcode always show."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「名無しを隠す」は、そのスレで最も多い名前（名無しさん、風吹けば名無しなど）を表示しません。トリップ付きの名前は常に表示されます。"
+          }
+        }
+      }
+    },
     "「近くの画像のみ」は、スクロールに合わせて少し先の画像を読み込みます。「すべて」はスレを開いた時点でスレ内の画像をすべて読み込みます（Wi-Fi時のみ、またはモバイル通信でも）。": {
       "localizations": {
         "en": {
@@ -392,6 +408,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "あぼーん"
+          }
+        }
+      }
+    },
+    "お気に入り": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Favorites"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "お気に入り"
           }
         }
       }
@@ -440,6 +472,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "お気に入りのスレ"
+          }
+        }
+      }
+    },
+    "お気に入りのスレはありません": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No Favorite Threads"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "お気に入りのスレはありません"
           }
         }
       }
@@ -733,6 +781,22 @@
         }
       }
     },
+    "オフライン保存": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offline"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "オフライン保存"
+          }
+        }
+      }
+    },
     "オフライン保存したスレとその画像は消えません。": {
       "localizations": {
         "en": {
@@ -973,6 +1037,22 @@
         }
       }
     },
+    "スレの☆をタップするか、一覧でスレを右にスワイプすると追加できます。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap ☆ in a thread, or swipe a thread right in a board, to add it."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "スレの☆をタップするか、一覧でスレを右にスワイプすると追加できます。"
+          }
+        }
+      }
+    },
     "スレの右上のメニューから「オフライン用に保存」を選ぶと、電波がなくても読めます。": {
       "localizations": {
         "en": {
@@ -1005,6 +1085,22 @@
         }
       }
     },
+    "スレの表示": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Threads"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "スレの表示"
+          }
+        }
+      }
+    },
     "スレタイ検索": {
       "localizations": {
         "en": {
@@ -1021,6 +1117,38 @@
         }
       }
     },
+    "スレ内を検索": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search This Thread"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "スレ内を検索"
+          }
+        }
+      }
+    },
+    "セピア": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sepia"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "セピア"
+          }
+        }
+      }
+    },
     "ダーク": {
       "localizations": {
         "en": {
@@ -1033,6 +1161,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "ダーク"
+          }
+        }
+      }
+    },
+    "ダークセピア": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dark Sepia"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ダークセピア"
           }
         }
       }
@@ -1262,6 +1406,38 @@
         }
       }
     },
+    "一番上へ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Top"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一番上へ"
+          }
+        }
+      }
+    },
+    "一番下へ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bottom"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一番下へ"
+          }
+        }
+      }
+    },
     "一致する書き込みは「あぼーん」として非表示になります。レス番号は変わりません。": {
       "localizations": {
         "en": {
@@ -1338,6 +1514,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "人気レス（返信%1$lld件以上）: %2$lld件"
+          }
+        }
+      }
+    },
+    "保存": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存"
           }
         }
       }
@@ -1582,6 +1774,22 @@
         }
       }
     },
+    "名無しを隠す": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hide Default Names"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "名無しを隠す"
+          }
+        }
+      }
+    },
     "吾輩は猫である。名前はまだ無い。[>>1](donguri://res/1) どこで生れたかとんと見当がつかぬ。": {
       "localizations": {
         "en": {
@@ -1678,6 +1886,22 @@
         }
       }
     },
+    "履歴": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "History"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "履歴"
+          }
+        }
+      }
+    },
     "常にすべて": {
       "localizations": {
         "en": {
@@ -1690,6 +1914,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "常にすべて"
+          }
+        }
+      }
+    },
+    "戻る": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "戻る"
           }
         }
       }
@@ -1758,6 +1998,22 @@
         }
       }
     },
+    "新着へ（>>%lld）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New Posts (>>%lld)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新着へ（>>%lld）"
+          }
+        }
+      }
+    },
     "日本語の文字がないフォントでは、かなと漢字は標準のフォントで表示されます。": {
       "localizations": {
         "en": {
@@ -1802,6 +2058,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "明朝（セリフ）"
+          }
+        }
+      }
+    },
+    "更新": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refresh"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更新"
           }
         }
       }
@@ -1886,6 +2158,38 @@
         }
       }
     },
+    "本文をコピー": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy Text"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本文をコピー"
+          }
+        }
+      }
+    },
+    "板": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Boards"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "板"
+          }
+        }
+      }
+    },
     "板の順番": {
       "localizations": {
         "en": {
@@ -1934,6 +2238,22 @@
         }
       }
     },
+    "検索結果: %lld件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld results"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "検索結果: %lld件"
+          }
+        }
+      }
+    },
     "標準": {
       "localizations": {
         "en": {
@@ -1950,6 +2270,70 @@
         }
       }
     },
+    "次スレ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Next Thread"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "次スレ"
+          }
+        }
+      }
+    },
+    "次スレが見つかりませんでした（もう一度探す）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No next thread found (search again)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "次スレが見つかりませんでした（もう一度探す）"
+          }
+        }
+      }
+    },
+    "次スレを探しています…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Looking for the next thread…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "次スレを探しています…"
+          }
+        }
+      }
+    },
+    "次スレを探す": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Find Next Thread"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "次スレを探す"
+          }
+        }
+      }
+    },
     "消去": {
       "localizations": {
         "en": {
@@ -1962,6 +2346,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "消去"
+          }
+        }
+      }
+    },
+    "満了": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Full"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "満了"
           }
         }
       }
@@ -2139,6 +2539,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "等幅"
+          }
+        }
+      }
+    },
+    "経過時間を表示": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show Time Since Posting"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "経過時間を表示"
           }
         }
       }
@@ -2352,6 +2768,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "返信 %lld件"
+          }
+        }
+      }
+    },
+    "返信%lld件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Replies"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "返信%lld件"
           }
         }
       }

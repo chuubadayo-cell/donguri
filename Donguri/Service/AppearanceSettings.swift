@@ -21,13 +21,25 @@ final class AppearanceSettings {
     static let shared = AppearanceSettings()
 
     enum Theme: String, CaseIterable, Identifiable {
-        case system, light, dark
+        case system, light, dark, sepia, darkSepia
         var id: String { rawValue }
         var title: String {
             switch self {
             case .system: String(localized: "システムに合わせる")
             case .light: String(localized: "ライト")
             case .dark: String(localized: "ダーク")
+            case .sepia: String(localized: "セピア")
+            case .darkSepia: String(localized: "ダークセピア")
+            }
+        }
+
+        /// Themes that recolour the reading screens rather than using the
+        /// system's own light or dark colours.
+        var palette: ThemePalette? {
+            switch self {
+            case .system, .light, .dark: nil
+            case .sepia: .sepia
+            case .darkSepia: .darkSepia
             }
         }
     }
@@ -77,6 +89,14 @@ final class AppearanceSettings {
     var highlightColorHex: String? { didSet { save(highlightColorHex, "highlightColor") } }
     var threadBackgroundHex: String? { didSet { save(threadBackgroundHex, "threadBackground") } }
 
+    // MARK: Thread layout
+
+    /// Hide the board's default name (名無しさん, 風吹けば名無し …) the way
+    /// Chance hides default usernames; only real names and tripcodes show.
+    var hideDefaultNames: Bool { didSet { save(hideDefaultNames, "hideDefaultNames") } }
+    /// "5分前" next to each post's time.
+    var showRelativeTime: Bool { didSet { save(showRelativeTime, "showRelativeTime") } }
+
     // MARK: Dictionary
 
     /// Empty means the popup's own default (Hiragino Sans).
@@ -102,6 +122,8 @@ final class AppearanceSettings {
         highlightColorHex = d.string(forKey: p + "highlightColor")
         threadBackgroundHex = d.string(forKey: p + "threadBackground")
         dictionaryFontFamily = d.string(forKey: p + "dictionaryFontFamily") ?? ""
+        hideDefaultNames = d.object(forKey: p + "hideDefaultNames") as? Bool ?? true
+        showRelativeTime = d.object(forKey: p + "showRelativeTime") as? Bool ?? true
     }
 
     func resetAll() {
@@ -117,6 +139,8 @@ final class AppearanceSettings {
         highlightColorHex = nil
         threadBackgroundHex = nil
         dictionaryFontFamily = ""
+        hideDefaultNames = true
+        showRelativeTime = true
     }
 
     private func save(_ value: Any?, _ key: String) {
@@ -132,13 +156,17 @@ final class AppearanceSettings {
     var colorScheme: ColorScheme? {
         switch theme {
         case .system: nil
-        case .light: .light
-        case .dark: .dark
+        case .light, .sepia: .light
+        case .dark, .darkSepia: .dark
         }
     }
 
+    /// The custom palette, if the theme has one (the sepia themes).
+    var palette: ThemePalette? { theme.palette }
+
     var accentColor: Color? {
-        accentColorHex.flatMap(UIColor.init(hex:)).map(Color.init(uiColor:))
+        if let custom = accentColorHex.flatMap(UIColor.init(hex:)) { return Color(uiColor: custom) }
+        return palette.map { Color(uiColor: $0.accent) }
     }
 
     var dynamicTypeSize: DynamicTypeSize? {
@@ -146,7 +174,8 @@ final class AppearanceSettings {
     }
 
     var threadBackground: Color? {
-        threadBackgroundHex.flatMap(UIColor.init(hex:)).map(Color.init(uiColor:))
+        if let custom = threadBackgroundHex.flatMap(UIColor.init(hex:)) { return Color(uiColor: custom) }
+        return palette.map { Color(uiColor: $0.background) }
     }
 
     /// Everything post rendering needs, as one value: reading it in a view's
@@ -155,19 +184,26 @@ final class AppearanceSettings {
         PostTextStyle(fontFamily: postFontFamily,
                       fontSize: CGFloat(postFontSize),
                       lineSpacing: CGFloat(postLineSpacing),
-                      textColor: postTextColorHex.flatMap(UIColor.init(hex:)) ?? .label,
-                      linkColor: linkColorHex.flatMap(UIColor.init(hex:)) ?? Self.defaultLinkColor,
+                      textColor: postTextColorHex.flatMap(UIColor.init(hex:)) ?? palette?.text ?? .label,
+                      linkColor: linkColorHex.flatMap(UIColor.init(hex:)) ?? palette?.link ?? Self.defaultLinkColor,
                       highlightColor: highlightColorHex.flatMap(UIColor.init(hex:)) ?? Self.defaultHighlightColor,
                       key: [postFontFamily, "\(postFontSize)", "\(postLineSpacing)",
-                            postTextColorHex ?? "-", linkColorHex ?? "-"].joined(separator: "|"))
+                            postTextColorHex ?? "-", linkColorHex ?? "-", theme.rawValue].joined(separator: "|"))
     }
 
     /// Prepended to the popup's custom CSS. `body *` matches the specificity
     /// of popup.css's own `!important` font rule and comes later, so it wins.
     var dictionaryCSS: String {
+        var css = ""
         let family = dictionaryFontFamily.replacingOccurrences(of: "\"", with: "")
-        guard !family.isEmpty else { return "" }
-        return "html, body, body * { font-family: \"\(family)\", \"Hiragino Sans\", sans-serif !important; }\n"
+        if !family.isEmpty {
+            css += "html, body, body * { font-family: \"\(family)\", \"Hiragino Sans\", sans-serif !important; }\n"
+        }
+        if let palette {
+            // popup.css reads its text colour from --text-color.
+            css += "html, body { --text-color: \(palette.text.hexString.cssColor) !important; color: \(palette.text.hexString.cssColor) !important; }\n"
+        }
+        return css
     }
 
     // MARK: Fonts
@@ -235,4 +271,43 @@ extension UIColor {
         func byte(_ v: CGFloat) -> Int { Int((min(max(v, 0), 1) * 255).rounded()) }
         return String(format: "#%02X%02X%02X%02X", byte(r), byte(g), byte(b), byte(a))
     }
+}
+
+/// Colours for the sepia themes, modelled on Chance's themes: a page
+/// background, a slightly darker "bar" colour for bars and cards, text,
+/// secondary text, an accent, links, and a title colour for thread titles.
+struct ThemePalette {
+    let background: UIColor
+    let bar: UIColor
+    let text: UIColor
+    let secondaryText: UIColor
+    let accent: UIColor
+    let link: UIColor
+    let title: UIColor
+
+    static let sepia = ThemePalette(
+        background: UIColor(hex: "#F4ECD8")!,
+        bar: UIColor(hex: "#EADFC5")!,
+        text: UIColor(hex: "#4B3A2A")!,
+        secondaryText: UIColor(hex: "#8A7458")!,
+        accent: UIColor(hex: "#A0522D")!,
+        link: UIColor(hex: "#9C4A1C")!,
+        title: UIColor(hex: "#6B7A2E")!
+    )
+
+    static let darkSepia = ThemePalette(
+        background: UIColor(hex: "#221D18")!,
+        bar: UIColor(hex: "#2F2822")!,
+        text: UIColor(hex: "#E3D5BC")!,
+        secondaryText: UIColor(hex: "#A2927A")!,
+        accent: UIColor(hex: "#D9935B")!,
+        link: UIColor(hex: "#E0A06A")!,
+        title: UIColor(hex: "#B5C27A")!
+    )
+}
+
+private extension String {
+    /// `#RRGGBBAA` → `#RRGGBB`; CSS reads 8-digit hex too, but not every
+    /// WebKit build has.
+    var cssColor: String { count == 9 ? String(prefix(7)) : self }
 }

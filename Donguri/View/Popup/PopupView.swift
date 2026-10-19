@@ -117,6 +117,11 @@ struct PopupView: View {
     let coverURL: URL?
     let documentTitle: String?
     var clearSelection: Bool
+    /// Set by screens that keep one popup alive across lookups (ThreadView):
+    /// each new value swaps the entries into the existing web view instead
+    /// of building a new one, which is what made popups slow to appear. Nil
+    /// keeps the old one-popup-per-lookup behaviour (DictionarySearchView).
+    var generation: Int? = nil
     var onTextSelected: ((SelectionData) -> Int?)?
     var onTapOutside: (() -> Void)?
     var onSwipeDismiss: (() -> Void)?
@@ -128,6 +133,9 @@ struct PopupView: View {
     @State private var forwardCount: Int = 0
     @State private var backTrigger: Bool = false
     @State private var forwardTrigger: Bool = false
+    /// Changes whenever `lookupEntries` is replaced, so the web view knows to
+    /// render the new ones.
+    @State private var entriesToken: Int = 0
     
     init(
         userConfig: UserConfig,
@@ -143,6 +151,7 @@ struct PopupView: View {
         coverURL: URL?,
         documentTitle: String?,
         clearSelection: Bool,
+        generation: Int? = nil,
         onTextSelected: ((SelectionData) -> Int?)? = nil,
         onTapOutside: (() -> Void)? = nil,
         onSwipeDismiss: (() -> Void)? = nil
@@ -159,6 +168,7 @@ struct PopupView: View {
         self.coverURL = coverURL
         self.documentTitle = documentTitle
         self.clearSelection = clearSelection
+        self.generation = generation
         self.onTextSelected = onTextSelected
         self.onTapOutside = onTapOutside
         self.onSwipeDismiss = onSwipeDismiss
@@ -169,12 +179,15 @@ struct PopupView: View {
     }
     
     private var layout: PopupLayout? {
-        guard let selectionData else {
+        // A persistent popup is laid out even before the first lookup (in
+        // the middle, invisible) so its web view is already loaded by then.
+        guard let rect = selectionData?.rect
+                ?? (generation != nil ? CGRect(x: screenSize.width / 2, y: screenSize.height / 2, width: 1, height: 1) : nil) else {
             return nil
         }
         
         let result = PopupLayout(
-            selectionRect: selectionData.rect,
+            selectionRect: rect,
             screenSize: screenSize,
             maxWidth: CGFloat(userConfig.popupWidth),
             maxHeight: CGFloat(userConfig.popupHeight),
@@ -234,7 +247,7 @@ struct PopupView: View {
         }
     }
     
-    private func popupContent(selectionData: SelectionData, layout: PopupLayout) -> some View {
+    private func popupContent(selectionData: SelectionData?, layout: PopupLayout) -> some View {
         VStack(spacing: 0) {
             VStack(spacing: 0) {
                 if userConfig.popupActionBar || backCount > 0 || forwardCount > 0 {
@@ -252,12 +265,13 @@ struct PopupView: View {
                 clearSelection: clearSelection,
                 dictionaryStyles: dictionaryStyles,
                 lookupEntries: lookupEntries,
+                entriesToken: entriesToken,
                 scanNonJapaneseText: userConfig.scanNonJapaneseText,
                 scanLength: userConfig.scanLength,
                 backTrigger: backTrigger,
                 forwardTrigger: forwardTrigger,
                 onMine: { content in
-                    await mineEntry(content: content, sentence: selectionData.sentence)
+                    await mineEntry(content: content, sentence: selectionData?.sentence ?? "")
                 },
                 onTextSelected: onTextSelected,
                 onTapOutside: onTapOutside,
@@ -280,27 +294,54 @@ struct PopupView: View {
         .frame(width: layout.width, height: layout.height)
     }
     
+    /// Persistent popups stay in the hierarchy while hidden, so the web view
+    /// (and the popup.js it has parsed) survives between lookups.
+    private var isShown: Bool {
+        isVisible && selectionData != nil
+    }
+
+    private var shouldRender: Bool {
+        generation != nil ? true : (isVisible && selectionData != nil && !content.isEmpty)
+    }
+
+    private var popupBackground: AnyShapeStyle {
+        if let palette = AppearanceSettings.shared.palette {
+            return AnyShapeStyle(Color(uiColor: palette.bar))
+        }
+        return userConfig.popupDisableTransparency
+            ? AnyShapeStyle(Color(.systemBackground))
+            : AnyShapeStyle(.ultraThinMaterial)
+    }
+
     var body: some View {
-        if #available(iOS 26, *), !userConfig.popupDisableTransparency {
-            GlassEffectContainer {
-                if isVisible, let selectionData, let layout, !content.isEmpty {
-                    popupContent(selectionData: selectionData, layout: layout)
-                        .glassEffect(.regular, in: .rect(cornerRadius: 8))
-                        .position(layout.position)
+        Group {
+            if #available(iOS 26, *), !userConfig.popupDisableTransparency, AppearanceSettings.shared.palette == nil {
+                GlassEffectContainer {
+                    if shouldRender, let layout {
+                        popupContent(selectionData: selectionData, layout: layout)
+                            .glassEffect(.regular, in: .rect(cornerRadius: 8))
+                            .position(layout.position)
+                            .opacity(isShown ? 1 : 0)
+                            .allowsHitTesting(isShown)
+                    }
                 }
-            }
-        } else {
-            Group {
-                if isVisible, let selectionData, let layout, !content.isEmpty {
+            } else {
+                if shouldRender, let layout {
                     popupContent(selectionData: selectionData, layout: layout)
-                        .background(
-                            userConfig.popupDisableTransparency ? AnyShapeStyle(Color(.systemBackground)) : AnyShapeStyle(.ultraThinMaterial),
-                            in: RoundedRectangle(cornerRadius: 8)
-                        )
+                        .background(popupBackground, in: RoundedRectangle(cornerRadius: 8))
                         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.primary.opacity(0.2), lineWidth: 1))
                         .position(layout.position)
+                        .opacity(isShown ? 1 : 0)
+                        .allowsHitTesting(isShown)
                 }
             }
+        }
+        .onChange(of: generation) {
+            guard generation != nil else { return }
+            lookupEntries = Self.buildLookupEntries(lookupResults: lookupResults)
+            entriesToken &+= 1
+            backCount = 0
+            forwardCount = 0
         }
     }
     

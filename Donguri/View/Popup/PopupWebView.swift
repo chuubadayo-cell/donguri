@@ -118,6 +118,8 @@ struct PopupWebView: UIViewRepresentable {
     var clearSelection: Bool
     var dictionaryStyles: [String: String] = [:]
     var lookupEntries: [[String: Any]] = []
+    /// Bumped by PopupView whenever `lookupEntries` is replaced in place.
+    var entriesToken: Int = 0
     var scanNonJapaneseText: Bool = true
     var scanLength: Int = 16
     var backTrigger: Bool = false
@@ -197,6 +199,15 @@ struct PopupWebView: UIViewRepresentable {
             webView.loadHTMLString(html, baseURL: Bundle.main.resourceURL)
         }
         
+        // New entries for an already-loaded popup: swap them in rather than
+        // reloading the page.
+        if context.coordinator.lastEntriesToken != entriesToken {
+            context.coordinator.lastEntriesToken = entriesToken
+            if context.coordinator.didFinishLoading {
+                context.coordinator.showEntries(lookupEntries, styles: dictionaryStyles, in: webView)
+            }
+        }
+
         if context.coordinator.clearSelection != clearSelection {
             context.coordinator.clearSelection = clearSelection
             webView.evaluateJavaScript("window.hoshiSelection.clearSelection()")
@@ -237,6 +248,8 @@ struct PopupWebView: UIViewRepresentable {
         var lastBackTrigger: Bool = false
         var lastForwardTrigger: Bool = false
         var entries: [[String: Any]] = []
+        var lastEntriesToken: Int = 0
+        var didFinishLoading = false
         weak var webView: WKWebView?
         private var buttons: [String: UIButton] = [:]
         let id = UUID()
@@ -317,7 +330,37 @@ struct PopupWebView: UIViewRepresentable {
             parent.onScrollViewDidEndDecelerating?()
         }
         
+        /// Replaces what the popup shows, keeping the page (and popup.js) as is.
+        func showEntries(_ newEntries: [[String: Any]], styles: [String: String], in webView: WKWebView) {
+            entries = newEntries
+            webView.callAsyncJavaScript(
+                """
+                window.dictionaryStyles = dictionaryStyles;
+                if (typeof backStack !== 'undefined') { backStack.length = 0; forwardStack.length = 0; }
+                try { audioUrls = {}; selectedDictionaries = {}; } catch (e) {}
+                window.lookupEntries = undefined;
+                window.entryCount = entryCount;
+                const container = document.getElementById('entries-container');
+                if (container) { container.innerHTML = ''; }
+                if (window.hoshiSelection) { window.hoshiSelection.clearSelection(); }
+                if (typeof closeOverlay === 'function') { try { closeOverlay(); } catch (e) {} }
+                window.renderPopup();
+                document.scrollingElement.scrollTop = 0;
+                if (typeof reportButtonRects === 'function') { requestAnimationFrame(reportButtonRects); }
+                """,
+                arguments: [
+                    "dictionaryStyles": styles,
+                    "entryCount": newEntries.count,
+                ],
+                in: nil,
+                in: .page,
+                completionHandler: nil
+            )
+        }
+
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            didFinishLoading = true
+            lastEntriesToken = parent.entriesToken
             entries = parent.lookupEntries
             webView.callAsyncJavaScript(
                 """

@@ -77,6 +77,7 @@ struct BoardView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
+            .themedScreen()
             .navigationTitle(board.boardName)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -147,62 +148,86 @@ struct BoardView: View {
     }
 }
 
+/// A thread in the board list, styled after Chance's catalog rows: the
+/// title, then one line of counters (replies with new ones in red, 勢い,
+/// age). Threads with nothing new since your last visit are greyed out.
 struct ThreadRowView: View {
     let thread: Thread
     let boardURL: String
     var momentum: Double? = nil
     var isFavorite: Bool = false
 
+    @State private var appearance = AppearanceSettings.shared
+
+    private var readState: ReadState? {
+        ReadStateStore.shared.state(for: ReadStateStore.key(boardURL: boardURL, threadId: thread.id))
+    }
+
     private var unreadCount: Int? {
-        guard let state = ReadStateStore.shared.state(
-            for: ReadStateStore.key(boardURL: boardURL, threadId: thread.id)
-        ) else { return nil }
+        guard let state = readState else { return nil }
         let unread = thread.responseCount - state.lastReadCount
         return unread > 0 ? unread : nil
     }
 
+    /// Opened before, and nothing new since.
+    private var isCaughtUp: Bool {
+        readState != nil && unreadCount == nil
+    }
+
+    private var created: Date {
+        Date(timeIntervalSince1970: TimeInterval(thread.id))
+    }
+
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    if isFavorite {
-                        Image(systemName: "star.fill")
-                            .font(.caption)
-                            .foregroundStyle(.yellow)
-                    }
-                    Text(thread.title ?? "無題")
-                        .font(.headline)
-                        .foregroundStyle(.primary)
-                        .lineLimit(2)
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                if isFavorite {
+                    Image(systemName: "star.fill")
+                        .font(.caption)
+                        .foregroundStyle(.yellow)
                 }
+                Text(thread.title ?? "無題")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(titleColor)
+                    .lineLimit(3)
+            }
 
-                HStack(spacing: 4) {
-                    Image(systemName: "clock")
-                    Text(
-                        Date(timeIntervalSince1970: TimeInterval(thread.id))
-                            .formatted(date: .numeric, time: .shortened)
-                    )
-                    if let momentum {
+            HStack(spacing: 10) {
+                HStack(spacing: 3) {
+                    Image(systemName: "arrowshape.turn.up.left")
+                    Text(verbatim: "\(thread.responseCount)")
+                    if let unreadCount {
+                        Text(verbatim: "+\(unreadCount)")
+                            .foregroundStyle(.red)
+                            .fontWeight(.bold)
+                    }
+                }
+                if thread.isFull {
+                    Text("満了")
+                        .padding(.horizontal, 4)
+                        .overlay(Capsule().stroke(Color.secondary.opacity(0.5), lineWidth: 1))
+                }
+                if let momentum {
+                    HStack(spacing: 3) {
                         Image(systemName: "flame")
-                            .padding(.leading, 6)
-                        Text("勢い \(momentum.momentumLabel)")
+                        Text(verbatim: momentum.momentumLabel)
                     }
                 }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
-            VStack(alignment: .trailing, spacing: 4) {
-                Chip(text: "\(thread.responseCount)",
-                     systemImage: "message.fill",
-                     tint: thread.isFull ? .secondary : .accentColor)
-                if let unreadCount {
-                    Chip(text: "+\(unreadCount)", tint: .red)
+                HStack(spacing: 3) {
+                    Image(systemName: "clock")
+                    Text(verbatim: PostDate.relativeLabel(for: created))
                 }
+                Spacer(minLength: 0)
             }
-       }
+            .font(.caption.monospacedDigit())
+            .foregroundStyle(.secondary)
+        }
+        .opacity(isCaughtUp ? 0.55 : 1)
+        .padding(.vertical, 2)
+    }
+
+    private var titleColor: Color {
+        appearance.palette.map { Color(uiColor: $0.title) } ?? .primary
     }
 }
 

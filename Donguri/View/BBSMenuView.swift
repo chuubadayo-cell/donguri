@@ -10,8 +10,6 @@ import SwiftUI
 struct BBSMenuView: View {
     @State private var menu: BBSMenu?
     @State private var errorMessage: String?
-    @State private var showSettings = false
-    @State private var showDictionarySearch = false
     @State private var searchText: String = ""
 
     var body: some View {
@@ -21,13 +19,14 @@ struct BBSMenuView: View {
                 // it, so favorites, history and saved threads stay reachable
                 // when the menu can't load (e.g. offline).
                 if searchText.isEmpty {
-                    LibrarySections()
+                    FavoriteBoardsSection()
                 }
 
                 if let menu {
                     Section {
                         ForEach(filteredMenuList(menu)) { category in
                             CategoryDisclosureView(category: category, searchText: searchText)
+                                .themedRow()
                         }
                     } header: {
                         if searchText.isEmpty {
@@ -41,6 +40,7 @@ struct BBSMenuView: View {
                         } description: {
                             Text(errorMessage)
                         }
+                        .themedRow()
                     }
                 } else {
                     Section {
@@ -67,39 +67,7 @@ struct BBSMenuView: View {
             }
             .navigationTitle("５ちゃんねる")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        showDictionarySearch = true
-                    } label: {
-                        Image(systemName: "character.book.closed.ja")
-                    }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showSettings = true
-                    } label: {
-                        Image(systemName: "gearshape")
-                    }
-                }
-            }
-            .sheet(isPresented: $showSettings) {
-                SettingsView()
-            }
-            .sheet(isPresented: $showDictionarySearch) {
-                NavigationStack {
-                    DictionarySearchView()
-                        .toolbar {
-                            ToolbarItem(placement: .topBarTrailing) {
-                                Button {
-                                    showDictionarySearch = false
-                                } label: {
-                                    Image(systemName: "xmark")
-                                }
-                            }
-                        }
-                }
-            }
+            .themedScreen()
         }
         .task {
             await loadMenu()
@@ -167,6 +135,7 @@ struct CategoryDisclosureView: View {
                         }
                     }
                 }
+                .themedRow()
                 .contextMenu {
                     FavoriteBoardButton(board: board, isFavorite: isFavorite)
                 }
