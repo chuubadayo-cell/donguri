@@ -304,6 +304,13 @@ struct PopupView: View {
         generation != nil ? true : (isVisible && selectionData != nil && !content.isEmpty)
     }
 
+    /// Where the popup sits. While hidden it is parked off screen: opacity
+    /// alone doesn't hide iOS 26's Liquid Glass, which is what left an empty
+    /// dictionary panel on screen before the first lookup and after closing.
+    private func position(for layout: PopupLayout) -> CGPoint {
+        isShown ? layout.position : CGPoint(x: -layout.width * 2, y: -layout.height * 2)
+    }
+
     private var popupBackground: AnyShapeStyle {
         if let palette = AppearanceSettings.shared.palette {
             return AnyShapeStyle(Color(uiColor: palette.bar))
@@ -320,7 +327,7 @@ struct PopupView: View {
                     if shouldRender, let layout {
                         popupContent(selectionData: selectionData, layout: layout)
                             .glassEffect(.regular, in: .rect(cornerRadius: 8))
-                            .position(layout.position)
+                            .position(position(for: layout))
                             .opacity(isShown ? 1 : 0)
                             .allowsHitTesting(isShown)
                     }
@@ -330,7 +337,7 @@ struct PopupView: View {
                     popupContent(selectionData: selectionData, layout: layout)
                         .background(popupBackground, in: RoundedRectangle(cornerRadius: 8))
                         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.primary.opacity(0.2), lineWidth: 1))
-                        .position(layout.position)
+                        .position(position(for: layout))
                         .opacity(isShown ? 1 : 0)
                         .allowsHitTesting(isShown)
                 }

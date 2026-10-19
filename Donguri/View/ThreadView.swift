@@ -51,6 +51,11 @@ struct ThreadView: View {
     // Read-position tracking: how far the user has scrolled, and where to
     // resume to once a fresh load's rows exist.
     @State private var maxSeenIndex: Int = 0
+    /// The live read position. Rows report in as they appear, many per
+    /// second while scrolling; writing each one to @State redrew the whole
+    /// thread every time. `maxSeenIndex` is published from this at most a
+    /// few times a second, and when scrolling stops.
+    @State private var seen = SeenTracker()
     @State private var resumeIndex: Int?
 
     @State private var ngFilter = NGFilterStore.shared
@@ -92,13 +97,21 @@ struct ThreadView: View {
 
     private static let popularThresholds = [3, 5, 10]
 
-    /// Indices of the posts the list shows, in thread order.
-    private var visibleIndices: [Int] {
+    /// Indices of the posts the list shows, in thread order. Stored rather
+    /// than computed: the list, the position pill and the banners all read it
+    /// on every redraw, and filtering 1000 posts each time added up.
+    @State private var visibleIndices: [Int] = []
+
+    private func recomputeVisibleIndices() {
+        visibleIndices = Self.filteredIndices(posts: posts, popularThreshold: popularThreshold, search: postSearch)
+    }
+
+    private static func filteredIndices(posts: [Post], popularThreshold: Int?, search: String) -> [Int] {
         var indices = Array(posts.indices)
         if let popularThreshold {
             indices = indices.filter { Self.replyCount(of: posts[$0]) >= popularThreshold }
         }
-        let query = postSearch.trimmingCharacters(in: .whitespaces)
+        let query = search.trimmingCharacters(in: .whitespaces)
         if !query.isEmpty {
             indices = indices.filter {
                 posts[$0].text.localizedCaseInsensitiveContains(query)
@@ -281,7 +294,12 @@ struct ThreadView: View {
             if phase == .interacting, showPopup {
                 dismissPopup()
             }
+            if phase == .idle, seen.maxSeen != maxSeenIndex {
+                maxSeenIndex = seen.maxSeen
+            }
         }
+        .onChange(of: postSearch) { recomputeVisibleIndices() }
+        .onChange(of: popularThreshold) { recomputeVisibleIndices() }
     }
 
     @ViewBuilder
@@ -347,9 +365,19 @@ struct ThreadView: View {
             .listRowBackground(rowBackground(for: index))
             .id(index)
             .onAppear {
-                maxSeenIndex = max(maxSeenIndex, index)
+                noteSeen(index)
                 prefetcher.rowAppeared(index, mediaByPost: mediaByPost)
             }
+        }
+    }
+
+    private func noteSeen(_ index: Int) {
+        guard index > seen.maxSeen else { return }
+        seen.maxSeen = index
+        let now = Date.now
+        if now.timeIntervalSince(seen.lastPublished) > 0.3 {
+            seen.lastPublished = now
+            maxSeenIndex = index
         }
     }
 
@@ -425,9 +453,9 @@ struct ThreadView: View {
     @ViewBuilder
     private func positionIndicator(proxy: ScrollViewProxy, boardURL: String, threadId: Int) -> some View {
         let lastIndex = visibleIndices.last ?? 0
-        let below = max(0, visibleIndices.filter { $0 > maxSeenIndex }.count)
+        let below = Self.count(in: visibleIndices, above: maxSeenIndex)
         let unseenNew = newPostsStart.map { start in
-            visibleIndices.filter { $0 >= start && $0 > maxSeenIndex }.count
+            Self.count(in: visibleIndices, above: max(start - 1, maxSeenIndex))
         } ?? 0
 
         if posts.count > 15 {
@@ -487,6 +515,16 @@ struct ThreadView: View {
             .padding(.trailing, 14)
             .padding(.bottom, 14)
         }
+    }
+
+    /// How many of the sorted `indices` are greater than `value`.
+    private static func count(in indices: [Int], above value: Int) -> Int {
+        var low = 0, high = indices.count
+        while low < high {
+            let mid = (low + high) / 2
+            if indices[mid] <= value { low = mid + 1 } else { high = mid }
+        }
+        return indices.count - low
     }
 
     private func scroll(_ proxy: ScrollViewProxy, to index: Int) {
@@ -819,6 +857,7 @@ struct ThreadView: View {
 
     private func apply(_ newPosts: [Post], boardURL: String, threadId: Int, isInitialLoad: Bool) {
         posts = newPosts
+        recomputeVisibleIndices()
         updateMedia(for: newPosts, boardURL: boardURL, threadId: threadId)
         (idIndices, tripIndices) = Self.buildHighlightIndices(posts: newPosts)
         highlightedID = nil
@@ -828,6 +867,7 @@ struct ThreadView: View {
 
         if isInitialLoad {
             maxSeenIndex = 0
+            seen.maxSeen = 0
             let key = ReadStateStore.key(boardURL: boardURL, threadId: threadId)
             if let state = ReadStateStore.shared.state(for: key),
                state.lastReadCount > 0, state.lastReadCount < newPosts.count {
@@ -902,7 +942,7 @@ struct ThreadView: View {
     private func persistReadState(boardURL: String, threadId: Int) {
         guard !posts.isEmpty else { return }
         let key = ReadStateStore.key(boardURL: boardURL, threadId: threadId)
-        ReadStateStore.shared.update(key: key, postCount: posts.count, readIndex: maxSeenIndex)
+        ReadStateStore.shared.update(key: key, postCount: posts.count, readIndex: max(maxSeenIndex, seen.maxSeen))
         favorites.readStateDidChange()
     }
 
@@ -1376,4 +1416,10 @@ private struct AbornPlaceholder: View {
 
 #Preview {
     ThreadView(thread: nil, boardURL: nil)
+}
+
+/// Not observable on purpose; see `ThreadView.seen`.
+private final class SeenTracker {
+    var maxSeen = 0
+    var lastPublished = Date.distantPast
 }
