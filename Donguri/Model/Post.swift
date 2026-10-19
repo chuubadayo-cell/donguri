@@ -8,8 +8,9 @@
 import Foundation
 
 /// `Codable` so a whole thread can be written to disk for offline reading
-/// (`SavedThreadStore`).
-struct Post: Codable {
+/// (`SavedThreadStore`), and `nonisolated` so `PostParser` can build posts on
+/// a background thread.
+nonisolated struct Post: Codable {
     let name: String
     let trip: String?
     let email: String

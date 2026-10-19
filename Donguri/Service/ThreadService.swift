@@ -19,6 +19,18 @@ struct ThreadService {
             throw URLError(.badServerResponse)
         }
         
+        // A busy board's subject.txt has hundreds of lines, each run through
+        // a regex; keep that off the main actor.
+        return try await Task.detached(priority: .userInitiated) {
+            try SubjectParser.parse(data)
+        }.value
+    }
+}
+
+/// Parses subject.txt, the board's thread list. `nonisolated` so it can run
+/// on a background thread.
+nonisolated enum SubjectParser {
+    static func parse(_ data: Data) throws -> [Thread] {
         guard let threadData = String(data: data, encoding: .shiftJIS) else {
             throw URLError(.cannotDecodeContentData)
         }

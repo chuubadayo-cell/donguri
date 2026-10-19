@@ -12,6 +12,86 @@
         }
       }
     },
+    "%lld件の画像を保存しました": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved %lld images"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld件の画像を保存しました"
+          }
+        }
+      }
+    },
+    "%lld件を保存・%lld件は読み込めませんでした": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved %1$lld · %2$lld couldn’t be loaded"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld件を保存・%2$lld件は読み込めませんでした"
+          }
+        }
+      }
+    },
+    "%lld件を写真に保存しました": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved %lld to Photos"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld件を写真に保存しました"
+          }
+        }
+      }
+    },
+    "%lld件を写真に保存・%lld件は失敗しました": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved %1$lld to Photos · %2$lld failed"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld件を写真に保存・%2$lld件は失敗しました"
+          }
+        }
+      }
+    },
+    "1枚ずつ表示": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Single View"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1枚ずつ表示"
+          }
+        }
+      }
+    },
     ">>%lld にジャンプ": {
       "localizations": {
         "en": {
@@ -192,6 +272,22 @@
         }
       }
     },
+    "Safariで開く": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open in Safari"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Safariで開く"
+          }
+        }
+      }
+    },
     "Selector": {
       "comment": "CSS selector field in the custom CSS editor.",
       "localizations": {
@@ -199,6 +295,38 @@
           "stringUnit": {
             "state": "translated",
             "value": "セレクタ"
+          }
+        }
+      }
+    },
+    "WebM動画はiOSで再生できません": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "WebM videos can’t be played on iOS"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "WebM動画はiOSで再生できません"
+          }
+        }
+      }
+    },
+    "Wi-Fi時はすべて": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All on Wi-Fi"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wi-Fi時はすべて"
           }
         }
       }
@@ -215,6 +343,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "dat落ち"
+          }
+        }
+      }
+    },
+    "「近くの画像のみ」は、スクロールに合わせて少し先の画像を読み込みます。「すべて」はスレを開いた時点でスレ内の画像をすべて読み込みます（Wi-Fi時のみ、またはモバイル通信でも）。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“Nearby Images Only” loads images a little ahead of where you’re scrolling. The “All” options load every image in a thread as soon as you open it (on Wi-Fi only, or on cellular too)."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「近くの画像のみ」は、スクロールに合わせて少し先の画像を読み込みます。「すべて」はスレを開いた時点でスレ内の画像をすべて読み込みます（Wi-Fi時のみ、またはモバイル通信でも）。"
           }
         }
       }
@@ -332,6 +476,22 @@
         }
       }
     },
+    "しない": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Off"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "しない"
+          }
+        }
+      }
+    },
     "しばらくお待ちください...": {
       "localizations": {
         "en": {
@@ -360,6 +520,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "すべてのレス"
+          }
+        }
+      }
+    },
+    "すべて写真に保存（%lld件）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save All to Photos (%lld)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "すべて写真に保存（%lld件）"
           }
         }
       }
@@ -461,6 +637,38 @@
         }
       }
     },
+    "オフライン保存したスレとその画像は消えません。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Threads saved for offline reading, and their images, are kept."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "オフライン保存したスレとその画像は消えません。"
+          }
+        }
+      }
+    },
+    "オフライン保存した画像": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offline Images"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "オフライン保存した画像"
+          }
+        }
+      }
+    },
     "オフライン保存を削除": {
       "localizations": {
         "en": {
@@ -525,6 +733,118 @@
         }
       }
     },
+    "オフライン用に画像を保存中 %lld/%lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saving images for offline %1$lld/%2$lld"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "オフライン用に画像を保存中 %1$lld/%2$lld"
+          }
+        }
+      }
+    },
+    "キャッシュ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cache"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "キャッシュ"
+          }
+        }
+      }
+    },
+    "キャッシュは1GBを超えると古いものから自動的に削除されます。オフライン保存したスレの画像は、そのスレを削除するまで残ります。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Once the cache passes 1 GB, the oldest files are removed automatically. Images in threads saved for offline reading stay until you delete the thread."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "キャッシュは1GBを超えると古いものから自動的に削除されます。オフライン保存したスレの画像は、そのスレを削除するまで残ります。"
+          }
+        }
+      }
+    },
+    "キャッシュを消去": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear Cache"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "キャッシュを消去"
+          }
+        }
+      }
+    },
+    "ギャラリー（%lld件）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gallery (%lld)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ギャラリー（%lld件）"
+          }
+        }
+      }
+    },
+    "グリッド表示": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grid View"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "グリッド表示"
+          }
+        }
+      }
+    },
+    "ストレージ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Storage"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ストレージ"
+          }
+        }
+      }
+    },
     "スレの右上のメニューから「オフライン用に保存」を選ぶと、電波がなくても読めます。": {
       "localizations": {
         "en": {
@@ -574,6 +894,22 @@
         }
       }
     },
+    "メディア %lld件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Items"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メディア %lld件"
+          }
+        }
+      }
+    },
     "ライブラリ": {
       "localizations": {
         "en": {
@@ -586,6 +922,38 @@
           "stringUnit": {
             "state": "translated",
             "value": "ライブラリ"
+          }
+        }
+      }
+    },
+    "リンクをコピー": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy Link"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "リンクをコピー"
+          }
+        }
+      }
+    },
+    "リンクをコピーしました": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Link copied"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "リンクをコピーしました"
           }
         }
       }
@@ -750,6 +1118,102 @@
         }
       }
     },
+    "先読み": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preload"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先読み"
+          }
+        }
+      }
+    },
+    "共有": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Share"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "共有"
+          }
+        }
+      }
+    },
+    "再試行": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retry"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "再試行"
+          }
+        }
+      }
+    },
+    "写真に保存": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save to Photos"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "写真に保存"
+          }
+        }
+      }
+    },
+    "写真に保存中 %lld/%lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saving to Photos %1$lld/%2$lld"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "写真に保存中 %1$lld/%2$lld"
+          }
+        }
+      }
+    },
+    "写真へのアクセスが許可されていません": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Photos access isn’t allowed"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "写真へのアクセスが許可されていません"
+          }
+        }
+      }
+    },
     "勢い %@": {
       "localizations": {
         "en": {
@@ -794,6 +1258,38 @@
           "stringUnit": {
             "state": "translated",
             "value": "合計 %@・本文のみ保存（画像は保存されません）。開くたびに最新の内容に更新されます。"
+          }
+        }
+      }
+    },
+    "常にすべて": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Always All"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "常にすべて"
+          }
+        }
+      }
+    },
+    "投稿へ移動": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Go to Post"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "投稿へ移動"
           }
         }
       }
@@ -906,6 +1402,102 @@
           "stringUnit": {
             "state": "translated",
             "value": "特定の語句・ID・名前を含む書き込みを非表示にします。"
+          }
+        }
+      }
+    },
+    "画像とスレのキャッシュを消去しますか？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear the image and thread cache?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "画像とスレのキャッシュを消去しますか？"
+          }
+        }
+      }
+    },
+    "画像と動画": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Images & Video"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "画像と動画"
+          }
+        }
+      }
+    },
+    "画像の先読み": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Image Preloading"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "画像の先読み"
+          }
+        }
+      }
+    },
+    "画像の先読みとキャッシュ、特定の語句・ID・名前を含む書き込みの非表示を設定します。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Image preloading and cache, and hiding posts with specific words, IDs or names."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "画像の先読みとキャッシュ、特定の語句・ID・名前を含む書き込みの非表示を設定します。"
+          }
+        }
+      }
+    },
+    "画像をすべてダウンロード": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download All Images"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "画像をすべてダウンロード"
+          }
+        }
+      }
+    },
+    "画像をダウンロード中 %lld/%lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Downloading images %1$lld/%2$lld"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "画像をダウンロード中 %1$lld/%2$lld"
           }
         }
       }
@@ -1026,6 +1618,22 @@
         }
       }
     },
+    "近くの画像のみ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nearby Images Only"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "近くの画像のみ"
+          }
+        }
+      }
+    },
     "返信": {
       "comment": "Reply preview header when there is a single reply.",
       "localizations": {
@@ -1122,6 +1730,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "通報する"
+          }
+        }
+      }
+    },
+    "閉じる": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "閉じる"
           }
         }
       }

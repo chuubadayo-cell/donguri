@@ -7,7 +7,8 @@
 
 import Foundation
 
-struct Thread: Identifiable {
+/// `nonisolated` so `ThreadService` can parse subject.txt off the main actor.
+nonisolated struct Thread: Identifiable {
     let id: Int
     let title: String?
     let responseCount: Int

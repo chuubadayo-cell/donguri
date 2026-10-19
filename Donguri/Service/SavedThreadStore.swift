@@ -102,11 +102,30 @@ final class SavedThreadStore {
     }
 
     private func delete(_ info: SavedThreadInfo) {
-        if let folder = try? Self.folderURL() {
+        let folder = try? Self.folderURL()
+        let doomedMedia = folder.flatMap { mediaURLs(in: $0.appendingPathComponent(info.fileName)) } ?? []
+
+        if let folder {
             try? AppFileStorage.delete(at: folder.appendingPathComponent(info.fileName))
         }
         entries.removeAll { $0.id == info.id }
         persist()
+
+        // Release this thread's offline images, except any another saved
+        // thread still links to.
+        guard !doomedMedia.isEmpty, let folder else { return }
+        var stillUsed = Set<URL>()
+        for other in entries {
+            stillUsed.formUnion(mediaURLs(in: folder.appendingPathComponent(other.fileName)))
+        }
+        let released = Array(doomedMedia.subtracting(stillUsed))
+        Task { await MediaStore.shared.unpin(released) }
+    }
+
+    /// Every media link in a saved thread's file.
+    private func mediaURLs(in file: URL) -> Set<URL> {
+        guard let saved = AppFileStorage.load(SavedThread.self, from: file) else { return [] }
+        return Set(MediaItem.items(for: saved.posts).map(\.url))
     }
 
     private func persist() {

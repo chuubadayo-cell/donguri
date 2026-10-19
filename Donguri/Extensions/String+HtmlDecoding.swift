@@ -8,10 +8,21 @@
 import Foundation
 
 extension String {
-    var htmlDecoded: String {
+    /// `nonisolated` so `PostParser` can decode posts off the main actor;
+    /// a 1000-post thread runs this once per post.
+    nonisolated var htmlDecoded: String {
         guard contains("&") || contains("<") else { return self }
 
         var s = self
+
+        if s.contains("<") {
+            // dat bodies separate lines with " <br> ". Plain string replacement
+            // handles that common case far faster than Swift Regex, and most
+            // posts then have no tags left, so the regex passes below are skipped.
+            for tag in [" <br> ", "<br>", "<BR>", "<br/>", "<br />"] where s.contains(tag) {
+                s = s.replacingOccurrences(of: tag, with: "\n")
+            }
+        }
 
         if s.contains("<") {
             // Void tags
@@ -49,7 +60,7 @@ extension String {
             if let dec = match.2, let cp = UInt32(dec), let scalar = Unicode.Scalar(cp) {
                 return String(scalar)
             }
-            if let name = match.3, let s = htmlNamedEntities[String(name)] {
+            if let name = match.3, let s = HTMLEntities.named[String(name)] {
                 return s
             }
             return String(match.0)
@@ -59,7 +70,9 @@ extension String {
 
 // Complete HTML4 named entity table — numeric entities (&#N; / &#xN;) cover
 // everything else including emoji, so only named forms are listed here.
-private let htmlNamedEntities: [String: String] = [
+// Wrapped in a nonisolated enum so `htmlDecoded` can read it off the main actor.
+private nonisolated enum HTMLEntities {
+static let named: [String: String] = [
     // XML / HTML basics
     "quot": "\"", "amp": "&", "apos": "'", "lt": "<", "gt": ">",
     // Latin-1 supplement
@@ -138,3 +151,4 @@ private let htmlNamedEntities: [String: String] = [
     "loz": "\u{25CA}",
     "spades": "\u{2660}", "clubs": "\u{2663}", "hearts": "\u{2665}", "diams": "\u{2666}",
 ]
+}

@@ -51,6 +51,14 @@ struct ThreadView: View {
     @State private var popularThreshold: Int?
     @State private var saveFeedback: String?
 
+    // Media: every image/video in the thread (for the gallery), the same
+    // grouped by post (for each row's thumbnails), and bulk-download progress.
+    @State private var mediaItems: [MediaItem] = []
+    @State private var mediaByPost: [Int: [MediaItem]] = [:]
+    @State private var galleryRequest: GalleryRequest?
+    @State private var mediaJob = MediaJob()
+    @State private var prefetcher = NearbyPrefetcher()
+
     // Popup dictionary
     @Environment(UserConfig.self) private var userConfig
     @State private var selectionData: SelectionData?
@@ -147,6 +155,9 @@ struct ThreadView: View {
                                             threadId: thread.id,
                                             threadTitle: thread.title ?? posts.first?.threadTitle
                                         )
+                                    }, media: mediaByPost[index] ?? [],
+                                       onOpenMedia: { item in
+                                        openGallery(at: item)
                                     }, contentWidth: geometry.size.width - Self.listRowHorizontalInsets,
                                        measuredHeight: postHeights[index],
                                        onHeightChange: { postHeights[index] = $0 })
@@ -158,6 +169,7 @@ struct ThreadView: View {
                                     .id(index)
                                     .onAppear {
                                         maxSeenIndex = max(maxSeenIndex, index)
+                                        prefetcher.rowAppeared(index, mediaByPost: mediaByPost)
                                     }
                                     }
                                 }
@@ -203,6 +215,11 @@ struct ThreadView: View {
                                     },
                                     onShowReplies: { indices in
                                         replyPreviewIndices = indices
+                                    },
+                                    mediaByPost: mediaByPost,
+                                    onOpenMedia: { item in
+                                        replyPreviewIndices = []
+                                        openGallery(at: item)
                                     }
                                 )
                                 .padding(.horizontal)
@@ -274,6 +291,18 @@ struct ThreadView: View {
                     threadMenu(boardURL: boardURL, thread: thread)
                 }
             }
+            .fullScreenCover(item: $galleryRequest) { request in
+                GalleryView(items: mediaItems,
+                            initialIndex: request.startIndex,
+                            initiallyShowGrid: request.showGrid,
+                            onJumpToPost: { postIndex in
+                                jumpToPost(postIndex)
+                            },
+                            onClose: {
+                                withTransaction(Transaction.noAnimation) { galleryRequest = nil }
+                            })
+                .presentationBackground(.clear)
+            }
             .navigationDestination(item: $threadRoute) { route in
                 ThreadView(
                     thread: Thread(id: route.threadId, title: nil, responseCount: -1),
@@ -324,6 +353,23 @@ struct ThreadView: View {
             }
 
             Section {
+                Button {
+                    openGallery(showGrid: true)
+                } label: {
+                    Label("ギャラリー（\(mediaItems.count)件）", systemImage: "square.grid.3x3")
+                }
+                .disabled(mediaItems.isEmpty)
+                Button {
+                    mediaJob.start(.download, items: mediaItems.filter { $0.kind != .unsupportedVideo }) { job in
+                        flashSaveFeedback(job.summaryText)
+                    }
+                } label: {
+                    Label("画像をすべてダウンロード", systemImage: "arrow.down.to.line")
+                }
+                .disabled(mediaItems.isEmpty || mediaJob.isRunning)
+            }
+
+            Section {
                 Picker(selection: $popularThreshold) {
                     Label("すべてのレス", systemImage: "list.bullet")
                         .tag(Int?.none)
@@ -349,6 +395,64 @@ struct ThreadView: View {
                                    posts: posts)
         flashSaveFeedback(ok ? String(localized: "オフライン用に保存しました")
                              : String(localized: "保存できませんでした"))
+        // Images come along so the thread really works offline. Videos are
+        // left out: they can be hundreds of megabytes each.
+        let images = mediaItems.filter { $0.kind == .image }
+        if ok, !images.isEmpty {
+            mediaJob.start(.pin, items: images) { job in
+                flashSaveFeedback(job.summaryText)
+            }
+        }
+    }
+
+    // MARK: Media
+
+    private func openGallery(at item: MediaItem) {
+        guard let index = mediaItems.firstIndex(of: item) else { return }
+        withTransaction(Transaction.noAnimation) {
+            galleryRequest = GalleryRequest(startIndex: index, showGrid: false)
+        }
+    }
+
+    private func openGallery(showGrid: Bool) {
+        guard !mediaItems.isEmpty else { return }
+        withTransaction(Transaction.noAnimation) {
+            galleryRequest = GalleryRequest(startIndex: 0, showGrid: showGrid)
+        }
+    }
+
+    /// From the gallery's "jump to post": close it and bring the post on screen.
+    private func jumpToPost(_ postIndex: Int) {
+        withTransaction(Transaction.noAnimation) { galleryRequest = nil }
+        if popularThreshold != nil && !visibleIndices.contains(postIndex) {
+            popularThreshold = nil
+        }
+        resumeIndex = postIndex
+    }
+
+    /// Works out the thread's media and starts any whole-thread preloading
+    /// the user asked for in Settings.
+    private func updateMedia(for newPosts: [Post], boardURL: String, threadId: Int) {
+        let items = MediaItem.items(for: newPosts)
+        mediaItems = items
+        mediaByPost = Dictionary(grouping: items, by: \.postIndex)
+        prefetcher.reset()
+
+        let mode = MediaPrefetchMode.current
+        let wantsAll = mode == .all || (mode == .allOnWiFi && !NetworkMonitor.shared.isExpensive)
+        if wantsAll {
+            prefetcher.prefetchAll(items)
+        }
+
+        // A saved thread keeps its images current as it grows.
+        if savedThreads.isSaved(boardURL: boardURL, threadId: threadId) {
+            let images = items.filter { $0.kind == .image }.map(\.url)
+            Task.detached(priority: .utility) {
+                for url in images {
+                    try? await MediaStore.shared.pin(url)
+                }
+            }
+        }
     }
 
     private func flashSaveFeedback(_ message: String) {
@@ -370,6 +474,11 @@ struct ThreadView: View {
                 if showingSavedCopy {
                     HighlightBanner(text: String(localized: "保存済みのコピーを表示中"),
                                     systemImage: "arrow.down.circle")
+                }
+                if mediaJob.isRunning {
+                    HighlightBanner(text: mediaJob.progressText, systemImage: "arrow.down.circle") {
+                        mediaJob.cancel()
+                    }
                 }
                 if let saveFeedback {
                     HighlightBanner(text: saveFeedback, systemImage: "checkmark.circle")
@@ -393,7 +502,8 @@ struct ThreadView: View {
     }
 
     private var hasBanner: Bool {
-        showingSavedCopy || saveFeedback != nil || popularThreshold != nil || highlightBannerText != nil
+        showingSavedCopy || mediaJob.isRunning || saveFeedback != nil
+            || popularThreshold != nil || highlightBannerText != nil
     }
 
     private var highlightBannerText: String? {
@@ -424,11 +534,16 @@ struct ThreadView: View {
     }
 
     public func loadThread(boardURL: String, threadId: Int) async {
-        // A saved thread shows its offline copy straight away, then swaps in
-        // the live version if the network answers. Offline, the copy stays.
-        if posts.isEmpty,
-           let savedPosts = savedThreads.posts(boardURL: boardURL, threadId: threadId),
-           !savedPosts.isEmpty {
+        let cacheKey = ReadStateStore.key(boardURL: boardURL, threadId: threadId)
+
+        // Show something immediately when we can: the copy still in memory from
+        // a recent visit, or else the offline copy of a saved thread. The live
+        // version replaces it once the network answers; offline, it stays.
+        if posts.isEmpty, let cached = ThreadMemoryCache.shared.posts(for: cacheKey), !cached.isEmpty {
+            apply(cached, boardURL: boardURL, threadId: threadId, isInitialLoad: true)
+        } else if posts.isEmpty,
+                  let savedPosts = savedThreads.posts(boardURL: boardURL, threadId: threadId),
+                  !savedPosts.isEmpty {
             showingSavedCopy = true
             apply(savedPosts, boardURL: boardURL, threadId: threadId, isInitialLoad: true)
         }
@@ -439,7 +554,12 @@ struct ThreadView: View {
             let service = PostService()
             let newPosts = try await service.fetchPosts(boardURL: boardURL, threadId: threadId)
             showingSavedCopy = false
-            apply(newPosts, boardURL: boardURL, threadId: threadId, isInitialLoad: isInitialLoad)
+            ThreadMemoryCache.shared.store(newPosts, for: cacheKey)
+            // Re-applying identical posts would throw away every measured row
+            // height and make the list reflow for nothing.
+            if !Self.samePosts(posts, newPosts) {
+                apply(newPosts, boardURL: boardURL, threadId: threadId, isInitialLoad: isInitialLoad)
+            }
             savedThreads.updateIfSaved(boardURL: boardURL,
                                        threadId: threadId,
                                        title: resolvedTitle,
@@ -450,9 +570,17 @@ struct ThreadView: View {
         }
     }
 
+    /// Cheap "nothing changed" check: same length, same first and last post.
+    /// A deleted post (あぼーん) changes the dat's length, so it is caught too.
+    private static func samePosts(_ a: [Post], _ b: [Post]) -> Bool {
+        guard a.count == b.count, let lastA = a.last, let lastB = b.last else { return false }
+        return lastA.text == lastB.text && lastA.date == lastB.date && a.first?.text == b.first?.text
+    }
+
     private func apply(_ newPosts: [Post], boardURL: String, threadId: Int, isInitialLoad: Bool) {
         posts = newPosts
         postHeights.removeAll()
+        updateMedia(for: newPosts, boardURL: boardURL, threadId: threadId)
         (idIndices, tripIndices) = Self.buildHighlightIndices(posts: newPosts)
         highlightedID = nil
         highlightedTrip = nil
@@ -589,6 +717,8 @@ private struct ReplyPreviewCard: View {
     let onJump: (Int) -> Void
     let onThreadRoute: (ThreadRoute) -> Void
     let onShowReplies: ([Int]) -> Void
+    var mediaByPost: [Int: [MediaItem]] = [:]
+    var onOpenMedia: ((MediaItem) -> Void)? = nil
 
     var body: some View {
         VStack(spacing: 0) {
@@ -633,7 +763,9 @@ private struct ReplyPreviewCard: View {
                                          onPostReply: { onShowReplies([$0]) },
                                          onShowReplies: onShowReplies,
                                          onIDTap: { _ in },
-                                         onTripTap: { _ in })
+                                         onTripTap: { _ in },
+                                         media: mediaByPost[index],
+                                         onOpenMedia: onOpenMedia)
                             }
                         }
                     }
@@ -664,6 +796,12 @@ struct PostView: View {
     var onTextSelected: (SelectionData) -> Int? = { _ in nil }
     var onTapOutside: () -> Void = {}
     var onReport: (() -> Void)? = nil
+    /// This post's images and videos, worked out once per thread by
+    /// `ThreadView`. Nil works them out here.
+    var media: [MediaItem]? = nil
+    /// Opens the thread's gallery at an item. Nil opens a gallery of just
+    /// this post's media.
+    var onOpenMedia: ((MediaItem) -> Void)? = nil
 
     /// Width the post text will lay out at, used only to estimate the row's
     /// height before the webview reports its real one.
@@ -674,7 +812,7 @@ struct PostView: View {
     var onHeightChange: ((CGFloat) -> Void)? = nil
 
     @Environment(UserConfig.self) private var userConfig
-    @State private var fullscreenImageURL: URL?
+    @State private var localGalleryItem: MediaItem?
     @State private var localHeight: CGFloat?
     @State private var showTranslation = false
 
@@ -730,14 +868,19 @@ struct PostView: View {
             )
             .frame(height: textFrameHeight)
 
-            if !post.imageURLs.isEmpty {
+            let mediaItems = resolvedMedia
+            if !mediaItems.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
-                        ForEach(post.imageURLs, id: \.self) { url in
+                        ForEach(mediaItems) { item in
                             Button {
-                                fullscreenImageURL = url
+                                if let onOpenMedia {
+                                    onOpenMedia(item)
+                                } else {
+                                    withTransaction(Transaction.noAnimation) { localGalleryItem = item }
+                                }
                             } label: {
-                                ImageThumbnail(url: url)
+                                MediaThumbnailView(item: item)
                             }
                             .buttonStyle(.plain)
                         }
@@ -801,16 +944,17 @@ struct PostView: View {
         // visible text, not PostService's `[>>N](donguri://res/N)` markdown.
         .translationPresentation(isPresented: $showTranslation,
                                  text: post.text.asPlainPostText)
-        .fullScreenCover(isPresented: Binding(
-            get: { fullscreenImageURL != nil },
-            set: { isPresented in if !isPresented { fullscreenImageURL = nil } }
-        )) {
-            if let fullscreenImageURL {
-                FullscreenImageView(url: fullscreenImageURL) {
-                    self.fullscreenImageURL = nil
-                }
+        .fullScreenCover(item: $localGalleryItem) { item in
+            let items = resolvedMedia
+            GalleryView(items: items, initialIndex: items.firstIndex(of: item) ?? 0) {
+                withTransaction(Transaction.noAnimation) { localGalleryItem = nil }
             }
+            .presentationBackground(.clear)
         }
+    }
+
+    private var resolvedMedia: [MediaItem] {
+        media ?? MediaItem.items(in: post, at: index)
     }
 
     @ViewBuilder
@@ -853,27 +997,6 @@ private struct AbornPlaceholder: View {
             Spacer()
         }
         .padding(.vertical, 6)
-    }
-}
-
-private struct ImageThumbnail: View {
-    let url: URL
-
-    var body: some View {
-        AsyncImage(url: url) { phase in
-            switch phase {
-            case .success(let image):
-                image.resizable().scaledToFill()
-            case .failure:
-                Image(systemName: "photo.badge.exclamationmark")
-                    .foregroundStyle(.secondary)
-            default:
-                ProgressView()
-            }
-        }
-        .frame(width: 84, height: 84)
-        .background(Color.secondary.opacity(0.08))
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
 

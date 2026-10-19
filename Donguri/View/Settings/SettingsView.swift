@@ -30,6 +30,11 @@ struct SettingsView: View {
 
                 Section {
                     NavigationLink {
+                        MediaSettingsView()
+                    } label: {
+                        Label("画像と動画", systemImage: "photo.on.rectangle")
+                    }
+                    NavigationLink {
                         NGFilterView()
                     } label: {
                         Label("NG設定", systemImage: "hand.raised")
@@ -37,7 +42,7 @@ struct SettingsView: View {
                 } header: {
                     Text("表示")
                 } footer: {
-                    Text("特定の語句・ID・名前を含む書き込みを非表示にします。")
+                    Text("画像の先読みとキャッシュ、特定の語句・ID・名前を含む書き込みの非表示を設定します。")
                 }
             }
             .navigationTitle("設定")

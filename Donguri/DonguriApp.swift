@@ -22,6 +22,8 @@ struct DonguriApp: App {
                     if userConfig.autoUpdateDictionaries {
                         dictionaryManager.autoUpdateDictionaries()
                     }
+                    // Keep the image cache under its size limit.
+                    await MediaStore.shared.trimCache()
                 }
                 .onOpenURL { url in
                     handleURL(url)
