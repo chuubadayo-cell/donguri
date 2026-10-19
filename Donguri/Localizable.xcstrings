@@ -299,6 +299,22 @@
         }
       }
     },
+    "UIの文字": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "UI Text"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "UIの文字"
+          }
+        }
+      }
+    },
     "WebM動画はiOSで再生できません": {
       "localizations": {
         "en": {
@@ -540,6 +556,22 @@
         }
       }
     },
+    "すべて初期設定に戻す": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reset All to Defaults"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "すべて初期設定に戻す"
+          }
+        }
+      }
+    },
     "すべて消去": {
       "localizations": {
         "en": {
@@ -556,6 +588,54 @@
         }
       }
     },
+    "その他のフォント": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Other Fonts"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "その他のフォント"
+          }
+        }
+      }
+    },
+    "やや大": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Larger"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "やや大"
+          }
+        }
+      }
+    },
+    "やや小": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Smaller"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "やや小"
+          }
+        }
+      }
+    },
     "ゆっくり順": {
       "localizations": {
         "en": {
@@ -568,6 +648,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "ゆっくり順"
+          }
+        }
+      }
+    },
+    "アクセントカラー": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accent Color"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アクセントカラー"
           }
         }
       }
@@ -829,6 +925,38 @@
         }
       }
     },
+    "システムに合わせる": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Match System"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "システムに合わせる"
+          }
+        }
+      }
+    },
+    "システム（標準）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "System (Default)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "システム（標準）"
+          }
+        }
+      }
+    },
     "ストレージ": {
       "localizations": {
         "en": {
@@ -861,6 +989,22 @@
         }
       }
     },
+    "スレの背景": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thread Background"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "スレの背景"
+          }
+        }
+      }
+    },
     "スレタイ検索": {
       "localizations": {
         "en": {
@@ -873,6 +1017,70 @@
           "stringUnit": {
             "state": "translated",
             "value": "スレタイ検索"
+          }
+        }
+      }
+    },
+    "ダーク": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dark"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ダーク"
+          }
+        }
+      }
+    },
+    "テーマ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Theme"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "テーマ"
+          }
+        }
+      }
+    },
+    "テーマと色": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Theme & Colors"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "テーマと色"
+          }
+        }
+      }
+    },
+    "ヒラギノ角ゴシック（標準）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hiragino Sans (Default)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ヒラギノ角ゴシック（標準）"
           }
         }
       }
@@ -894,6 +1102,38 @@
         }
       }
     },
+    "フォント": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Font"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "フォント"
+          }
+        }
+      }
+    },
+    "フォントを検索": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search Fonts"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "フォントを検索"
+          }
+        }
+      }
+    },
     "メディア %lld件": {
       "localizations": {
         "en": {
@@ -910,6 +1150,38 @@
         }
       }
     },
+    "メニュー、一覧、ボタンなどの文字です。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Text in menus, lists and buttons."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メニュー、一覧、ボタンなどの文字です。"
+          }
+        }
+      }
+    },
+    "ライト": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Light"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ライト"
+          }
+        }
+      }
+    },
     "ライブラリ": {
       "localizations": {
         "en": {
@@ -922,6 +1194,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "ライブラリ"
+          }
+        }
+      }
+    },
+    "リンクの色": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Link Color"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "リンクの色"
           }
         }
       }
@@ -1002,6 +1290,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "並び替え"
+          }
+        }
+      }
+    },
+    "丸ゴシック": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rounded"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "丸ゴシック"
           }
         }
       }
@@ -1214,6 +1518,22 @@
         }
       }
     },
+    "初期設定に戻す": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reset to Default"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "初期設定に戻す"
+          }
+        }
+      }
+    },
     "勢い %@": {
       "localizations": {
         "en": {
@@ -1262,6 +1582,102 @@
         }
       }
     },
+    "吾輩は猫である。名前はまだ無い。[>>1](donguri://res/1) どこで生れたかとんと見当がつかぬ。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "吾輩は猫である。名前はまだ無い。[>>1](donguri://res/1) どこで生れたかとんと見当がつかぬ。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "吾輩は猫である。名前はまだ無い。[>>1](donguri://res/1) どこで生れたかとんと見当がつかぬ。"
+          }
+        }
+      }
+    },
+    "外観": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Appearance"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "外観"
+          }
+        }
+      }
+    },
+    "外観の設定をすべて初期設定に戻しますか？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reset all appearance settings to their defaults?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "外観の設定をすべて初期設定に戻しますか？"
+          }
+        }
+      }
+    },
+    "大": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Large"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "大"
+          }
+        }
+      }
+    },
+    "大きさ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Size"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "大きさ"
+          }
+        }
+      }
+    },
+    "小": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Small"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "小"
+          }
+        }
+      }
+    },
     "常にすべて": {
       "localizations": {
         "en": {
@@ -1294,6 +1710,38 @@
         }
       }
     },
+    "文字の大きさ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Text Size"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文字の大きさ"
+          }
+        }
+      }
+    },
+    "文字の色": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Text Color"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文字の色"
+          }
+        }
+      }
+    },
     "新しい順": {
       "localizations": {
         "en": {
@@ -1306,6 +1754,134 @@
           "stringUnit": {
             "state": "translated",
             "value": "新しい順"
+          }
+        }
+      }
+    },
+    "日本語の文字がないフォントでは、かなと漢字は標準のフォントで表示されます。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fonts without Japanese characters show kana and kanji in the default font."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "日本語の文字がないフォントでは、かなと漢字は標準のフォントで表示されます。"
+          }
+        }
+      }
+    },
+    "日本語フォント": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Japanese Fonts"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "日本語フォント"
+          }
+        }
+      }
+    },
+    "明朝（セリフ）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Serif (Mincho)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "明朝（セリフ）"
+          }
+        }
+      }
+    },
+    "書き込みのフォント": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Post Font"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "書き込みのフォント"
+          }
+        }
+      }
+    },
+    "書き込みの文字": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Post Text"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "書き込みの文字"
+          }
+        }
+      }
+    },
+    "書体": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Typeface"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "書体"
+          }
+        }
+      }
+    },
+    "最大": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Largest"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最大"
+          }
+        }
+      }
+    },
+    "最小": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Smallest"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最小"
           }
         }
       }
@@ -1354,6 +1930,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "板一覧"
+          }
+        }
+      }
+    },
+    "標準": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Default"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "標準"
           }
         }
       }
@@ -1535,6 +2127,22 @@
         }
       }
     },
+    "等幅": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Monospaced"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "等幅"
+          }
+        }
+      }
+    },
     "翻訳": {
       "comment": "Post context menu action.",
       "localizations": {
@@ -1548,6 +2156,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "翻訳"
+          }
+        }
+      }
+    },
+    "行間": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Line Spacing"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "行間"
           }
         }
       }
@@ -1601,6 +2225,22 @@
         }
       }
     },
+    "辞書で調べた語のハイライト": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Looked-Up Word Highlight"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "辞書で調べた語のハイライト"
+          }
+        }
+      }
+    },
     "辞書とマイニング": {
       "comment": "Settings section header.",
       "localizations": {
@@ -1614,6 +2254,54 @@
           "stringUnit": {
             "state": "translated",
             "value": "辞書とマイニング"
+          }
+        }
+      }
+    },
+    "辞書のフォント": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dictionary Font"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "辞書のフォント"
+          }
+        }
+      }
+    },
+    "辞書の文字": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dictionary Text"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "辞書の文字"
+          }
+        }
+      }
+    },
+    "辞書ポップアップと辞書検索の文字です。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Text in the dictionary popup and dictionary search."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "辞書ポップアップと辞書検索の文字です。"
           }
         }
       }

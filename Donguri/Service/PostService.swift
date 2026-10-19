@@ -267,10 +267,7 @@ nonisolated enum PostParser {
                  threadTitle: post.threadTitle,
                  replies: repliesByIndex[index],
                  imageURLs: post.imageURLs,
-                 isDeleted: post.isDeleted,
-                 // Rendered here, off the main actor, rather than on every
-                 // redraw of the row.
-                 html: post.isDeleted == true ? "" : post.text.asPostHTML)
+                 isDeleted: post.isDeleted)
         }
     }
 

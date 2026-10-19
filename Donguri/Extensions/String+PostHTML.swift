@@ -8,7 +8,8 @@
 import Foundation
 
 extension String {
-    /// Renders post text as HTML for `PostTextWebView`.
+    /// Renders post text as HTML. Posts are now drawn natively by
+    /// `PostTextView`; this is kept for anything that wants HTML.
     ///
     /// `PostService` normalises the raw dat/HTML into markdown-ish text (`>>N`
     /// anchors become `[>>N](donguri://res/N)` links) for SwiftUI's `Text`. The

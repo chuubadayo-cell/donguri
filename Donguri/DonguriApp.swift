@@ -13,11 +13,18 @@ struct DonguriApp: App {
     // Instantiated at launch (not lazily on first settings visit) so the
     // dictionaries are loaded into LookupEngine before any post is tapped.
     @State private var dictionaryManager = DictionaryManager.shared
+    @State private var appearance = AppearanceSettings.shared
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environment(userConfig)
+                // 外観: app-wide theme, accent colour and UI text.
+                .preferredColorScheme(appearance.colorScheme)
+                .tint(appearance.accentColor)
+                .accentColor(appearance.accentColor)
+                .fontDesign(appearance.uiDesign.design)
+                .modifier(UITextSizeModifier(size: appearance.dynamicTypeSize))
                 .task {
                     if userConfig.autoUpdateDictionaries {
                         dictionaryManager.autoUpdateDictionaries()
@@ -48,6 +55,20 @@ struct DonguriApp: App {
             }
         default:
             break
+        }
+    }
+}
+
+/// Applies the chosen UI text size, or leaves the system's in charge.
+private struct UITextSizeModifier: ViewModifier {
+    let size: DynamicTypeSize?
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if let size {
+            content.dynamicTypeSize(size)
+        } else {
+            content
         }
     }
 }

@@ -173,10 +173,26 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate {
         guard gestureRecognizer === dismissPan else {
             return super.gestureRecognizerShouldBegin(gestureRecognizer)
         }
-        // Only an unzoomed, mostly vertical swipe; horizontal ones page.
+        // Only an unzoomed, clearly vertical swipe closes the gallery. A
+        // swipe that's even somewhat sideways belongs to the pager, and so
+        // does any touch while the pager is still moving.
         guard zoomScale <= minimumZoomScale + 0.01 else { return false }
+        if let pager = enclosingScrollView, pager.isDragging || pager.isDecelerating {
+            return false
+        }
         let velocity = dismissPan.velocity(in: self)
-        return abs(velocity.y) > abs(velocity.x) * 1.3
+        return abs(velocity.y) > 120 && abs(velocity.y) > abs(velocity.x) * 2.2
+    }
+
+    /// The gallery's horizontal pager (SwiftUI's ScrollView is a UIScrollView
+    /// underneath), found by walking up from this page.
+    private var enclosingScrollView: UIScrollView? {
+        var view = superview
+        while let current = view {
+            if let scrollView = current as? UIScrollView { return scrollView }
+            view = current.superview
+        }
+        return nil
     }
 
     @objc private func handleDismissPan(_ recognizer: UIPanGestureRecognizer) {
@@ -185,9 +201,9 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate {
 
         switch recognizer.state {
         case .changed:
-            let shrink = 1 - progress * 0.15
-            imageView.transform = CGAffineTransform(translationX: translation.x, y: translation.y)
-                .scaledBy(x: shrink, y: shrink)
+            // Vertical only: following the finger sideways too is what made
+            // a slightly diagonal page swipe drag and squash the image.
+            imageView.transform = CGAffineTransform(translationX: 0, y: translation.y)
             callbacks?.dismissProgress(progress)
         case .ended, .cancelled:
             let velocity = recognizer.velocity(in: self).y
@@ -196,7 +212,7 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate {
             if shouldClose {
                 let direction: CGFloat = translation.y >= 0 ? 1 : -1
                 UIView.animate(withDuration: 0.2, delay: 0, options: .curveEaseOut) {
-                    self.imageView.transform = CGAffineTransform(translationX: translation.x,
+                    self.imageView.transform = CGAffineTransform(translationX: 0,
                                                                  y: direction * self.bounds.height)
                     self.imageView.alpha = 0
                 }

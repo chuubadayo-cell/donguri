@@ -338,7 +338,7 @@ struct DictionarySearchView: View {
             .flatMap { String(data: $0, encoding: .utf8) } ?? "[]") : "[]"
         let audioSources = (try? JSONEncoder().encode(userConfig.enabledAudioSources))
             .flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
-        let scaledCSS = userConfig.customCSS.replacingOccurrences(of: #"(-?(?:\d+(?:\.\d+)?|\.\d+))px"#, with: "calc($1px * var(--popup-scale))", options: .regularExpression)
+        let scaledCSS = (AppearanceSettings.shared.dictionaryCSS + userConfig.customCSS).replacingOccurrences(of: #"(-?(?:\d+(?:\.\d+)?|\.\d+))px"#, with: "calc($1px * var(--popup-scale))", options: .regularExpression)
         let customCSS = (try? JSONSerialization.data(withJSONObject: scaledCSS, options: .fragmentsAllowed))
             .flatMap { String(data: $0, encoding: .utf8) } ?? "\"\""
         

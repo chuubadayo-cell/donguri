@@ -46,6 +46,10 @@ struct GalleryView: View {
         _showGrid = State(initialValue: initiallyShowGrid)
     }
 
+    private var chromeVisible: Bool {
+        showChrome && !showGrid
+    }
+
     private var currentIndex: Int {
         items.firstIndex { $0.id == currentID } ?? 0
     }
@@ -62,10 +66,12 @@ struct GalleryView: View {
 
             pager
 
-            if showChrome && !showGrid {
-                chrome
-                    .transition(.opacity)
-            }
+            // Always in the hierarchy and faded rather than inserted: re-inserting
+            // it on every tap rebuilt the thumbnail strip, whose thumbnails then
+            // animated in from nothing and the strip jumped to re-centre.
+            chrome
+                .opacity(chromeVisible ? 1 : 0)
+                .allowsHitTesting(chromeVisible)
 
             if showGrid {
                 grid
@@ -243,6 +249,9 @@ struct GalleryView: View {
                                             .stroke(Color.white, lineWidth: item.id == currentID ? 2 : 0)
                                     }
                                     .opacity(item.id == currentID ? 1 : 0.6)
+                                    // Selection changes snap; nothing in a
+                                    // thumbnail resizes or fades with the strip.
+                                    .transaction { $0.animation = nil }
                             }
                             .buttonStyle(.plain)
                             .id(item.id)
@@ -255,7 +264,9 @@ struct GalleryView: View {
                     proxy.scrollTo(currentID, anchor: .center)
                 }
                 .onChange(of: currentID) {
-                    withAnimation(.snappy) {
+                    // A plain, short slide: the thumbnails themselves never
+                    // animate, only the strip's position.
+                    withAnimation(.easeOut(duration: 0.18)) {
                         proxy.scrollTo(currentID, anchor: .center)
                     }
                 }
@@ -553,6 +564,7 @@ private struct GalleryVideoPage: View {
 
     @State private var player: AVPlayer?
     @State private var dragOffset: CGFloat = 0
+    @State private var dragIsDismiss: Bool?
 
     var body: some View {
         ZStack {
@@ -568,11 +580,18 @@ private struct GalleryVideoPage: View {
         .simultaneousGesture(
             DragGesture(minimumDistance: 24)
                 .onChanged { value in
-                    guard abs(value.translation.height) > abs(value.translation.width) * 1.3 else { return }
+                    // Decide once, from the first movement, whether this is
+                    // a close swipe; a page swipe never moves the video.
+                    if dragIsDismiss == nil {
+                        dragIsDismiss = abs(value.translation.height) > abs(value.translation.width) * 2.2
+                    }
+                    guard dragIsDismiss == true else { return }
                     dragOffset = value.translation.height
                     onDismissProgress(min(abs(dragOffset) / 140, 1))
                 }
                 .onEnded { value in
+                    defer { dragIsDismiss = nil }
+                    guard dragIsDismiss == true else { return }
                     if abs(dragOffset) > 140 || abs(value.predictedEndTranslation.height) > 400 {
                         player?.pause()
                         onDismissProgress(1)

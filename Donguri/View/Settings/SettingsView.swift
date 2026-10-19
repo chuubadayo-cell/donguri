@@ -30,6 +30,11 @@ struct SettingsView: View {
 
                 Section {
                     NavigationLink {
+                        AppearanceView()
+                    } label: {
+                        Label("外観", systemImage: "textformat")
+                    }
+                    NavigationLink {
                         MediaSettingsView()
                     } label: {
                         Label("画像と動画", systemImage: "photo.on.rectangle")
