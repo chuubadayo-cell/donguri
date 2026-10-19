@@ -16,19 +16,54 @@ struct BBSMenuView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
+            List {
+                // The library sits above the board menu and doesn't depend on
+                // it, so favorites, history and saved threads stay reachable
+                // when the menu can't load (e.g. offline).
+                if searchText.isEmpty {
+                    LibrarySections()
+                }
+
                 if let menu {
-                    MenuListView(menu: menu, searchText: searchText)
+                    Section {
+                        ForEach(filteredMenuList(menu)) { category in
+                            CategoryDisclosureView(category: category, searchText: searchText)
+                        }
+                    } header: {
+                        if searchText.isEmpty {
+                            Text("板一覧")
+                        }
+                    }
                 } else if let errorMessage {
-                    ContentUnavailableView {
-                        Label("エラーが発生しました", systemImage: "exclamationmark.triangle")
-                    } description: {
-                        Text(errorMessage)
+                    Section {
+                        ContentUnavailableView {
+                            Label("エラーが発生しました", systemImage: "exclamationmark.triangle")
+                        } description: {
+                            Text(errorMessage)
+                        }
                     }
                 } else {
-                    ProgressView("しばらくお待ちください...")
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    Section {
+                        HStack {
+                            Spacer()
+                            ProgressView("しばらくお待ちください...")
+                            Spacer()
+                        }
+                        .padding(.vertical, 24)
+                    }
                 }
+            }
+            .listStyle(.insetGrouped)
+            // Attached to the stack's root rather than the stack itself, so
+            // boards pushed on top can have a search field of their own.
+            .searchable(
+                text: $searchText,
+                placement: .navigationBarDrawer(displayMode: .automatic),
+                prompt: "フィルタ"
+            )
+            .refreshable {
+                await loadMenu()
+                await FavoritesStore.shared.refreshThreadCounts()
             }
             .navigationTitle("５ちゃんねる")
             .navigationBarTitleDisplayMode(.inline)
@@ -68,15 +103,15 @@ struct BBSMenuView: View {
         }
         .task {
             await loadMenu()
+            await FavoritesStore.shared.refreshThreadCounts()
         }
-        .refreshable {
-            await loadMenu()
+    }
+
+    private func filteredMenuList(_ menu: BBSMenu) -> [BBSMenu.MenuList] {
+        guard !searchText.isEmpty else { return menu.menuList }
+        return menu.menuList.filter {
+            $0.categoryContent.contains(where: { $0.boardName.localizedCaseInsensitiveContains(searchText) })
         }
-        .searchable(
-                    text: $searchText,
-                    placement: .navigationBarDrawer(displayMode: .automatic),
-                    prompt: "フィルタ"
-                )
     }
 
     private func loadMenu() async {
@@ -92,32 +127,12 @@ struct BBSMenuView: View {
     }
 }
 
-struct MenuListView: View {
-    let menu: BBSMenu
-    let searchText: String
-
-    var filteredMenuList: [BBSMenu.MenuList] {
-        guard !searchText.isEmpty else { return menu.menuList }
-        return menu.menuList.filter {
-            $0.categoryContent.contains(where: { $0.boardName.localizedCaseInsensitiveContains(searchText) })
-        }
-    }
-    
-    var body: some View {
-        List {
-            ForEach(filteredMenuList) { category in
-                CategoryDisclosureView(category: category, searchText: searchText)
-            }
-        }
-        .listStyle(.insetGrouped)
-    }
-}
-
-
 struct CategoryDisclosureView: View {
     let category: BBSMenu.MenuList
     let searchText: String
-    
+
+    @State private var favorites = FavoritesStore.shared
+
     var filteredCategoryContent: [BBSMenu.CategoryContent] {
         guard !searchText.isEmpty else { return category.categoryContent }
         return category.categoryContent.filter {
@@ -128,6 +143,7 @@ struct CategoryDisclosureView: View {
     var body: some View {
         DisclosureGroup() {
             ForEach(filteredCategoryContent) { board in
+                let isFavorite = favorites.isFavorite(boardURL: board.url)
                 NavigationLink {
                     BoardView(board: board)
                 } label: {
@@ -136,7 +152,20 @@ struct CategoryDisclosureView: View {
                             .foregroundStyle(Color.accentColor)
                         Text(board.boardName)
                             .foregroundStyle(.primary)
+                        if isFavorite {
+                            Spacer()
+                            Image(systemName: "star.fill")
+                                .font(.caption)
+                                .foregroundStyle(.yellow)
+                        }
                     }
+                }
+                .contextMenu {
+                    FavoriteBoardButton(board: board, isFavorite: isFavorite)
+                }
+                .swipeActions(edge: .leading) {
+                    FavoriteBoardButton(board: board, isFavorite: isFavorite)
+                        .tint(.yellow)
                 }
             }
         } label: {
@@ -144,6 +173,23 @@ struct CategoryDisclosureView: View {
                 Text(category.categoryName)
                     .font(.headline)
                 Chip(text: "\(filteredCategoryContent.count)", tint: .secondary, filled: false)
+            }
+        }
+    }
+}
+
+struct FavoriteBoardButton: View {
+    let board: BBSMenu.CategoryContent
+    let isFavorite: Bool
+
+    var body: some View {
+        Button {
+            FavoritesStore.shared.toggle(board: board)
+        } label: {
+            if isFavorite {
+                Label("お気に入りから削除", systemImage: "star.slash")
+            } else {
+                Label("お気に入りに追加", systemImage: "star")
             }
         }
     }

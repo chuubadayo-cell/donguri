@@ -203,6 +203,22 @@
         }
       }
     },
+    "dat落ち": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Archived"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "dat落ち"
+          }
+        }
+      }
+    },
     "あぼーん": {
       "comment": "Placeholder shown in place of a post hidden by an NG rule. 5ch slang.",
       "localizations": {
@@ -216,6 +232,70 @@
           "stringUnit": {
             "state": "translated",
             "value": "あぼーん"
+          }
+        }
+      }
+    },
+    "お気に入りから削除": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove from Favorites"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "お気に入りから削除"
+          }
+        }
+      }
+    },
+    "お気に入りに追加": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add to Favorites"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "お気に入りに追加"
+          }
+        }
+      }
+    },
+    "お気に入りのスレ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Favorite Threads"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "お気に入りのスレ"
+          }
+        }
+      }
+    },
+    "お気に入りの板": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Favorite Boards"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "お気に入りの板"
           }
         }
       }
@@ -264,6 +344,54 @@
           "stringUnit": {
             "state": "translated",
             "value": "しばらくお待ちください..."
+          }
+        }
+      }
+    },
+    "すべてのレス": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All Posts"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "すべてのレス"
+          }
+        }
+      }
+    },
+    "すべて消去": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear All"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "すべて消去"
+          }
+        }
+      }
+    },
+    "ゆっくり順": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slowest"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ゆっくり順"
           }
         }
       }
@@ -333,6 +461,102 @@
         }
       }
     },
+    "オフライン保存を削除": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove Offline Copy"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "オフライン保存を削除"
+          }
+        }
+      }
+    },
+    "オフライン保存を削除しました": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Removed offline copy"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "オフライン保存を削除しました"
+          }
+        }
+      }
+    },
+    "オフライン用に保存": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save for Offline"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "オフライン用に保存"
+          }
+        }
+      }
+    },
+    "オフライン用に保存しました": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved for offline reading"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "オフライン用に保存しました"
+          }
+        }
+      }
+    },
+    "スレの右上のメニューから「オフライン用に保存」を選ぶと、電波がなくても読めます。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose “Save for Offline” from the menu at the top right of a thread to read it without a connection."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "スレの右上のメニューから「オフライン用に保存」を選ぶと、電波がなくても読めます。"
+          }
+        }
+      }
+    },
+    "スレタイ検索": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search thread titles"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "スレタイ検索"
+          }
+        }
+      }
+    },
     "フィルタ": {
       "comment": "Search field placeholder on the board list.",
       "localizations": {
@@ -350,6 +574,38 @@
         }
       }
     },
+    "ライブラリ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Library"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ライブラリ"
+          }
+        }
+      }
+    },
+    "レス数順": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Most Replies"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "レス数順"
+          }
+        }
+      }
+    },
     "一致する書き込みは「あぼーん」として非表示になります。レス番号は変わりません。": {
       "localizations": {
         "en": {
@@ -362,6 +618,278 @@
           "stringUnit": {
             "state": "translated",
             "value": "一致する書き込みは「あぼーん」として非表示になります。レス番号は変わりません。"
+          }
+        }
+      }
+    },
+    "並び替え": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sort"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "並び替え"
+          }
+        }
+      }
+    },
+    "人気レス": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Popular Posts"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "人気レス"
+          }
+        }
+      }
+    },
+    "人気レス（返信%lld件以上）: %lld件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Popular posts (%1$lld+ replies): %2$lld"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "人気レス（返信%1$lld件以上）: %2$lld件"
+          }
+        }
+      }
+    },
+    "保存したスレ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved Threads"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存したスレ"
+          }
+        }
+      }
+    },
+    "保存したスレはありません": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No Saved Threads"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存したスレはありません"
+          }
+        }
+      }
+    },
+    "保存できませんでした": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t save"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存できませんでした"
+          }
+        }
+      }
+    },
+    "保存済みのコピーを更新": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Update Saved Copy"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存済みのコピーを更新"
+          }
+        }
+      }
+    },
+    "保存済みのコピーを表示中": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Showing saved copy"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存済みのコピーを表示中"
+          }
+        }
+      }
+    },
+    "勢い %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@/day"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "勢い %@"
+          }
+        }
+      }
+    },
+    "勢い順": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fastest"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "勢い順"
+          }
+        }
+      }
+    },
+    "合計 %@・本文のみ保存（画像は保存されません）。開くたびに最新の内容に更新されます。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ total · Text only (images aren’t saved). Saved copies update each time you open them."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "合計 %@・本文のみ保存（画像は保存されません）。開くたびに最新の内容に更新されます。"
+          }
+        }
+      }
+    },
+    "新しい順": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Newest"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新しい順"
+          }
+        }
+      }
+    },
+    "板の順番": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Board Order"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "板の順番"
+          }
+        }
+      }
+    },
+    "板やスレを長押し、または右にスワイプすると、お気に入りに追加できます。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Long-press or swipe right on a board or thread to add it to your favorites."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "板やスレを長押し、または右にスワイプすると、お気に入りに追加できます。"
+          }
+        }
+      }
+    },
+    "板一覧": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Boards"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "板一覧"
+          }
+        }
+      }
+    },
+    "消去": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "消去"
+          }
+        }
+      }
+    },
+    "無題": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Untitled"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無題"
           }
         }
       }
@@ -532,6 +1060,22 @@
         }
       }
     },
+    "返信%lld件以上": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld+ Replies"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "返信%lld件以上"
+          }
+        }
+      }
+    },
     "追加": {
       "localizations": {
         "en": {
@@ -578,6 +1122,70 @@
           "stringUnit": {
             "state": "translated",
             "value": "通報する"
+          }
+        }
+      }
+    },
+    "開いたスレがここに表示されます。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Threads you open will appear here."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "開いたスレがここに表示されます。"
+          }
+        }
+      }
+    },
+    "閲覧履歴": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "History"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "閲覧履歴"
+          }
+        }
+      }
+    },
+    "閲覧履歴はありません": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No History"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "閲覧履歴はありません"
+          }
+        }
+      }
+    },
+    "閲覧履歴をすべて消去しますか？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear all history?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "閲覧履歴をすべて消去しますか？"
           }
         }
       }

@@ -7,7 +7,9 @@
 
 import Foundation
 
-struct Post {
+/// `Codable` so a whole thread can be written to disk for offline reading
+/// (`SavedThreadStore`).
+struct Post: Codable {
     let name: String
     let trip: String?
     let email: String

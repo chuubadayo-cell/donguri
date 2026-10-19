@@ -16,6 +16,10 @@ struct ThreadRoute: Hashable {
 struct ThreadView: View {
     var thread: Thread?
     var boardURL: String?
+    /// Shown in the library (favorites, history, saved threads). Optional
+    /// because a thread reached from a link inside another thread arrives
+    /// without one; `HistoryStore.knownBoardName` fills the gap.
+    var boardName: String? = nil
 
     @State private var posts: [Post] = []
     @State private var errorMessage: String?
@@ -35,6 +39,17 @@ struct ThreadView: View {
     @State private var resumeIndex: Int?
 
     @State private var ngFilter = NGFilterStore.shared
+    @State private var favorites = FavoritesStore.shared
+    @State private var savedThreads = SavedThreadStore.shared
+
+    /// True while the posts on screen came from the offline copy rather than
+    /// the network: either the fresh load is still running, or it failed.
+    @State private var showingSavedCopy = false
+    /// 人気レス filter: when set, only posts with at least this many replies
+    /// are listed. Hidden posts keep their place in `posts`, so `>>N` numbering
+    /// and reply indices stay correct, exactly like NG filtering.
+    @State private var popularThreshold: Int?
+    @State private var saveFeedback: String?
 
     // Popup dictionary
     @Environment(UserConfig.self) private var userConfig
@@ -55,6 +70,29 @@ struct ThreadView: View {
     /// against the narrower width, not the full screen.
     private static let listRowHorizontalInsets: CGFloat = 32
 
+    private static let popularThresholds = [3, 5, 10]
+
+    /// Indices of the posts the list shows, in thread order.
+    private var visibleIndices: [Int] {
+        guard let popularThreshold else { return Array(posts.indices) }
+        return posts.indices.filter { Self.replyCount(of: posts[$0]) >= popularThreshold }
+    }
+
+    /// Distinct posts replying to this one (a post quoting `>>5` twice counts once).
+    private static func replyCount(of post: Post) -> Int {
+        Set(post.replies ?? []).count
+    }
+
+    private var resolvedTitle: String? {
+        thread?.title ?? posts.first?.threadTitle
+    }
+
+    private var resolvedBoardName: String {
+        if let boardName { return boardName }
+        guard let boardURL else { return "" }
+        return HistoryStore.shared.knownBoardName(for: boardURL)
+    }
+
     private var highlightedIndices: Set<Int> {
         if let highlightedID {
             return Set(idIndices[highlightedID] ?? [])
@@ -73,7 +111,8 @@ struct ThreadView: View {
                     if !posts.isEmpty {
                         ZStack(alignment: .top) {
                             List {
-                                ForEach(Array(posts.enumerated()), id: \.offset) { index, post in
+                                ForEach(visibleIndices, id: \.self) { index in
+                                    let post = posts[index]
                                     if ngFilter.hides(post) {
                                         // Kept in place so >>N numbering stays correct.
                                         AbornPlaceholder(index: index)
@@ -124,12 +163,7 @@ struct ThreadView: View {
                                 }
                             }
                             .safeAreaInset(edge: .top) {
-                                if let banner = highlightBannerText {
-                                    HighlightBanner(text: banner) {
-                                        clearHighlight()
-                                    }
-                                    .padding(.top, 6)
-                                }
+                                bannerStack
                             }
 
                             // Reply preview popup — shown for a >>N tap (single post) or
@@ -147,8 +181,20 @@ struct ThreadView: View {
                                     onClose: { replyPreviewIndices = [] },
                                     onJump: { index in
                                         replyPreviewIndices = []
-                                        withAnimation(.snappy) {
-                                            proxy.scrollTo(index, anchor: .top)
+                                        if popularThreshold != nil && !visibleIndices.contains(index) {
+                                            // The target is filtered out of the list, so there is
+                                            // no row to scroll to until the filter is lifted.
+                                            popularThreshold = nil
+                                            Task {
+                                                try? await Task.sleep(for: .milliseconds(200))
+                                                withAnimation(.snappy) {
+                                                    proxy.scrollTo(index, anchor: .top)
+                                                }
+                                            }
+                                        } else {
+                                            withAnimation(.snappy) {
+                                                proxy.scrollTo(index, anchor: .top)
+                                            }
                                         }
                                     },
                                     onThreadRoute: { route in
@@ -209,10 +255,30 @@ struct ThreadView: View {
             .listStyle(.plain)
             .navigationTitle(thread.title ?? posts.first?.threadTitle ?? "無題")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    let isFavorite = favorites.isFavorite(boardURL: boardURL, threadId: thread.id)
+                    Button {
+                        favorites.toggle(boardURL: boardURL,
+                                         boardName: resolvedBoardName,
+                                         threadId: thread.id,
+                                         title: resolvedTitle ?? String(localized: "無題"),
+                                         responseCount: max(posts.count, thread.responseCount))
+                    } label: {
+                        Image(systemName: isFavorite ? "star.fill" : "star")
+                            .foregroundStyle(isFavorite ? Color.yellow : Color.accentColor)
+                    }
+                    .accessibilityLabel(isFavorite ? Text("お気に入りから削除") : Text("お気に入りに追加"))
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    threadMenu(boardURL: boardURL, thread: thread)
+                }
+            }
             .navigationDestination(item: $threadRoute) { route in
                 ThreadView(
                     thread: Thread(id: route.threadId, title: nil, responseCount: -1),
-                    boardURL: route.boardURL
+                    boardURL: route.boardURL,
+                    boardName: route.boardURL == boardURL ? boardName : nil
                 )
             }
             .task {
@@ -227,6 +293,107 @@ struct ThreadView: View {
         } else {
             ContentUnavailableView("エラー：スレや板情報がありません", systemImage: "exclamationmark.triangle")
         }
+    }
+
+    private func threadMenu(boardURL: String, thread: Thread) -> some View {
+        let isSaved = savedThreads.isSaved(boardURL: boardURL, threadId: thread.id)
+        return Menu {
+            Section {
+                if isSaved {
+                    Button {
+                        saveForOffline(boardURL: boardURL, threadId: thread.id)
+                    } label: {
+                        Label("保存済みのコピーを更新", systemImage: "arrow.clockwise.circle")
+                    }
+                    .disabled(posts.isEmpty || showingSavedCopy)
+                    Button(role: .destructive) {
+                        savedThreads.delete(boardURL: boardURL, threadId: thread.id)
+                        showingSavedCopy = false
+                        flashSaveFeedback(String(localized: "オフライン保存を削除しました"))
+                    } label: {
+                        Label("オフライン保存を削除", systemImage: "trash")
+                    }
+                } else {
+                    Button {
+                        saveForOffline(boardURL: boardURL, threadId: thread.id)
+                    } label: {
+                        Label("オフライン用に保存", systemImage: "arrow.down.circle")
+                    }
+                    .disabled(posts.isEmpty)
+                }
+            }
+
+            Section {
+                Picker(selection: $popularThreshold) {
+                    Label("すべてのレス", systemImage: "list.bullet")
+                        .tag(Int?.none)
+                    ForEach(Self.popularThresholds, id: \.self) { threshold in
+                        Label("返信\(threshold)件以上", systemImage: "flame")
+                            .tag(Int?.some(threshold))
+                    }
+                } label: {
+                    Label("人気レス", systemImage: "flame")
+                }
+                .pickerStyle(.menu)
+            }
+        } label: {
+            Image(systemName: isSaved ? "ellipsis.circle.fill" : "ellipsis.circle")
+        }
+    }
+
+    private func saveForOffline(boardURL: String, threadId: Int) {
+        let ok = savedThreads.save(boardURL: boardURL,
+                                   boardName: resolvedBoardName,
+                                   threadId: threadId,
+                                   title: resolvedTitle ?? String(localized: "無題"),
+                                   posts: posts)
+        flashSaveFeedback(ok ? String(localized: "オフライン用に保存しました")
+                             : String(localized: "保存できませんでした"))
+    }
+
+    private func flashSaveFeedback(_ message: String) {
+        withAnimation { saveFeedback = message }
+        Task {
+            try? await Task.sleep(for: .seconds(2))
+            withAnimation {
+                if saveFeedback == message { saveFeedback = nil }
+            }
+        }
+    }
+
+    /// Status pills floating over the top of the list: offline copy, save
+    /// confirmation, 人気レス filter, and ID/trip highlighting.
+    @ViewBuilder
+    private var bannerStack: some View {
+        if hasBanner {
+            VStack(spacing: 6) {
+                if showingSavedCopy {
+                    HighlightBanner(text: String(localized: "保存済みのコピーを表示中"),
+                                    systemImage: "arrow.down.circle")
+                }
+                if let saveFeedback {
+                    HighlightBanner(text: saveFeedback, systemImage: "checkmark.circle")
+                }
+                if let popularThreshold {
+                    HighlightBanner(
+                        text: String(localized: "人気レス（返信\(popularThreshold)件以上）: \(visibleIndices.count)件"),
+                        systemImage: "flame"
+                    ) {
+                        self.popularThreshold = nil
+                    }
+                }
+                if let banner = highlightBannerText {
+                    HighlightBanner(text: banner) {
+                        clearHighlight()
+                    }
+                }
+            }
+            .padding(.top, 6)
+        }
+    }
+
+    private var hasBanner: Bool {
+        showingSavedCopy || saveFeedback != nil || popularThreshold != nil || highlightBannerText != nil
     }
 
     private var highlightBannerText: String? {
@@ -257,33 +424,62 @@ struct ThreadView: View {
     }
 
     public func loadThread(boardURL: String, threadId: Int) async {
+        // A saved thread shows its offline copy straight away, then swaps in
+        // the live version if the network answers. Offline, the copy stays.
+        if posts.isEmpty,
+           let savedPosts = savedThreads.posts(boardURL: boardURL, threadId: threadId),
+           !savedPosts.isEmpty {
+            showingSavedCopy = true
+            apply(savedPosts, boardURL: boardURL, threadId: threadId, isInitialLoad: true)
+        }
+
         let isInitialLoad = posts.isEmpty
         do {
             errorMessage = nil
             let service = PostService()
             let newPosts = try await service.fetchPosts(boardURL: boardURL, threadId: threadId)
-            posts = newPosts
-            postHeights.removeAll()
-            (idIndices, tripIndices) = Self.buildHighlightIndices(posts: newPosts)
-            highlightedID = nil
-            highlightedTrip = nil
-
-            if isInitialLoad {
-                maxSeenIndex = 0
-                let key = ReadStateStore.key(boardURL: boardURL, threadId: threadId)
-                // Only resume if there's unread content below the saved position —
-                // if the last visit already reached the end, scrolling the final row
-                // to the top would have nothing below it to anchor against.
-                if let state = ReadStateStore.shared.state(for: key),
-                   newPosts.count > 1,
-                   state.lastReadIndex < newPosts.count - 1 {
-                    resumeIndex = max(0, state.lastReadIndex)
-                }
-            }
+            showingSavedCopy = false
+            apply(newPosts, boardURL: boardURL, threadId: threadId, isInitialLoad: isInitialLoad)
+            savedThreads.updateIfSaved(boardURL: boardURL,
+                                       threadId: threadId,
+                                       title: resolvedTitle,
+                                       posts: newPosts)
         } catch {
             errorMessage = String(localized: "エラーが発生しました: \(String(describing: error))")
             print("ThreadView Error: \(error)")
         }
+    }
+
+    private func apply(_ newPosts: [Post], boardURL: String, threadId: Int, isInitialLoad: Bool) {
+        posts = newPosts
+        postHeights.removeAll()
+        (idIndices, tripIndices) = Self.buildHighlightIndices(posts: newPosts)
+        highlightedID = nil
+        highlightedTrip = nil
+
+        if isInitialLoad {
+            maxSeenIndex = 0
+            let key = ReadStateStore.key(boardURL: boardURL, threadId: threadId)
+            // Only resume if there's unread content below the saved position —
+            // if the last visit already reached the end, scrolling the final row
+            // to the top would have nothing below it to anchor against.
+            if let state = ReadStateStore.shared.state(for: key),
+               newPosts.count > 1,
+               state.lastReadIndex < newPosts.count - 1 {
+                resumeIndex = max(0, state.lastReadIndex)
+            }
+        }
+
+        let title = resolvedTitle
+        HistoryStore.shared.record(boardURL: boardURL,
+                                   boardName: boardName,
+                                   threadId: threadId,
+                                   title: title,
+                                   responseCount: newPosts.count)
+        favorites.noteOpened(boardURL: boardURL,
+                             threadId: threadId,
+                             title: title,
+                             responseCount: newPosts.count)
     }
 
     /// Runs a dictionary lookup for the tapped text and shows the popup.
@@ -326,6 +522,7 @@ struct ThreadView: View {
         guard !posts.isEmpty else { return }
         let key = ReadStateStore.key(boardURL: boardURL, threadId: threadId)
         ReadStateStore.shared.update(key: key, postCount: posts.count, readIndex: maxSeenIndex)
+        favorites.readStateDidChange()
     }
 
     private static func buildHighlightIndices(posts: [Post]) -> (id: [String: [Int]], trip: [String: [Int]]) {
@@ -345,23 +542,32 @@ struct ThreadView: View {
 
 private struct HighlightBanner: View {
     let text: String
-    let onClear: () -> Void
+    var systemImage: String? = nil
+    var onClear: (() -> Void)? = nil
 
     var body: some View {
         HStack {
             Spacer(minLength: 0)
 
             HStack(spacing: 8) {
+                if let systemImage {
+                    Image(systemName: systemImage)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
                 Text(text)
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
 
-                Button(action: onClear) {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.secondary)
+                if let onClear {
+                    Button(action: onClear) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
