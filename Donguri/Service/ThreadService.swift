@@ -31,7 +31,7 @@ struct ThreadService {
 /// on a background thread.
 nonisolated enum SubjectParser {
     static func parse(_ data: Data) throws -> [Thread] {
-        guard let threadData = String(data: data, encoding: .shiftJIS) else {
+        guard let threadData = ShiftJIS.decode(data) else {
             throw URLError(.cannotDecodeContentData)
         }
         

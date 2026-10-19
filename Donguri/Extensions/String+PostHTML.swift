@@ -20,13 +20,13 @@ extension String {
     /// only the label is ever rendered. Anything reasoning about the visible
     /// text — measuring it, or handing it to the system translator — wants this
     /// rather than the raw form, which would drag `donguri://` URLs along.
-    var asPlainPostText: String {
+    nonisolated var asPlainPostText: String {
         replacing(#/\[([^\]]*)\]\(([^)\s]+)\)/#) { match in
             String(match.1)
         }
     }
 
-    var asPostHTML: String {
+    nonisolated var asPostHTML: String {
         var s = self
             .replacingOccurrences(of: "&", with: "&amp;")
             .replacingOccurrences(of: "<", with: "&lt;")

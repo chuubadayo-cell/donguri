@@ -1814,6 +1814,22 @@
         }
       }
     },
+    "（削除されました）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "(deleted)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "（削除されました）"
+          }
+        }
+      }
+    },
     "５ちゃんねる": {
       "comment": "App's board-list title.",
       "localizations": {

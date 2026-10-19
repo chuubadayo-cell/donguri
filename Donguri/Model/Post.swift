@@ -24,4 +24,29 @@ nonisolated struct Post: Codable {
 
     /// Image URLs found in `text`, shown as thumbnails below the post.
     let imageURLs: [URL]
+
+    /// The post was deleted on the server (its dat line reads あぼーん) or its
+    /// line couldn't be read. It is kept as a placeholder, because every
+    /// `>>N` link and reply index counts posts by position.
+    var isDeleted: Bool? = nil
+
+    /// `text` already rendered for the post webview, worked out once while
+    /// parsing instead of on every redraw. Not written to disk (saved threads
+    /// work it out again when shown), so it's left out of `CodingKeys`.
+    var html: String? = nil
+
+    private nonisolated enum CodingKeys: String, CodingKey {
+        case name, trip, email, date, id, text, threadTitle, replies, imageURLs, isDeleted
+    }
+
+    /// The webview HTML, from the parser when available.
+    var renderedHTML: String {
+        html ?? text.asPostHTML
+    }
+
+    /// A stand-in for a post that can't be shown.
+    static func deleted(date: String = "") -> Post {
+        Post(name: "", trip: nil, email: "", date: date, id: nil, text: "",
+             threadTitle: nil, replies: nil, imageURLs: [], isDeleted: true)
+    }
 }

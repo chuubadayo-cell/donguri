@@ -73,24 +73,30 @@ nonisolated enum PostParser {
     static let abornMarker = "あぼーん"
 
     static func parseDat(_ data: Data) throws -> [Post] {
-        guard let postData = String(data: data, encoding: .shiftJIS) else {
+        let lines = ShiftJIS.lines(of: data)
+        guard lines.contains(where: { $0 != nil }) else {
             throw URLError(.cannotDecodeRawData)
         }
 
         // First pass: parse each line into a post, without reply back-references
         // (those require knowing about every post first, and Post is immutable).
-        let parsed = postData
-            .components(separatedBy: .newlines)
-            .compactMap { element -> Post? in
-                // Skip empty lines
-                guard !element.isEmpty else { return nil }
+        //
+        // Every line becomes exactly one post, even when it can't be shown: a
+        // post's number is its line number, so dropping a line would shift
+        // every later post and point each `>>N` after it at the wrong one.
+        let parsed = lines
+            .map { line -> Post in
+                // Unreadable bytes (see `ShiftJIS.lines`).
+                guard let element = line else { return .deleted() }
 
-                // Skip aborn (deleted/moderated) posts
-                if element.hasPrefix(abornMarker) { return nil }
+                // Deleted by a moderator: 5ch overwrites the line with あぼーん.
+                if element.hasPrefix(abornMarker) {
+                    return .deleted(date: datFields(element)?.date ?? "")
+                }
 
                 guard let fields = datFields(element) else {
                     print("Error parsing: \(element)")
-                    return nil
+                    return .deleted()
                 }
 
                 let name = fields.name.htmlDecoded
@@ -175,7 +181,7 @@ nonisolated enum PostParser {
     }
 
     static func parseArchive(_ data: Data) throws -> [Post] {
-        guard let html = String(data: data, encoding: .shiftJIS) else {
+        guard let html = ShiftJIS.decode(data) else {
             throw URLError(.cannotDecodeRawData)
         }
 
@@ -187,8 +193,11 @@ nonisolated enum PostParser {
         // slicing between consecutive ones avoids needing to balance nested tags.
         let postStartRegex = #/<div id="\d+" data-date="[^"]*" data-userid="([^"]*)" data-id="\d+" class="clear post">/#
         let starts = Array(html.matches(of: postStartRegex))
+        // Archive pages number their posts too; a post the page can't be
+        // parsed for still takes up its slot, for the same reason as in
+        // `parseDat`.
 
-        let parsed: [Post] = starts.enumerated().compactMap { index, match in
+        let parsed: [Post] = starts.enumerated().map { index, match in
             let chunkStart = match.range.upperBound
             let chunkEnd = index + 1 < starts.count ? starts[index + 1].range.lowerBound : html.endIndex
             let chunk = html[chunkStart..<chunkEnd]
@@ -197,7 +206,7 @@ nonisolated enum PostParser {
                   let dateMatch = chunk.firstMatch(of: #/<span class="date">(.*?)<\/span>/#),
                   let contentMatch = chunk.firstMatch(of: #/<div class="post-content">(.*?)<\/div>/#) else {
                 print("Error parsing archive post at index \(index)")
-                return nil
+                return Post.deleted()
             }
 
             let name = String(nameMatch.1).htmlDecoded
@@ -257,7 +266,11 @@ nonisolated enum PostParser {
                  text: post.text,
                  threadTitle: post.threadTitle,
                  replies: repliesByIndex[index],
-                 imageURLs: post.imageURLs)
+                 imageURLs: post.imageURLs,
+                 isDeleted: post.isDeleted,
+                 // Rendered here, off the main actor, rather than on every
+                 // redraw of the row.
+                 html: post.isDeleted == true ? "" : post.text.asPostHTML)
         }
     }
 
@@ -291,5 +304,43 @@ nonisolated enum PostParser {
             guard let url = URL(string: full), seen.insert(url).inserted else { return nil }
             return url
         }
+    }
+}
+
+/// Decoding for 5ch's text, which is Windows Shift-JIS (CP932): plain
+/// Shift-JIS plus the extra characters Windows added, such as ①, ㈱ and №.
+nonisolated enum ShiftJIS {
+    private static let windows31J = String.Encoding(rawValue: CFStringConvertEncodingToNSStringEncoding(
+        CFStringEncoding(CFStringEncodings.dosJapanese.rawValue)))
+
+    static func decode(_ data: Data) -> String? {
+        String(data: data, encoding: windows31J) ?? String(data: data, encoding: .shiftJIS)
+    }
+
+    /// The text split into lines. Whole-file decoding fails outright on a
+    /// single bad byte, which used to make the entire thread fail to load;
+    /// when that happens each line is decoded on its own instead, and only the
+    /// lines that still fail come back as nil.
+    static func lines(of data: Data) -> [String?] {
+        var lines: [String?]
+        if let text = decode(data) {
+            // "\r\n" is a single Character in Swift, so it's matched explicitly.
+            lines = text.split(omittingEmptySubsequences: false,
+                               whereSeparator: { $0 == "\n" || $0 == "\r\n" })
+                .map { stripCarriageReturn(String($0)) }
+        } else {
+            lines = data.split(separator: UInt8(ascii: "\n"), omittingEmptySubsequences: false)
+                .map { decode(Data($0)).map(stripCarriageReturn) }
+        }
+        // A dat ends with a newline, which leaves an empty "line" after the
+        // last post; that isn't a post.
+        while let last = lines.last, last?.isEmpty ?? false {
+            lines.removeLast()
+        }
+        return lines
+    }
+
+    private static func stripCarriageReturn(_ line: String) -> String {
+        line.hasSuffix("\r") ? String(line.dropLast()) : line
     }
 }

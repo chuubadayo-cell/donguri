@@ -115,13 +115,20 @@ struct BBSMenuView: View {
     }
 
     private func loadMenu() async {
+        let service = BBSMenuService()
+        // Show the saved menu straight away; the fresh one replaces it.
+        if menu == nil {
+            menu = service.cachedBBSMenu()
+        }
         do {
             errorMessage = nil
-            let service = BBSMenuService()
             let newMenu = try await service.fetchBBSMenu()
             menu = newMenu
         } catch {
-            errorMessage = String(localized: "エラーが発生しました: \(String(describing: error))")
+            // With a saved menu on screen, being offline isn't worth an error.
+            if menu == nil {
+                errorMessage = String(localized: "エラーが発生しました: \(String(describing: error))")
+            }
             print("BBSMenuView Error: \(error)")
         }
     }

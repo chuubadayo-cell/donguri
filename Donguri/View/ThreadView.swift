@@ -121,7 +121,11 @@ struct ThreadView: View {
                             List {
                                 ForEach(visibleIndices, id: \.self) { index in
                                     let post = posts[index]
-                                    if ngFilter.hides(post) {
+                                    if post.isDeleted == true {
+                                        AbornPlaceholder(index: index, isDeletedOnServer: true)
+                                            .listRowBackground(Color.clear)
+                                            .id(index)
+                                    } else if ngFilter.hides(post) {
                                         // Kept in place so >>N numbering stays correct.
                                         AbornPlaceholder(index: index)
                                             .listRowBackground(Color.clear)
@@ -850,7 +854,7 @@ struct PostView: View {
             // Rendered in a webview rather than SwiftUI Text so selection.js can
             // do tap-to-lookup on individual words.
             PostTextWebView(
-                html: post.text.asPostHTML,
+                html: post.renderedHTML,
                 scanNonJapaneseText: userConfig.scanNonJapaneseText,
                 onTextSelected: onTextSelected,
                 onTapOutside: onTapOutside,
@@ -979,9 +983,11 @@ struct PostView: View {
 
 }
 
-/// Stands in for a post hidden by an NG rule. 5ch clients call this あぼーん.
+/// Stands in for a post hidden by an NG rule, or deleted on the server.
+/// 5ch clients call both あぼーん.
 private struct AbornPlaceholder: View {
     let index: Int
+    var isDeletedOnServer = false
 
     var body: some View {
         HStack(spacing: 6) {
@@ -994,6 +1000,11 @@ private struct AbornPlaceholder: View {
             Text("あぼーん")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+            if isDeletedOnServer {
+                Text("（削除されました）")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
             Spacer()
         }
         .padding(.vertical, 6)
