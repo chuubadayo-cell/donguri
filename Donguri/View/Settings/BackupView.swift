@@ -44,7 +44,7 @@ enum BackupService {
     /// Restores a backup. Returns how many settings were written.
     @discardableResult
     static func restore(from data: Data) throws -> Int {
-        let object = try PropertyListSerialization.propertyList(from: data, options: [], format: nil)
+        let object = try PropertyListSerialization.propertyList(from: data, options: 0, format: nil)
         guard let root = object as? [String: Any],
               root["format"] as? String == format,
               let values = root["defaults"] as? [String: Any] else {
