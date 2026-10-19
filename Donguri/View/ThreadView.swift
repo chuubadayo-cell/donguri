@@ -924,17 +924,14 @@ struct ThreadView: View {
         lookupResults = results
         dictionaryStyles = styles
         popupGeneration += 1
-        withAnimation(.default.speed(2.2)) {
-            showPopup = true
-        }
+        // No animation: the popup should simply be there.
+        showPopup = true
         return first.matched.count
     }
 
     private func dismissPopup() {
         guard showPopup else { return }
-        withAnimation(.default.speed(2.4)) {
-            showPopup = false
-        }
+        showPopup = false
         clearSelection.toggle()
         PostSelectionCenter.shared.clearAll()
     }

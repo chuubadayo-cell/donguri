@@ -328,6 +328,8 @@ struct PopupView: View {
                         popupContent(selectionData: selectionData, layout: layout)
                             .glassEffect(.regular, in: .rect(cornerRadius: 8))
                             .position(position(for: layout))
+                            // Jump straight to the word, never glide across the screen.
+                            .transaction { $0.animation = nil }
                             .opacity(isShown ? 1 : 0)
                             .allowsHitTesting(isShown)
                     }
@@ -338,6 +340,8 @@ struct PopupView: View {
                         .background(popupBackground, in: RoundedRectangle(cornerRadius: 8))
                         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.primary.opacity(0.2), lineWidth: 1))
                         .position(position(for: layout))
+                        // Jump straight to the word, never glide across the screen.
+                        .transaction { $0.animation = nil }
                         .opacity(isShown ? 1 : 0)
                         .allowsHitTesting(isShown)
                 }
