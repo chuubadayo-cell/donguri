@@ -196,6 +196,9 @@ final class AppearanceSettings {
     /// Detect ASCII art and draw it in an MS P Gothic–compatible font,
     /// scaled to fit the screen, so it lines up.
     var asciiArtFont: Bool { didSet { save(asciiArtFont, "asciiArtFont") } }
+    /// Show links as the site's name ("Imgur", "X @user") instead of the
+    /// whole URL.
+    var shortenLinks: Bool { didSet { save(shortenLinks, "shortenLinks") } }
 
     // MARK: Dictionary
 
@@ -238,6 +241,7 @@ final class AppearanceSettings {
         thumbnailOnRight = d.object(forKey: p + "thumbnailOnRight") as? Bool ?? false
         postSeparators = d.object(forKey: p + "postSeparators") as? Bool ?? true
         asciiArtFont = d.object(forKey: p + "asciiArtFont") as? Bool ?? true
+        shortenLinks = d.object(forKey: p + "shortenLinks") as? Bool ?? true
         systemIsDark = UIScreen.main.traitCollection.userInterfaceStyle == .dark
         resolveTheme()
     }
@@ -265,6 +269,7 @@ final class AppearanceSettings {
         thumbnailOnRight = false
         postSeparators = true
         asciiArtFont = true
+        shortenLinks = true
     }
 
     private func save(_ value: Any?, _ key: String) {
@@ -364,7 +369,8 @@ final class AppearanceSettings {
                       linkColor: linkColorHex.flatMap(UIColor.init(hex:)) ?? palette?.link ?? Self.defaultLinkColor,
                       highlightColor: highlightColorHex.flatMap(UIColor.init(hex:)) ?? Self.defaultHighlightColor,
                       detectsAsciiArt: asciiArtFont,
-                      key: [asciiArtFont ? "aa" : "-", postFontFamily, "\(postFontSize)", "\(postLineSpacing)",
+                      shortensLinks: shortenLinks,
+                      key: [asciiArtFont ? "aa" : "-", shortenLinks ? "short" : "-", postFontFamily, "\(postFontSize)", "\(postLineSpacing)",
                             postTextColorHex ?? "-", linkColorHex ?? "-", highlightColorHex ?? "-",
                             activeThemeID, paletteSignature].joined(separator: "|"))
     }
@@ -378,8 +384,34 @@ final class AppearanceSettings {
             css += "html, body, body * { font-family: \"\(family)\", \"Hiragino Sans\", sans-serif !important; }\n"
         }
         if let palette {
-            // popup.css reads its text colour from --text-color.
-            css += "html, body { --text-color: \(palette.text.hexString.cssColor) !important; color: \(palette.text.hexString.cssColor) !important; }\n"
+            // Every themed colour in the popup, not just the body text:
+            // popup.js paints each dictionary's entries plain black or white
+            // by light/dark mode, which is what made every theme's popup
+            // look like the default one.
+            let text = palette.text.hexString.cssColor
+            let secondary = palette.secondaryText.hexString.cssColor
+            let accent = palette.accent.hexString.cssColor
+            let link = palette.link.hexString.cssColor
+            let title = palette.title.hexString.cssColor
+            let background = palette.background.hexString.cssColor
+            css += """
+            html, body {
+              --text-color: \(text) !important;
+              --accent-color: \(accent) !important;
+              --text-color-light1: \(secondary) !important;
+              --text-color-light2: \(secondary) !important;
+              --text-color-light3: \(secondary) !important;
+              --text-color-light4: \(secondary) !important;
+              --background-color-dark1: \(background) !important;
+              --gloss-image-background-color: \(background) !important;
+              color: \(text) !important;
+            }
+            html body [data-dictionary] { color: \(text) !important; }
+            html body a, html body .gloss-link { color: \(link) !important; }
+            html body .expression { color: \(title) !important; }
+            html body .dict-name, html body .dict-label, html body .frequency-dict-label, html body .pitch-dict-label { color: \(secondary) !important; }
+
+            """
         }
         return css
     }
@@ -416,6 +448,8 @@ struct PostTextStyle {
     var highlightColor: UIColor
     /// Draw posts that look like ASCII art in the AA font (see AsciiArt).
     var detectsAsciiArt: Bool = false
+    /// Links drawn as the site's name rather than the full URL.
+    var shortensLinks: Bool = false
     var key: String
     /// False for ASCII art, whose lines must never wrap.
     var wraps: Bool = true

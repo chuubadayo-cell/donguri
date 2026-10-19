@@ -21,6 +21,11 @@ struct BoardView: View {
     /// Hidden threads (one by one, or by NGスレタイ) shown anyway, dimmed.
     @State private var showsHidden = false
     @State private var showsBoardSwitcher = false
+    /// The list as shown, worked out when something it depends on changes
+    /// rather than on every redraw (a busy board has 800+ threads to filter
+    /// and sort).
+    @State private var shown: [Thread] = []
+    @State private var hiddenCount = 0
 
     @Environment(BrowseContext.self) private var browseContext: BrowseContext?
     private var browse: BrowseContext { browseContext ?? .detached }
@@ -28,6 +33,12 @@ struct BoardView: View {
 
     private var sortOrder: ThreadSortOrder {
         ThreadSortOrder(rawValue: sortOrderRaw) ?? .board
+    }
+
+    private func recompute(_ board: BBSMenu.CategoryContent) {
+        let result = matching(board)
+        shown = result.shown
+        hiddenCount = result.hiddenCount
     }
 
     private func matching(_ board: BBSMenu.CategoryContent) -> (shown: [Thread], hiddenCount: Int) {
@@ -48,8 +59,6 @@ struct BoardView: View {
         if let board {
             Group {
                 if !threads.isEmpty {
-                    let result = matching(board)
-                    let shown = result.shown
                     List {
                         if shown.isEmpty, !searchText.isEmpty {
                             ContentUnavailableView.search(text: searchText)
@@ -58,7 +67,7 @@ struct BoardView: View {
                         ForEach(shown) { thread in
                             threadRow(thread, board: board)
                         }
-                        if result.hiddenCount > 0 || showsHidden {
+                        if hiddenCount > 0 || showsHidden {
                             Button {
                                 withAnimation { showsHidden.toggle() }
                             } label: {
@@ -67,7 +76,7 @@ struct BoardView: View {
                                     if showsHidden {
                                         Label("非表示のスレを隠す", systemImage: "eye.slash")
                                     } else {
-                                        Label("非表示のスレ \(result.hiddenCount)件を表示", systemImage: "eye")
+                                        Label("非表示のスレ \(hiddenCount)件を表示", systemImage: "eye")
                                     }
                                     Spacer()
                                 }
@@ -126,17 +135,6 @@ struct BoardView: View {
                             }
                         }
                         Section {
-                            let isFavorite = favorites.isFavorite(boardURL: board.url)
-                            Button {
-                                favorites.toggle(board: board)
-                                Haptics.play(.success)
-                            } label: {
-                                if isFavorite {
-                                    Label("お気に入りから削除", systemImage: "star.slash")
-                                } else {
-                                    Label("お気に入りに追加", systemImage: "star")
-                                }
-                            }
                             Button {
                                 browse.openInNewTab(.board(FavoriteBoard(board)), inBackground: false)
                             } label: {
@@ -150,9 +148,25 @@ struct BoardView: View {
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
+                    let isFavorite = favorites.isFavorite(boardURL: board.url)
+                    Button {
+                        favorites.toggle(board: board)
+                        Haptics.play(.success)
+                    } label: {
+                        Image(systemName: isFavorite ? "star.fill" : "star")
+                            .foregroundStyle(isFavorite ? Color.yellow : Color.accentColor)
+                    }
+                    .accessibilityLabel(isFavorite ? Text("お気に入りから削除") : Text("お気に入りに追加"))
+                }
+                ToolbarItem(placement: .topBarTrailing) {
                     TabsToolbarButton()
                 }
             }
+            .onChange(of: searchText) { recompute(board) }
+            .onChange(of: sortOrderRaw) { recompute(board) }
+            .onChange(of: showsHidden) { recompute(board) }
+            .onChange(of: ngFilter.rules) { recompute(board) }
+            .onChange(of: ngFilter.hiddenThreads) { recompute(board) }
             .sheet(isPresented: $showsBoardSwitcher) {
                 BoardSwitcherView(currentBoardURL: board.url) { picked in
                     showsBoardSwitcher = false
@@ -243,6 +257,7 @@ struct BoardView: View {
             let newThreads = try await service.fetchThreads(boardURL: board.url)
             loadedAt = .now
             threads = newThreads
+            recompute(board)
             favorites.update(boardURL: board.url, from: newThreads)
         } catch {
             errorMessage = String(localized: "エラーが発生しました: \(String(describing: error))")

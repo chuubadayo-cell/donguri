@@ -330,6 +330,14 @@ enum PostTextFormatter {
             if let url {
                 attributes[.foregroundColor] = style.linkColor
                 attributes[.donguriLink] = url
+                // A web link whose text is just its own URL reads better as
+                // the site's name.
+                let showsURL = label.hasPrefix("http") || label.hasPrefix("ttp") || label == url.absoluteString
+                if style.shortensLinks, showsURL, url.scheme == "http" || url.scheme == "https" {
+                    result.append(LinkLabel.attributed(for: url, attributes: attributes,
+                                                       font: font, color: style.linkColor))
+                    return
+                }
             }
             result.append(NSAttributedString(string: label, attributes: attributes))
         }

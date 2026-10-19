@@ -493,6 +493,16 @@ struct GalleryView: View {
         pagerHidden = true
         backdrop = 0
         hero = Hero(image: image, frame: source, cornerRadius: 6)
+        // The zoom starts from whatever is in memory (often the small
+        // thumbnail); swap in the full image as soon as it's ready so the
+        // growing picture sharpens instead of staying soft.
+        if MediaStore.shared.memoryImage(for: item.url, maxPixelSize: nil) == nil {
+            Task {
+                if let full = await MediaStore.shared.image(for: item.url, maxPixelSize: nil), hero != nil {
+                    hero?.image = full
+                }
+            }
+        }
         // Next frame, so the hero is first drawn over the thumbnail.
         DispatchQueue.main.async {
             withAnimation(.spring(response: 0.36, dampingFraction: 0.86)) {

@@ -110,10 +110,11 @@ struct AppearanceView: View {
                 Toggle("名無しを隠す", isOn: $appearance.hideDefaultNames)
                 Toggle("経過時間を表示", isOn: $appearance.showRelativeTime)
                 Toggle("AAを専用フォントで表示", isOn: $appearance.asciiArtFont)
+                Toggle("リンクを短く表示", isOn: $appearance.shortenLinks)
             } header: {
                 Text("スレの表示")
             } footer: {
-                Text("「名無しを隠す」は、そのスレで最も多い名前（名無しさん、風吹けば名無しなど）を表示しません。トリップ付きの名前は常に表示されます。「AAを専用フォントで表示」は、アスキーアートを見つけるとMS Pゴシック互換のフォント（Saitamaar）で画面幅に合わせて表示し、ずれないようにします。")
+                Text("「名無しを隠す」は、そのスレで最も多い名前（名無しさん、風吹けば名無しなど）を表示しません。トリップ付きの名前は常に表示されます。「AAを専用フォントで表示」は、アスキーアートを見つけるとMS Pゴシック互換のフォント（Saitamaar）で画面幅に合わせて表示し、ずれないようにします。「リンクを短く表示」は、URLの代わりにサイト名（Imgur、X @ユーザー名、YouTubeなど）を表示します。長押しでコピーする本文には元のURLが残ります。")
             }
 
             Section {

@@ -146,16 +146,32 @@ final class FavoritesStore {
         isRefreshing = true
         defer { isRefreshing = false }
 
-        let service = ThreadService()
-        for boardURL in boardURLs {
-            do {
-                let listing = try await service.fetchThreads(boardURL: boardURL)
-                update(boardURL: boardURL, from: listing)
-            } catch {
-                // Offline, or the board moved servers. Keep the old counts.
-                print("FavoritesStore refresh error for \(boardURL): \(error)")
+        // All boards at once: a background refresh only gets about 30
+        // seconds, and one board at a time could run out of it.
+        await withTaskGroup(of: (String, [Thread]?).self) { group in
+            for boardURL in boardURLs {
+                group.addTask {
+                    // Offline, or the board moved servers: nil keeps the old counts.
+                    let listing = try? await ThreadService().fetchThreads(boardURL: boardURL)
+                    return (boardURL, listing)
+                }
+            }
+            for await result in group {
+                if let listing = result.1 {
+                    update(boardURL: result.0, from: listing)
+                }
             }
         }
+    }
+
+    func remove(_ thread: FavoriteThread) {
+        threads.removeAll { $0.id == thread.id }
+        persistThreads()
+    }
+
+    func removeBoard(url: String) {
+        boards.removeAll { $0.url == url }
+        persistBoards()
     }
 
     // MARK: Unread counts

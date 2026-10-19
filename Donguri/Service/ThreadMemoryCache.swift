@@ -13,7 +13,8 @@ import UIKit
 final class ThreadMemoryCache {
     static let shared = ThreadMemoryCache()
 
-    private static let capacity = 8
+    /// Room for the live browser tabs plus a few long-press previews.
+    private static let capacity = 16
 
     private var posts: [String: [Post]] = [:]
     /// Most recently used last.

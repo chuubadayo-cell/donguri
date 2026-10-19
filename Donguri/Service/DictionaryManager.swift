@@ -294,7 +294,7 @@ class DictionaryManager {
     func importDictionary(from urls: [URL]) {
         isImporting = true
 
-        Task.detached {
+        _ = Task.detached {
             var imported: [String] = []
             var failed: [String] = []
 

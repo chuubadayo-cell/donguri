@@ -169,14 +169,21 @@ struct ThreadView: View {
         return HistoryStore.shared.knownBoardName(for: boardURL)
     }
 
-    private var highlightedIndices: Set<Int> {
+    /// Posts by the highlighted ID or trip. Stored, not computed: every row
+    /// asks whether it's in here on every redraw.
+    @State private var highlightedIndices: Set<Int> = []
+    /// Posts hidden by NG rules, worked out once per load or rule change
+    /// rather than by every row on every redraw.
+    @State private var ngHidden: Set<Int> = []
+
+    private func updateHighlightedIndices() {
         if let highlightedID {
-            return Set(idIndices[highlightedID] ?? [])
+            highlightedIndices = Set(idIndices[highlightedID] ?? [])
+        } else if let highlightedTrip {
+            highlightedIndices = Set(tripIndices[highlightedTrip] ?? [])
+        } else {
+            highlightedIndices = []
         }
-        if let highlightedTrip {
-            return Set(tripIndices[highlightedTrip] ?? [])
-        }
-        return []
     }
 
     var body: some View {
@@ -345,6 +352,7 @@ struct ThreadView: View {
         .onChange(of: popularThreshold) { recomputeVisibleIndices() }
         .onChange(of: treeMode) { recomputeVisibleIndices() }
         .onChange(of: collapsed) { recomputeVisibleIndices() }
+        .onChange(of: ngFilter.rules) { ngHidden = ngFilter.hiddenIndices(in: posts) }
     }
 
     @ViewBuilder
@@ -355,7 +363,7 @@ struct ThreadView: View {
             if post.isDeleted == true {
                 AbornPlaceholder(index: index, isDeletedOnServer: true)
                     .listRowBackground(Color.clear)
-            } else if ngFilter.hides(post) {
+            } else if ngHidden.contains(index) {
                 // Kept in place so >>N numbering stays correct.
                 AbornPlaceholder(index: index)
                     .listRowBackground(Color.clear)
@@ -473,8 +481,9 @@ struct ThreadView: View {
     /// A link to another thread inside a post.
     private func open(_ route: ThreadRoute) {
         dismissPopup()
-        let sameBoard = route.boardURL == boardURL
-        browse.push(.thread(ThreadLink(boardURL: route.boardURL,
+        let target = BBSMenuService.resolveBoardURL(route.boardURL)
+        let sameBoard = target == boardURL
+        browse.push(.thread(ThreadLink(boardURL: target,
                                        threadId: route.threadId,
                                        title: nil,
                                        boardName: sameBoard ? boardName : nil)))
@@ -948,16 +957,19 @@ struct ThreadView: View {
     private func toggleHighlightedID(_ id: String) {
         highlightedTrip = nil
         highlightedID = (highlightedID == id) ? nil : id
+        updateHighlightedIndices()
     }
 
     private func toggleHighlightedTrip(_ trip: String) {
         highlightedID = nil
         highlightedTrip = (highlightedTrip == trip) ? nil : trip
+        updateHighlightedIndices()
     }
 
     private func clearHighlight() {
         highlightedID = nil
         highlightedTrip = nil
+        highlightedIndices = []
     }
 
     public func loadThread(boardURL: String, threadId: Int) async {
@@ -1013,6 +1025,8 @@ struct ThreadView: View {
         (idIndices, tripIndices) = Self.buildHighlightIndices(posts: newPosts)
         highlightedID = nil
         highlightedTrip = nil
+        highlightedIndices = []
+        ngHidden = ngFilter.hiddenIndices(in: newPosts)
 
         defaultName = Self.defaultName(in: newPosts)
 

@@ -25,6 +25,7 @@ struct BBSMenuService {
         }
 
         let menu = try Self.decode(data)
+        Self.memo = menu
         if let cacheFile = Self.cacheFile {
             try? data.write(to: cacheFile, options: .atomic)
         }
@@ -33,9 +34,30 @@ struct BBSMenuService {
 
     /// The saved copy from the last successful fetch, if any.
     func cachedBBSMenu() -> BBSMenu? {
+        if let memo = Self.memo { return memo }
         guard let cacheFile = Self.cacheFile,
               let data = try? Data(contentsOf: cacheFile) else { return nil }
-        return try? Self.decode(data)
+        let menu = try? Self.decode(data)
+        Self.memo = menu
+        return menu
+    }
+
+    /// The last menu decoded, so lookups don't re-read the file.
+    private static var memo: BBSMenu?
+
+    /// A board's live URL. Threads found through 5ch's search can point at
+    /// the archive server (kako.5ch.io), which doesn't serve dat files; the
+    /// board's own server still serves its old threads through read.cgi.
+    static func resolveBoardURL(_ boardURL: String) -> String {
+        guard let url = URL(string: boardURL), let host = url.host, host.hasPrefix("kako."),
+              let directory = url.pathComponents.first(where: { $0 != "/" }),
+              let menu = BBSMenuService().cachedBBSMenu() else { return boardURL }
+        for category in menu.menuList {
+            if let board = category.categoryContent.first(where: { $0.directoryName == directory }) {
+                return board.url
+            }
+        }
+        return boardURL
     }
 
     private static func decode(_ data: Data) throws -> BBSMenu {

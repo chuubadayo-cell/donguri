@@ -112,6 +112,21 @@ final class AppNavigator {
         let current = restored.first { $0.id == savedCurrent }?.id ?? restored[0].id
         currentTabID = current
         recentTabIDs = [current]
+
+        // Hidden tabs are the easiest memory to give back: they rebuild from
+        // their saved path (and the thread cache) when switched to.
+        _ = NotificationCenter.default.addObserver(forName: UIApplication.didReceiveMemoryWarningNotification,
+                                                   object: nil,
+                                                   queue: .main) { _ in
+            MainActor.assumeIsolated {
+                AppNavigator.shared.releaseHiddenTabs()
+            }
+        }
+    }
+
+    /// Keeps only the visible tab alive.
+    func releaseHiddenTabs() {
+        recentTabIDs = [currentTabID]
     }
 
     // MARK: Tabs

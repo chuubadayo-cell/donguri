@@ -96,7 +96,8 @@ struct ThreadSearchService {
         }.value
         let now = Date.now
         return raw.map { item in
-            let link = ThreadLink(boardURL: item.boardURL, threadId: item.threadId, title: item.title,
+            let link = ThreadLink(boardURL: BBSMenuService.resolveBoardURL(item.boardURL),
+                                  threadId: item.threadId, title: item.title,
                                   boardName: item.boardName, responseCount: item.count ?? -1)
             let momentum = item.rate ?? link.thread.momentum(now: now)
             return ThreadSearchResult(link: link, lastPost: item.lastPost, momentum: momentum,

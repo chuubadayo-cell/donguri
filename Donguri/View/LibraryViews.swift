@@ -26,9 +26,15 @@ struct FavoriteBoardsSection: View {
                 .themedRow()
                 .contextMenu {
                     BoardTabButtons(board: board)
+                    Button(role: .destructive) {
+                        withAnimation { favorites.removeBoard(url: board.url) }
+                    } label: {
+                        Label("お気に入りから削除", systemImage: "star.slash")
+                    }
                 }
             }
             .onDelete { favorites.removeBoards(atOffsets: $0) }
+            .onMove { favorites.moveBoards(fromOffsets: $0, toOffset: $1) }
         } header: {
             Text("お気に入りの板")
         } footer: {
@@ -97,9 +103,25 @@ struct FavoriteThreadsList: View {
                                              unreadCount: favorites.unreadCount(for: favorite),
                                              isArchived: favorite.isArchived)
                         }
-                        .threadContextMenu(link)
+                        .threadContextMenu(link) {
+                            Button(role: .destructive) {
+                                withAnimation { favorites.remove(favorite) }
+                                Haptics.play(.light)
+                            } label: {
+                                Label("お気に入りから削除", systemImage: "star.slash")
+                            }
+                        }
+                        .swipeActions(edge: .trailing) {
+                            Button(role: .destructive) {
+                                withAnimation { favorites.remove(favorite) }
+                                Haptics.play(.light)
+                            } label: {
+                                Label("削除", systemImage: "star.slash")
+                            }
+                        }
                     }
                     .onDelete { favorites.removeThreads(atOffsets: $0) }
+                    .onMove { favorites.moveThreads(fromOffsets: $0, toOffset: $1) }
                 }
                 .listStyle(.plain)
                 .refreshable {
@@ -110,6 +132,12 @@ struct FavoriteThreadsList: View {
         .navigationTitle("お気に入り")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                if !favorites.threads.isEmpty {
+                    // Delete several at once, or drag to reorder.
+                    EditButton()
+                }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 if favorites.isRefreshing {
                     ProgressView()
