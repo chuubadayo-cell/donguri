@@ -1741,6 +1741,22 @@
         }
       }
     },
+    "スレを読み込み中…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading thread…"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "スレを読み込み中…"
+          }
+        }
+      }
+    },
     "スレタイ" : {
       "localizations" : {
         "en" : {
@@ -4254,6 +4270,38 @@
         }
       }
     },
+    "準備中 %lld/%lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preparing %1$lld/%2$lld"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "準備中 %1$lld/%2$lld"
+          }
+        }
+      }
+    },
+    "準備中…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preparing…"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "準備中…"
+          }
+        }
+      }
+    },
     "無題" : {
       "localizations" : {
         "en" : {
@@ -4394,6 +4442,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "画像をダウンロード中 %1$lld/%2$lld"
+          }
+        }
+      }
+    },
+    "画像を読み込み中…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading images…"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "画像を読み込み中…"
           }
         }
       }

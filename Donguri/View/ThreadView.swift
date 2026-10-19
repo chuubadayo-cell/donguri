@@ -107,6 +107,20 @@ struct ThreadView: View {
     /// (new posts arriving at the bottom).
     @State private var followTarget: Int?
 
+    // Opening a thread, as Chance does it: the title and a progress bar
+    // while the thread downloads and every post is prepared (text laid out,
+    // the first images decoded), and only then the thread, already at the
+    // right place, so the first scroll is smooth.
+    @State private var showsLoadingCover = false
+    @State private var preparePhase: PreparePhase = .downloading
+    /// nil while the amount of work isn't known.
+    @State private var prepareProgress: Double?
+    /// True from parsing until the reveal; holds back the resume scroll so
+    /// it happens under the cover.
+    @State private var isPreparingLoad = false
+    @State private var revealTarget: Int?
+    @State private var prepareTotal = 0
+
     // Tree mode (ツリー表示), as in Chance.
     @AppStorage("donguri.threadTreeMode") private var treeMode = false
     @State private var tree = ReplyTree.empty
@@ -191,8 +205,21 @@ struct ThreadView: View {
             GeometryReader { geometry in
                 ScrollViewReader { proxy in
                     threadContent(thread: thread, boardURL: boardURL, proxy: proxy)
-                        .onChange(of: resumeIndex) { _, newValue in
+                        .onChange(of: revealTarget) { _, newValue in
                             guard let newValue else { return }
+                            revealTarget = nil
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                                withAnimation(nil) {
+                                    proxy.scrollTo(newValue, anchor: .top)
+                                }
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                                    hideLoadingCover()
+                                }
+                            }
+                        }
+                        .onChange(of: resumeIndex) { _, newValue in
+                            // While a load is being prepared, the reveal does this.
+                            guard let newValue, !isPreparingLoad else { return }
                             resumeIndex = nil
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                                 withAnimation(nil) {
@@ -311,6 +338,12 @@ struct ThreadView: View {
                 }
             }
             .animation(.snappy, value: replyStack)
+            .overlay {
+                if showsLoadingCover {
+                    loadingCover(thread: thread, boardURL: boardURL)
+                        .transition(.opacity)
+                }
+            }
         } else if let errorMessage {
             ContentUnavailableView {
                 Label("エラーが発生しました", systemImage: "exclamationmark.triangle")
@@ -318,9 +351,16 @@ struct ThreadView: View {
                 Text(errorMessage)
             }
         } else {
-            ProgressView("しばらくお待ちください...")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            loadingCover(thread: thread, boardURL: boardURL)
         }
+    }
+
+    private func loadingCover(thread: Thread, boardURL: String) -> some View {
+        ThreadLoadingView(title: resolvedTitle,
+                          boardName: resolvedBoardName,
+                          phase: preparePhase,
+                          progress: prepareProgress,
+                          postCount: prepareTotal > 0 ? prepareTotal : nil)
     }
 
     private func postList(thread: Thread, boardURL: String, proxy: ScrollViewProxy) -> some View {
@@ -979,12 +1019,16 @@ struct ThreadView: View {
         // a recent visit, or else the offline copy of a saved thread. The live
         // version replaces it once the network answers; offline, it stays.
         if posts.isEmpty, let cached = ThreadMemoryCache.shared.posts(for: cacheKey), !cached.isEmpty {
-            apply(cached, boardURL: boardURL, threadId: threadId, isInitialLoad: true)
+            await prepareAndApply(cached, boardURL: boardURL, threadId: threadId)
         } else if posts.isEmpty,
                   let savedPosts = savedThreads.posts(boardURL: boardURL, threadId: threadId),
                   !savedPosts.isEmpty {
             showingSavedCopy = true
-            apply(savedPosts, boardURL: boardURL, threadId: threadId, isInitialLoad: true)
+            await prepareAndApply(savedPosts, boardURL: boardURL, threadId: threadId)
+        }
+        if posts.isEmpty {
+            preparePhase = .downloading
+            prepareProgress = nil
         }
 
         let isInitialLoad = posts.isEmpty
@@ -997,7 +1041,11 @@ struct ThreadView: View {
             // Re-applying identical posts would throw away every measured row
             // height and make the list reflow for nothing.
             if !Self.samePosts(posts, newPosts) {
-                apply(newPosts, boardURL: boardURL, threadId: threadId, isInitialLoad: isInitialLoad)
+                if isInitialLoad {
+                    await prepareAndApply(newPosts, boardURL: boardURL, threadId: threadId, afterDownload: true)
+                } else {
+                    apply(newPosts, boardURL: boardURL, threadId: threadId, isInitialLoad: false)
+                }
             }
             savedThreads.updateIfSaved(boardURL: boardURL,
                                        threadId: threadId,
@@ -1006,6 +1054,104 @@ struct ThreadView: View {
         } catch {
             errorMessage = String(localized: "エラーが発生しました: \(String(describing: error))")
             print("ThreadView Error: \(error)")
+            hideLoadingCover()
+        }
+    }
+
+    // MARK: Preparing a load
+
+    /// Prepares every post, applies them, decodes the images that will be on
+    /// screen first, then reveals the thread at its resume position.
+    private func prepareAndApply(_ newPosts: [Post], boardURL: String, threadId: Int,
+                                 afterDownload: Bool = false) async {
+        isPreparingLoad = true
+        preparePhase = .preparing
+        prepareProgress = 0
+        prepareTotal = newPosts.count
+        // Coming from the download screen, the cover is already what's
+        // showing, so it simply stays up.
+        if afterDownload {
+            showsLoadingCover = true
+        }
+        // Threads still in memory are ready almost at once; only cover the
+        // screen if preparing takes long enough to notice.
+        let cover = Task {
+            try? await Task.sleep(for: .milliseconds(120))
+            guard !Task.isCancelled, isPreparingLoad else { return }
+            withAnimation(.easeOut(duration: 0.15)) { showsLoadingCover = true }
+        }
+
+        await warmUp(newPosts)
+        apply(newPosts, boardURL: boardURL, threadId: threadId, isInitialLoad: true)
+
+        let start = resumeIndex ?? 0
+        preparePhase = .images
+        prepareProgress = nil
+        await preloadThumbnails(from: start)
+
+        cover.cancel()
+        isPreparingLoad = false
+        if let target = resumeIndex {
+            resumeIndex = nil
+            revealTarget = target
+        } else {
+            hideLoadingCover()
+        }
+    }
+
+    private func hideLoadingCover() {
+        isPreparingLoad = false
+        guard showsLoadingCover else { return }
+        withAnimation(.easeOut(duration: 0.2)) { showsLoadingCover = false }
+    }
+
+    /// Builds each post's text (cached by PostTextFormatter, so the rows
+    /// only look it up) and the other per-post work rows do, in chunks so
+    /// the progress bar moves.
+    private func warmUp(_ newPosts: [Post]) async {
+        let style = appearance.postStyle
+        let total = max(newPosts.count, 1)
+        for index in newPosts.indices {
+            let post = newPosts[index]
+            if post.isDeleted != true {
+                _ = PostTextFormatter.attributed(post.text, style: style)
+                if style.detectsAsciiArt, AsciiArt.isArt(post.text) {
+                    _ = AsciiArt.widestLine(post.text)
+                }
+                _ = PostDate.date(from: post.date)
+                _ = LinkPreviewService.previewableURLs(in: post.text)
+            }
+            if index % 40 == 39 {
+                prepareProgress = Double(index + 1) / Double(total)
+                await Task.yield()
+            }
+        }
+        prepareProgress = 1
+    }
+
+    /// Decodes the thumbnails of the first screenful from `start`, waiting
+    /// at most a moment: a slow image server shouldn't hold the thread back.
+    private func preloadThumbnails(from start: Int) async {
+        guard !posts.isEmpty else { return }
+        let end = min(start + 12, posts.count)
+        guard start < end else { return }
+        let items = (start..<end).flatMap { mediaByPost[$0] ?? [] }.filter { $0.kind != .unsupportedVideo }
+        guard !items.isEmpty else { return }
+        let size = MediaThumbnailView.rowPixelSize
+        let loading = Task.detached(priority: .userInitiated) {
+            await withTaskGroup(of: Void.self) { group in
+                for item in items {
+                    group.addTask {
+                        _ = await MediaStore.shared.thumbnail(for: item, maxPixelSize: size)
+                    }
+                }
+            }
+        }
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { await loading.value }
+            group.addTask { try? await Task.sleep(for: .seconds(1.5)) }
+            _ = await group.next()
+            group.cancelAll()
         }
     }
 
@@ -1758,6 +1904,97 @@ private struct AbornPlaceholder: View {
 
 #Preview {
     ThreadView(thread: nil, boardURL: nil)
+}
+
+enum PreparePhase {
+    case downloading, preparing, images
+}
+
+/// What shows while a thread opens: its title, board and a progress bar.
+private struct ThreadLoadingView: View {
+    let title: String?
+    let boardName: String
+    let phase: PreparePhase
+    let progress: Double?
+    let postCount: Int?
+
+    @State private var appearance = AppearanceSettings.shared
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Spacer()
+            if let title {
+                Text(title)
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(appearance.palette.map { Color(uiColor: $0.title) } ?? .primary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(4)
+            }
+            if !boardName.isEmpty {
+                Text(boardName)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            LoadingBar(progress: progress)
+                .frame(width: 180, height: 4)
+                .padding(.top, 8)
+            Text(phaseText)
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+            Spacer()
+            Spacer()
+        }
+        .padding(.horizontal, 32)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(background.ignoresSafeArea())
+    }
+
+    private var phaseText: String {
+        switch phase {
+        case .downloading:
+            return String(localized: "スレを読み込み中…")
+        case .preparing:
+            if let postCount, let progress {
+                return String(localized: "準備中 \(Int(Double(postCount) * progress))/\(postCount)")
+            }
+            return String(localized: "準備中…")
+        case .images:
+            return String(localized: "画像を読み込み中…")
+        }
+    }
+
+    private var background: Color {
+        appearance.threadBackground ?? Color(uiColor: .systemBackground)
+    }
+}
+
+/// A thin bar: filled to `progress`, or a sliding segment when unknown.
+private struct LoadingBar: View {
+    let progress: Double?
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.secondary.opacity(0.2))
+                if let progress {
+                    Capsule()
+                        .fill(Color.accentColor)
+                        .frame(width: max(geometry.size.width * progress, geometry.size.height))
+                        .animation(.easeOut(duration: 0.15), value: progress)
+                } else {
+                    TimelineView(.animation) { context in
+                        let cycle = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.1) / 1.1
+                        let segment = geometry.size.width * 0.35
+                        Capsule()
+                            .fill(Color.accentColor)
+                            .frame(width: segment)
+                            .offset(x: (geometry.size.width + segment) * cycle - segment)
+                    }
+                }
+            }
+            .clipShape(Capsule())
+        }
+    }
 }
 
 /// "ここまで読んだ": where the last visit stopped.
