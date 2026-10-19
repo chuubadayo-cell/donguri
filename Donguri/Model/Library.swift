@@ -59,6 +59,11 @@ struct FavoriteThread: Codable, Identifiable, Hashable {
     var thread: Thread {
         Thread(id: threadId, title: title, responseCount: responseCount)
     }
+
+    var link: ThreadLink {
+        ThreadLink(boardURL: boardURL, threadId: threadId, title: title,
+                   boardName: boardName, responseCount: responseCount)
+    }
 }
 
 /// One thread the user has opened, most recent visit first.
@@ -74,6 +79,11 @@ struct HistoryEntry: Codable, Identifiable, Hashable {
 
     var thread: Thread {
         Thread(id: threadId, title: title, responseCount: responseCount)
+    }
+
+    var link: ThreadLink {
+        ThreadLink(boardURL: boardURL, threadId: threadId, title: title,
+                   boardName: boardName, responseCount: responseCount)
     }
 }
 
@@ -93,6 +103,11 @@ struct SavedThreadInfo: Codable, Identifiable, Hashable {
 
     var thread: Thread {
         Thread(id: threadId, title: title, responseCount: postCount)
+    }
+
+    var link: ThreadLink {
+        ThreadLink(boardURL: boardURL, threadId: threadId, title: title,
+                   boardName: boardName, responseCount: postCount)
     }
 }
 

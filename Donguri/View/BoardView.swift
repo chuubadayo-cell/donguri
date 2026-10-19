@@ -17,49 +17,67 @@ struct BoardView: View {
     /// "now" for every row and the sort stays consistent while scrolling.
     @State private var loadedAt = Date.now
     @State private var favorites = FavoritesStore.shared
+    @State private var ngFilter = NGFilterStore.shared
+    /// Hidden threads (one by one, or by NGスレタイ) shown anyway, dimmed.
+    @State private var showsHidden = false
+    @State private var showsBoardSwitcher = false
 
+    @Environment(BrowseContext.self) private var browseContext: BrowseContext?
+    private var browse: BrowseContext { browseContext ?? .detached }
     @AppStorage("donguri.threadSortOrder") private var sortOrderRaw = ThreadSortOrder.board.rawValue
 
     private var sortOrder: ThreadSortOrder {
         ThreadSortOrder(rawValue: sortOrderRaw) ?? .board
     }
 
-    private var displayedThreads: [Thread] {
+    private func matching(_ board: BBSMenu.CategoryContent) -> (shown: [Thread], hiddenCount: Int) {
         let query = searchText.trimmingCharacters(in: .whitespaces)
-        let matching = query.isEmpty ? threads : threads.filter {
+        var list = query.isEmpty ? threads : threads.filter {
             ($0.title ?? "").localizedCaseInsensitiveContains(query)
         }
-        return sortOrder.sorted(matching, now: loadedAt)
+        var hiddenCount = 0
+        if !showsHidden {
+            let before = list.count
+            list = list.filter { !ngFilter.hides(thread: $0, boardURL: board.url) }
+            hiddenCount = before - list.count
+        }
+        return (sortOrder.sorted(list, now: loadedAt), hiddenCount)
     }
 
     var body: some View {
         if let board {
             Group {
                 if !threads.isEmpty {
-                    let shown = displayedThreads
+                    let result = matching(board)
+                    let shown = result.shown
                     List {
-                        if shown.isEmpty {
+                        if shown.isEmpty, !searchText.isEmpty {
                             ContentUnavailableView.search(text: searchText)
                                 .listRowSeparator(.hidden)
                         }
                         ForEach(shown) { thread in
-                            let isFavorite = favorites.isFavorite(boardURL: board.url, threadId: thread.id)
-                            NavigationLink {
-                                ThreadView(thread: thread, boardURL: board.url, boardName: board.boardName)
+                            threadRow(thread, board: board)
+                        }
+                        if result.hiddenCount > 0 || showsHidden {
+                            Button {
+                                withAnimation { showsHidden.toggle() }
                             } label: {
-                                ThreadRowView(thread: thread,
-                                              boardURL: board.url,
-                                              momentum: thread.momentum(now: loadedAt),
-                                              isFavorite: isFavorite)
+                                HStack {
+                                    Spacer()
+                                    if showsHidden {
+                                        Label("非表示のスレを隠す", systemImage: "eye.slash")
+                                    } else {
+                                        Label("非表示のスレ \(result.hiddenCount)件を表示", systemImage: "eye")
+                                    }
+                                    Spacer()
+                                }
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                                .padding(.vertical, 8)
                             }
-                            .padding(.vertical, 4)
-                            .contextMenu {
-                                favoriteThreadButton(thread: thread, board: board, isFavorite: isFavorite)
-                            }
-                            .swipeActions(edge: .leading) {
-                                favoriteThreadButton(thread: thread, board: board, isFavorite: isFavorite)
-                                    .tint(.yellow)
-                            }
+                            .buttonStyle(.plain)
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
                         }
                     }
                     .listStyle(.plain)
@@ -81,12 +99,48 @@ struct BoardView: View {
             .navigationTitle(board.boardName)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                // Tap the board name to jump to another board.
+                ToolbarItem(placement: .principal) {
+                    Button {
+                        showsBoardSwitcher = true
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(board.boardName)
+                                .font(.headline)
+                                .foregroundStyle(.primary)
+                                .lineLimit(1)
+                            Image(systemName: "chevron.down.circle.fill")
+                                .font(.caption)
+                                .symbolRenderingMode(.hierarchical)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .accessibilityLabel(Text("板を切り替え"))
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         Picker("並び替え", selection: $sortOrderRaw) {
                             ForEach(ThreadSortOrder.allCases) { order in
                                 Label(order.title, systemImage: order.systemImage)
                                     .tag(order.rawValue)
+                            }
+                        }
+                        Section {
+                            let isFavorite = favorites.isFavorite(boardURL: board.url)
+                            Button {
+                                favorites.toggle(board: board)
+                                Haptics.play(.success)
+                            } label: {
+                                if isFavorite {
+                                    Label("お気に入りから削除", systemImage: "star.slash")
+                                } else {
+                                    Label("お気に入りに追加", systemImage: "star")
+                                }
+                            }
+                            Button {
+                                browse.openInNewTab(.board(FavoriteBoard(board)), inBackground: false)
+                            } label: {
+                                Label("新しいタブで開く", systemImage: "plus.square.on.square")
                             }
                         }
                     } label: {
@@ -96,14 +150,15 @@ struct BoardView: View {
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    let isFavorite = favorites.isFavorite(boardURL: board.url)
-                    Button {
-                        favorites.toggle(board: board)
-                    } label: {
-                        Image(systemName: isFavorite ? "star.fill" : "star")
-                            .foregroundStyle(isFavorite ? Color.yellow : Color.accentColor)
-                    }
-                    .accessibilityLabel(isFavorite ? Text("お気に入りから削除") : Text("お気に入りに追加"))
+                    TabsToolbarButton()
+                }
+            }
+            .sheet(isPresented: $showsBoardSwitcher) {
+                BoardSwitcherView(currentBoardURL: board.url) { picked in
+                    showsBoardSwitcher = false
+                    guard picked.url != board.url else { return }
+                    Haptics.play(.selection)
+                    browse.replaceTop(.board(picked))
                 }
             }
             .task {
@@ -117,6 +172,32 @@ struct BoardView: View {
         }
     }
 
+    @ViewBuilder
+    private func threadRow(_ thread: Thread, board: BBSMenu.CategoryContent) -> some View {
+        let isFavorite = favorites.isFavorite(boardURL: board.url, threadId: thread.id)
+        let isHidden = showsHidden && ngFilter.hides(thread: thread, boardURL: board.url)
+        let link = ThreadLink(boardURL: board.url, threadId: thread.id, title: thread.title,
+                              boardName: board.boardName, responseCount: thread.responseCount)
+        NavigationLink(value: BrowseRoute.thread(link)) {
+            ThreadRowView(thread: thread,
+                          boardURL: board.url,
+                          momentum: thread.momentum(now: loadedAt),
+                          isFavorite: isFavorite)
+                .opacity(isHidden ? 0.4 : 1)
+        }
+        .padding(.vertical, 4)
+        .threadContextMenu(link) {
+            favoriteThreadButton(thread: thread, board: board, isFavorite: isFavorite)
+            hideThreadButton(thread: thread, board: board)
+        }
+        .swipeActions(edge: .trailing) {
+            hideThreadButton(thread: thread, board: board)
+                .tint(.gray)
+            favoriteThreadButton(thread: thread, board: board, isFavorite: isFavorite)
+                .tint(.yellow)
+        }
+    }
+
     private func favoriteThreadButton(thread: Thread, board: BBSMenu.CategoryContent, isFavorite: Bool) -> some View {
         Button {
             favorites.toggle(boardURL: board.url,
@@ -124,11 +205,33 @@ struct BoardView: View {
                              threadId: thread.id,
                              title: thread.title ?? String(localized: "無題"),
                              responseCount: thread.responseCount)
+            Haptics.play(.success)
         } label: {
             if isFavorite {
                 Label("お気に入りから削除", systemImage: "star.slash")
             } else {
                 Label("お気に入りに追加", systemImage: "star")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func hideThreadButton(thread: Thread, board: BBSMenu.CategoryContent) -> some View {
+        if ngFilter.isHidden(boardURL: board.url, threadId: thread.id) {
+            Button {
+                withAnimation { ngFilter.unhide(boardURL: board.url, threadId: thread.id) }
+            } label: {
+                Label("再表示", systemImage: "eye")
+            }
+        } else {
+            Button {
+                withAnimation {
+                    ngFilter.hide(boardURL: board.url, threadId: thread.id,
+                                  title: thread.title ?? String(localized: "無題"))
+                }
+                Haptics.play(.light)
+            } label: {
+                Label("非表示", systemImage: "eye.slash")
             }
         }
     }

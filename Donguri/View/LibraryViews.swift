@@ -15,9 +15,7 @@ struct FavoriteBoardsSection: View {
     var body: some View {
         Section {
             ForEach(favorites.boards) { board in
-                NavigationLink {
-                    BoardView(board: board.categoryContent)
-                } label: {
+                NavigationLink(value: BrowseRoute.board(board)) {
                     HStack(spacing: 10) {
                         Image(systemName: "star.fill")
                             .foregroundStyle(.yellow)
@@ -26,13 +24,16 @@ struct FavoriteBoardsSection: View {
                     }
                 }
                 .themedRow()
+                .contextMenu {
+                    BoardTabButtons(board: board)
+                }
             }
             .onDelete { favorites.removeBoards(atOffsets: $0) }
         } header: {
             Text("お気に入りの板")
         } footer: {
             if favorites.boards.isEmpty {
-                Text("板やスレを長押し、または右にスワイプすると、お気に入りに追加できます。")
+                Text("板やスレを長押し、または左にスワイプすると、お気に入りに追加できます。")
             }
         }
     }
@@ -52,7 +53,7 @@ struct SavedTabView: View {
     private var segment: Segment { Segment(rawValue: segmentRaw) ?? .favorites }
 
     var body: some View {
-        NavigationStack {
+        RouteStack {
             Group {
                 switch segment {
                 case .favorites:
@@ -88,17 +89,15 @@ struct FavoriteThreadsList: View {
             } else {
                 List {
                     ForEach(favorites.threads) { favorite in
-                        NavigationLink {
-                            ThreadView(thread: favorite.thread,
-                                       boardURL: favorite.boardURL,
-                                       boardName: favorite.boardName)
-                        } label: {
+                        let link = favorite.link
+                        NavigationLink(value: BrowseRoute.thread(link)) {
                             LibraryThreadRow(title: favorite.title,
                                              boardName: favorite.boardName,
                                              responseCount: favorite.responseCount,
                                              unreadCount: favorites.unreadCount(for: favorite),
                                              isArchived: favorite.isArchived)
                         }
+                        .threadContextMenu(link)
                     }
                     .onDelete { favorites.removeThreads(atOffsets: $0) }
                 }
@@ -190,16 +189,14 @@ struct HistoryView: View {
             } else {
                 List {
                     ForEach(entries) { entry in
-                        NavigationLink {
-                            ThreadView(thread: entry.thread,
-                                       boardURL: entry.boardURL,
-                                       boardName: entry.boardName)
-                        } label: {
+                        let link = entry.link
+                        NavigationLink(value: BrowseRoute.thread(link)) {
                             LibraryThreadRow(title: entry.title,
                                              boardName: entry.boardName,
                                              detail: entry.lastViewed.formatted(.relative(presentation: .named)),
                                              responseCount: entry.responseCount)
                         }
+                        .threadContextMenu(link)
                     }
                     .onDelete { offsets in
                         for entry in offsets.map({ entries[$0] }) {
@@ -254,16 +251,14 @@ struct SavedThreadsView: View {
                 List {
                     Section {
                         ForEach(entries) { info in
-                            NavigationLink {
-                                ThreadView(thread: info.thread,
-                                           boardURL: info.boardURL,
-                                           boardName: info.boardName)
-                            } label: {
+                            let link = info.link
+                            NavigationLink(value: BrowseRoute.thread(link)) {
                                 LibraryThreadRow(title: info.title,
                                                  boardName: info.boardName,
                                                  detail: info.savedAt.formatted(date: .numeric, time: .shortened),
                                                  responseCount: info.postCount)
                             }
+                            .threadContextMenu(link)
                         }
                         .onDelete { offsets in
                             for info in offsets.map({ entries[$0] }) {

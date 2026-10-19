@@ -19,6 +19,8 @@ struct GalleryView: View {
     /// Closes the gallery and scrolls the thread to this post (an index into
     /// the thread's posts). Nil hides the "jump to post" controls.
     var onJumpToPost: ((Int) -> Void)? = nil
+    /// Where an item's thumbnail is on screen, for the zoom in and out.
+    var sourceFrame: ((MediaItem) -> CGRect?)? = nil
     var onClose: () -> Void
 
     @Environment(\.openURL) private var openURL
@@ -32,14 +34,33 @@ struct GalleryView: View {
     @State private var job = MediaJob()
     @State private var toast: String?
 
+    // Zoom transition: an image that grows out of its thumbnail on opening
+    // and shrinks back into it on closing, drawn over everything while the
+    // real pages are hidden.
+    @State private var hero: Hero?
+    @State private var pagerHidden = false
+    /// The black backdrop, 0 while zooming in from or out to a thumbnail.
+    @State private var backdrop: Double = 1
+    @State private var isClosing = false
+    /// The gallery's frame in window coordinates.
+    @State private var bounds: CGRect = UIScreen.main.bounds
+
+    private struct Hero {
+        var image: UIImage
+        var frame: CGRect
+        var cornerRadius: CGFloat
+    }
+
     init(items: [MediaItem],
          initialIndex: Int = 0,
          initiallyShowGrid: Bool = false,
          onJumpToPost: ((Int) -> Void)? = nil,
+         sourceFrame: ((MediaItem) -> CGRect?)? = nil,
          onClose: @escaping () -> Void) {
         self.items = items
         self.initiallyShowGrid = initiallyShowGrid
         self.onJumpToPost = onJumpToPost
+        self.sourceFrame = sourceFrame
         self.onClose = onClose
         let start = items.indices.contains(initialIndex) ? items[initialIndex].id : items.first?.id
         _currentID = State(initialValue: start)
@@ -61,17 +82,18 @@ struct GalleryView: View {
     var body: some View {
         ZStack {
             Color.black
-                .opacity(1 - dismissProgress * 0.85)
+                .opacity((1 - dismissProgress * 0.85) * backdrop)
                 .ignoresSafeArea()
 
             pager
+                .opacity(pagerHidden ? 0 : 1)
 
             // Always in the hierarchy and faded rather than inserted: re-inserting
             // it on every tap rebuilt the thumbnail strip, whose thumbnails then
             // animated in from nothing and the strip jumped to re-centre.
             chrome
-                .opacity(chromeVisible ? 1 : 0)
-                .allowsHitTesting(chromeVisible)
+                .opacity(chromeVisible && !pagerHidden ? 1 : 0)
+                .allowsHitTesting(chromeVisible && !pagerHidden)
 
             if showGrid {
                 grid
@@ -79,12 +101,16 @@ struct GalleryView: View {
             }
 
             statusPill
+
+            heroLayer
         }
         .opacity(appeared ? 1 : 0)
         .statusBarHidden(!showChrome && !showGrid)
         .preferredColorScheme(.dark)
         .onAppear {
-            withAnimation(.easeOut(duration: 0.2)) { appeared = true }
+            if !zoomIn() {
+                withAnimation(.easeOut(duration: 0.2)) { appeared = true }
+            }
             preloadNeighbours()
         }
         .onChange(of: currentID) {
@@ -104,7 +130,7 @@ struct GalleryView: View {
                                 onTap: toggleChrome,
                                 onZoomChange: { isZoomed = $0 },
                                 onDismissProgress: { dismissProgress = $0 },
-                                onDismiss: { close() })
+                                onDismiss: { frame in close(from: frame) })
                         .containerRelativeFrame([.horizontal, .vertical])
                         .id(item.id)
                 }
@@ -407,19 +433,100 @@ struct GalleryView: View {
         withAnimation(.easeInOut(duration: 0.2)) { showChrome.toggle() }
     }
 
-    private func close(then action: (() -> Void)? = nil) {
+    /// Closes the gallery, zooming the image back into its thumbnail when
+    /// the thumbnail is on screen. Returns true if it's zooming.
+    @discardableResult
+    private func close(from frame: CGRect? = nil, then action: (() -> Void)? = nil) -> Bool {
+        guard !isClosing else { return false }
+        isClosing = true
+        if action == nil, zoomOut(from: frame) { return true }
         withAnimation(.easeIn(duration: 0.18)) { appeared = false }
         Task {
             try? await Task.sleep(for: .milliseconds(180))
             onClose()
             action?()
         }
+        return false
+    }
+
+    // MARK: Zoom transition
+
+    @ViewBuilder
+    private var heroLayer: some View {
+        GeometryReader { proxy in
+            let origin = proxy.frame(in: .global).origin
+            if let hero {
+                Image(uiImage: hero.image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: hero.frame.width, height: hero.frame.height)
+                    .clipShape(RoundedRectangle(cornerRadius: hero.cornerRadius, style: .continuous))
+                    .position(x: hero.frame.midX - origin.x, y: hero.frame.midY - origin.y)
+            }
+            Color.clear
+                .onAppear { bounds = proxy.frame(in: .global) }
+                .onChange(of: proxy.size) { bounds = proxy.frame(in: .global) }
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+    }
+
+    /// The image's frame when it fills the screen, as the page lays it out.
+    private func fittedFrame(for size: CGSize) -> CGRect {
+        guard size.width > 0, size.height > 0, bounds.width > 0, bounds.height > 0 else { return bounds }
+        let scale = min(bounds.width / size.width, bounds.height / size.height)
+        let fitted = CGSize(width: size.width * scale, height: size.height * scale)
+        return CGRect(x: bounds.midX - fitted.width / 2, y: bounds.midY - fitted.height / 2,
+                      width: fitted.width, height: fitted.height)
+    }
+
+    /// The best image already in memory: the full one, else the thumbnail.
+    private func cachedImage(for item: MediaItem) -> UIImage? {
+        MediaStore.shared.memoryImage(for: item.url, maxPixelSize: nil)
+            ?? MediaStore.shared.memoryImage(for: item.url, maxPixelSize: MediaThumbnailView.rowPixelSize)
+    }
+
+    private func zoomIn() -> Bool {
+        guard !initiallyShowGrid, let item = current, item.kind == .image,
+              let source = sourceFrame?(item), let image = cachedImage(for: item) else { return false }
+        appeared = true
+        pagerHidden = true
+        backdrop = 0
+        hero = Hero(image: image, frame: source, cornerRadius: 6)
+        // Next frame, so the hero is first drawn over the thumbnail.
+        DispatchQueue.main.async {
+            withAnimation(.spring(response: 0.36, dampingFraction: 0.86)) {
+                hero?.frame = fittedFrame(for: image.size)
+                hero?.cornerRadius = 0
+                backdrop = 1
+            } completion: {
+                pagerHidden = false
+                hero = nil
+            }
+        }
+        return true
+    }
+
+    private func zoomOut(from frame: CGRect?) -> Bool {
+        guard !showGrid, !isZoomed, let item = current, item.kind == .image,
+              let target = sourceFrame?(item), let image = cachedImage(for: item) else { return false }
+        let start = frame ?? fittedFrame(for: image.size)
+        hero = Hero(image: image, frame: start, cornerRadius: 0)
+        pagerHidden = true
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
+            hero?.frame = target
+            hero?.cornerRadius = 6
+            backdrop = 0
+        } completion: {
+            onClose()
+        }
+        return true
     }
 
     private func jump(to item: MediaItem) {
         guard let onJumpToPost else { return }
         let postIndex = item.postIndex
-        close { onJumpToPost(postIndex) }
+        close(then: { onJumpToPost(postIndex) })
     }
 
     private func showSummary(of job: MediaJob) {
@@ -459,7 +566,9 @@ private struct GalleryPage: View {
     var onTap: () -> Void
     var onZoomChange: (Bool) -> Void
     var onDismissProgress: (CGFloat) -> Void
-    var onDismiss: () -> Void
+    /// The image's frame when a swipe closes the gallery (nil for videos);
+    /// true if the gallery zooms it back into its thumbnail.
+    var onDismiss: (CGRect?) -> Bool
 
     @Environment(\.openURL) private var openURL
     @State private var image: UIImage?
@@ -474,7 +583,7 @@ private struct GalleryPage: View {
             GalleryVideoPage(url: item.url,
                              isCurrent: isCurrent,
                              onDismissProgress: onDismissProgress,
-                             onDismiss: onDismiss)
+                             onDismiss: { _ = onDismiss(nil) })
         case .unsupportedVideo:
             messagePage(systemImage: "film",
                         text: String(localized: "WebM動画はiOSで再生できません"))
@@ -489,7 +598,7 @@ private struct GalleryPage: View {
                                   onTap: onTap,
                                   onZoomChange: onZoomChange,
                                   onDismissProgress: onDismissProgress,
-                                  onDismiss: onDismiss)
+                                  onDismiss: { frame in onDismiss(frame) })
             } else if failed {
                 messagePage(systemImage: "photo.badge.exclamationmark",
                             text: String(localized: "画像を読み込めませんでした"),

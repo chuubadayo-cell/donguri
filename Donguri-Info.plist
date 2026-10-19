@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>iroha.favorites.refresh</string>
+	</array>
 	<key>CFBundleDisplayName</key>
 	<string>いろは</string>
 	<key>CFBundleDocumentTypes</key>
@@ -32,6 +36,10 @@
 	</array>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Donguri adds the images and videos you choose to save from a thread to your photo library. / スレの画像や動画を、選んだときだけ写真ライブラリに保存します。</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+	</array>
 	<key>UIFileSharingEnabled</key>
 	<true/>
 	<key>UTImportedTypeDeclarations</key>

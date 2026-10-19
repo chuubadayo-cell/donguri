@@ -18,15 +18,19 @@ struct AppearanceView: View {
 
         List {
             Section {
-                Picker("テーマ", selection: $appearance.theme) {
-                    ForEach(AppearanceSettings.Theme.allCases) { theme in
-                        Text(theme.title).tag(theme)
-                    }
+                Toggle("ライト/ダークで自動切り替え", isOn: $appearance.autoTheme)
+                if appearance.autoTheme {
+                    themeLink(title: String(localized: "ライト時のテーマ"), selection: $appearance.lightThemeID)
+                    themeLink(title: String(localized: "ダーク時のテーマ"), selection: $appearance.darkThemeID)
+                } else {
+                    themeLink(title: String(localized: "テーマ"), selection: $appearance.themeID)
                 }
                 ColorSettingRow(title: "アクセントカラー", hex: $appearance.accentColorHex,
                                 defaultColor: UIColor(named: "AccentColor") ?? .systemBlue)
             } header: {
                 Text("テーマと色")
+            } footer: {
+                Text("自動切り替えでは、iPhoneのライト/ダークモードに合わせてテーマが切り替わります。テーマの画面から自分のテーマも作れます。")
             }
 
             Section {
@@ -88,12 +92,28 @@ struct AppearanceView: View {
             }
 
             Section {
+                Picker("表示密度", selection: $appearance.density) {
+                    ForEach(AppearanceSettings.Density.allCases) { density in
+                        Text(density.title).tag(density)
+                    }
+                }
+                Picker("サムネイルの大きさ", selection: $appearance.thumbnailSize) {
+                    ForEach(AppearanceSettings.ThumbnailSize.allCases) { size in
+                        Text(size.title).tag(size)
+                    }
+                }
+                Picker("サムネイルの位置", selection: $appearance.thumbnailOnRight) {
+                    Text("左").tag(false)
+                    Text("右").tag(true)
+                }
+                Toggle("区切り線", isOn: $appearance.postSeparators)
                 Toggle("名無しを隠す", isOn: $appearance.hideDefaultNames)
                 Toggle("経過時間を表示", isOn: $appearance.showRelativeTime)
+                Toggle("AAを専用フォントで表示", isOn: $appearance.asciiArtFont)
             } header: {
                 Text("スレの表示")
             } footer: {
-                Text("「名無しを隠す」は、そのスレで最も多い名前（名無しさん、風吹けば名無しなど）を表示しません。トリップ付きの名前は常に表示されます。")
+                Text("「名無しを隠す」は、そのスレで最も多い名前（名無しさん、風吹けば名無しなど）を表示しません。トリップ付きの名前は常に表示されます。「AAを専用フォントで表示」は、アスキーアートを見つけるとMS Pゴシック互換のフォント（Saitamaar）で画面幅に合わせて表示し、ずれないようにします。")
             }
 
             Section {
@@ -190,6 +210,22 @@ struct AppearanceView: View {
             Button("初期設定に戻す", role: .destructive) {
                 appearance.resetAll()
                 userConfig.popupScale = 1.0
+            }
+        }
+    }
+
+    private func themeLink(title: String, selection: Binding<String>) -> some View {
+        NavigationLink {
+            ThemePickerView(title: title, selection: selection)
+        } label: {
+            HStack {
+                Text(title)
+                Spacer()
+                ThemeSwatch(palette: appearance.palette(forTheme: selection.wrappedValue),
+                            isDark: appearance.themeOptions.first { $0.id == selection.wrappedValue }?.isDark)
+                    .scaleEffect(0.8)
+                Text(appearance.title(forTheme: selection.wrappedValue))
+                    .foregroundStyle(.secondary)
             }
         }
     }

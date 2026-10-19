@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UserNotifications
 
 @main
 struct DonguriApp: App {
@@ -14,6 +15,12 @@ struct DonguriApp: App {
     // dictionaries are loaded into LookupEngine before any post is tapped.
     @State private var dictionaryManager = DictionaryManager.shared
     @State private var appearance = AppearanceSettings.shared
+    @Environment(\.scenePhase) private var scenePhase
+
+    init() {
+        AsciiArt.registerFont()
+        UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
+    }
 
     var body: some Scene {
         WindowGroup {
@@ -35,6 +42,15 @@ struct DonguriApp: App {
                 .onOpenURL { url in
                     handleURL(url)
                 }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            // Favorites are checked for notifications in the background.
+            if phase == .background {
+                FavoriteWatcher.shared.schedule()
+            }
+        }
+        .backgroundTask(.appRefresh(FavoriteWatcher.taskIdentifier)) {
+            await FavoriteWatcher.shared.runBackgroundRefresh()
         }
     }
 

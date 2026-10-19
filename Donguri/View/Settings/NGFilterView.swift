@@ -49,7 +49,11 @@ struct NGFilterView: View {
             } header: {
                 Text("追加")
             } footer: {
-                Text("一致する書き込みは「あぼーん」として非表示になります。レス番号は変わりません。")
+                if newKind == .threadTitle {
+                    Text("タイトルに語句を含むスレは、板のスレ一覧に表示されなくなります。")
+                } else {
+                    Text("一致する書き込みは「あぼーん」として非表示になります。レス番号は変わりません。")
+                }
             }
 
             if rulesByKind.isEmpty {
@@ -73,6 +77,28 @@ struct NGFilterView: View {
                     } header: {
                         Text(group.kind.label)
                     }
+                }
+            }
+
+            if !store.hiddenThreads.isEmpty {
+                Section {
+                    ForEach(store.hiddenThreads) { hidden in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(hidden.title)
+                                .lineLimit(2)
+                            Text(HistoryStore.shared.knownBoardName(for: hidden.boardURL))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .onDelete { store.unhideThreads(atOffsets: $0) }
+                    Button("すべて再表示", role: .destructive) {
+                        store.unhideAll()
+                    }
+                } header: {
+                    Text("非表示にしたスレ（\(store.hiddenThreads.count)件）")
+                } footer: {
+                    Text("左にスワイプすると再表示されます。")
                 }
             }
         }

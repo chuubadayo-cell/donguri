@@ -24,7 +24,6 @@ struct ThreadView: View {
     @State private var posts: [Post] = []
     @State private var errorMessage: String?
 
-    @State private var threadRoute: ThreadRoute?
     /// Reply previews stack up, like Chance's reply pages: tapping `>>N`
     /// inside a preview pushes a new card, and the back button pops it.
     @State private var replyStack: [[Int]] = []
@@ -93,13 +92,50 @@ struct ThreadView: View {
 
     private static let popularThresholds = [3, 5, 10]
 
+    @Environment(BrowseContext.self) private var browseContext: BrowseContext?
+    private var browse: BrowseContext { browseContext ?? .detached }
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var behavior = BehaviorSettings.shared
+
+    // Auto-refresh (自動更新), for live threads.
+    @State private var autoRefresh = false
+    @State private var autoRefreshDecided = false
+    /// When the current wait started, for the pill's countdown ring.
+    @State private var refreshCycleStart = Date.now
+    @State private var isOnScreen = false
+    /// Set to a post to bring into view from outside the scroll reader
+    /// (new posts arriving at the bottom).
+    @State private var followTarget: Int?
+
+    // Tree mode (ツリー表示), as in Chance.
+    @AppStorage("donguri.threadTreeMode") private var treeMode = false
+    @State private var tree = ReplyTree.empty
+    @State private var treeDepth: [Int: Int] = [:]
+    @State private var collapsed: Set<Int> = []
+
+    /// Tree order only applies to the whole thread; a search or the 人気レス
+    /// filter shows matching posts in thread order.
+    private var showsTree: Bool {
+        treeMode && popularThreshold == nil && postSearch.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
     /// Indices of the posts the list shows, in thread order. Stored rather
     /// than computed: the list, the position pill and the banners all read it
     /// on every redraw, and filtering 1000 posts each time added up.
     @State private var visibleIndices: [Int] = []
 
     private func recomputeVisibleIndices() {
-        visibleIndices = Self.filteredIndices(posts: posts, popularThreshold: popularThreshold, search: postSearch)
+        if showsTree {
+            if tree.parent.count != posts.count {
+                tree = ReplyTree(posts: posts)
+            }
+            let flattened = tree.flattened(collapsed: collapsed)
+            visibleIndices = flattened.order
+            treeDepth = flattened.depth
+        } else {
+            visibleIndices = Self.filteredIndices(posts: posts, popularThreshold: popularThreshold, search: postSearch)
+            treeDepth = [:]
+        }
     }
 
     private static func filteredIndices(posts: [Post], popularThreshold: Int?, search: String) -> [Int] {
@@ -157,6 +193,15 @@ struct ThreadView: View {
                                 }
                             }
                         }
+                        .onChange(of: followTarget) { _, newValue in
+                            guard let newValue else { return }
+                            followTarget = nil
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                                withAnimation(.snappy) {
+                                    proxy.scrollTo(newValue, anchor: .bottom)
+                                }
+                            }
+                        }
                         .overlay {
                             popupLayer(screenSize: geometry.size,
                                        documentTitle: thread.title ?? posts.first?.threadTitle)
@@ -179,6 +224,7 @@ struct ThreadView: View {
                                          threadId: thread.id,
                                          title: resolvedTitle ?? String(localized: "無題"),
                                          responseCount: max(posts.count, thread.responseCount))
+                        Haptics.play(.success)
                     } label: {
                         Image(systemName: isFavorite ? "star.fill" : "star")
                             .foregroundStyle(isFavorite ? Color.yellow : Color.accentColor)
@@ -188,6 +234,9 @@ struct ThreadView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     threadMenu(boardURL: boardURL, thread: thread)
                 }
+                ToolbarItem(placement: .topBarTrailing) {
+                    TabsToolbarButton()
+                }
             }
             .fullScreenCover(item: $galleryRequest) { request in
                 GalleryView(items: mediaItems,
@@ -196,27 +245,41 @@ struct ThreadView: View {
                             onJumpToPost: { postIndex in
                                 jumpToPost(postIndex)
                             },
+                            sourceFrame: { item in
+                                MediaFrameRegistry.shared.frame(for: item.id)
+                            },
                             onClose: {
                                 withTransaction(Transaction.noAnimation) { galleryRequest = nil }
                             })
                 .presentationBackground(.clear)
             }
-            .navigationDestination(item: $threadRoute) { route in
-                ThreadView(
-                    thread: Thread(id: route.threadId, title: nil, responseCount: -1),
-                    boardURL: route.boardURL,
-                    boardName: route.boardURL == boardURL ? boardName : nil
-                )
-            }
             .task {
                 WebProcessWarmer.warm()
+                if !autoRefreshDecided {
+                    autoRefreshDecided = true
+                    autoRefresh = behavior.autoRefreshLiveBoards && Self.isLiveBoard(boardURL)
+                }
                 await loadThread(boardURL: boardURL, threadId: thread.id)
+            }
+            .task(id: autoRefreshKey) {
+                await runAutoRefresh(boardURL: boardURL, threadId: thread.id)
             }
             .refreshable {
                 await loadThread(boardURL: boardURL, threadId: thread.id)
             }
+            .onAppear {
+                isOnScreen = true
+            }
             .onDisappear {
+                isOnScreen = false
                 persistReadState(boardURL: boardURL, threadId: thread.id)
+            }
+            .onChange(of: browse.isActive) { _, isActive in
+                // Switching to another tab counts as leaving the thread.
+                if !isActive { persistReadState(boardURL: boardURL, threadId: thread.id) }
+            }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .background { persistReadState(boardURL: boardURL, threadId: thread.id) }
             }
         } else {
             ContentUnavailableView("エラー：スレや板情報がありません", systemImage: "exclamationmark.triangle")
@@ -280,78 +343,148 @@ struct ThreadView: View {
         }
         .onChange(of: postSearch) { recomputeVisibleIndices() }
         .onChange(of: popularThreshold) { recomputeVisibleIndices() }
+        .onChange(of: treeMode) { recomputeVisibleIndices() }
+        .onChange(of: collapsed) { recomputeVisibleIndices() }
     }
 
     @ViewBuilder
     private func postRow(index: Int, thread: Thread, boardURL: String) -> some View {
         let post = posts[index]
-        if post.isDeleted == true {
-            AbornPlaceholder(index: index, isDeletedOnServer: true)
-                .listRowBackground(Color.clear)
-                .id(index)
-        } else if ngFilter.hides(post) {
-            // Kept in place so >>N numbering stays correct.
-            AbornPlaceholder(index: index)
-                .listRowBackground(Color.clear)
-                .id(index)
-        } else {
-            PostView(index: index,
-                     post: post,
-                     idCount: post.id.flatMap { idIndices[$0]?.count } ?? 0,
-                     tripCount: post.trip.flatMap { tripIndices[$0]?.count } ?? 0,
-                     isIDHighlighted: post.id != nil && post.id == highlightedID,
-                     isTripHighlighted: post.trip != nil && post.trip == highlightedTrip,
-                     onThreadRoute: { route in
-                         threadRoute = route
-                     },
-                     onPostReply: { postIndex in
-                         dismissPopup()
-                         replyStack.append([postIndex])
-                     },
-                     onShowReplies: { indices in
-                         dismissPopup()
-                         replyStack.append(indices)
-                     },
-                     onIDTap: { id in
-                         toggleHighlightedID(id)
-                     },
-                     onTripTap: { trip in
-                         toggleHighlightedTrip(trip)
-                     },
-                     onTextSelected: { selection in
-                         handleTextSelection(selection)
-                     },
-                     onTapOutside: {
-                         dismissPopup()
-                     },
-                     onReport: {
-                         ReportService.report(
-                             post: post,
-                             index: index,
-                             boardURL: boardURL,
-                             threadId: thread.id,
-                             threadTitle: thread.title ?? posts.first?.threadTitle
-                         )
-                     },
-                     media: mediaByPost[index] ?? [],
-                     onOpenMedia: { item in
-                         dismissPopup()
-                         openGallery(at: item)
-                     },
-                     textStyle: appearance.postStyle,
-                     hidesName: appearance.hideDefaultNames && post.trip == nil
-                        && defaultName != nil && post.name == defaultName,
-                     threadTitle: index == 0 ? resolvedTitle : nil)
-            .listRowBackground(rowBackground(for: index))
-            .id(index)
-            .onAppear {
-                noteSeen(index)
-                prefetcher.rowAppeared(index, mediaByPost: mediaByPost)
+        let depth = treeDepth[index] ?? 0
+        Group {
+            if post.isDeleted == true {
+                AbornPlaceholder(index: index, isDeletedOnServer: true)
+                    .listRowBackground(Color.clear)
+            } else if ngFilter.hides(post) {
+                // Kept in place so >>N numbering stays correct.
+                AbornPlaceholder(index: index)
+                    .listRowBackground(Color.clear)
+            } else {
+                VStack(alignment: .leading, spacing: 0) {
+                    if showsReadMarker(at: index) {
+                        ReadMarker()
+                    }
+                    postView(index: index, post: post, thread: thread, boardURL: boardURL)
+                    if showsTree, tree.descendantCount.indices.contains(index), tree.descendantCount[index] > 0 {
+                        collapseButton(index: index)
+                    }
+                }
+                .listRowBackground(rowBackground(for: index))
             }
+        }
+        .padding(.leading, CGFloat(min(depth, 8)) * 14)
+        .overlay(alignment: .leading) {
+            if depth > 0 {
+                TreeGuides(depth: min(depth, 8))
+            }
+        }
+        .listRowSeparator(appearance.postSeparators && depth == 0 ? .automatic : .hidden)
+        .id(index)
+        .onAppear {
+            noteSeen(index)
+            seen.visible.insert(index)
+            prefetcher.rowAppeared(index, mediaByPost: mediaByPost)
+        }
+        .onDisappear {
+            seen.visible.remove(index)
         }
     }
 
+    private func postView(index: Int, post: Post, thread: Thread, boardURL: String) -> some View {
+        PostView(index: index,
+                 post: post,
+                 idCount: post.id.flatMap { idIndices[$0]?.count } ?? 0,
+                 tripCount: post.trip.flatMap { tripIndices[$0]?.count } ?? 0,
+                 isIDHighlighted: post.id != nil && post.id == highlightedID,
+                 isTripHighlighted: post.trip != nil && post.trip == highlightedTrip,
+                 onThreadRoute: { route in
+                     open(route)
+                 },
+                 onPostReply: { postIndex in
+                     dismissPopup()
+                     replyStack.append([postIndex])
+                 },
+                 onShowReplies: { indices in
+                     dismissPopup()
+                     replyStack.append(indices)
+                 },
+                 onIDTap: { id in
+                     toggleHighlightedID(id)
+                 },
+                 onTripTap: { trip in
+                     toggleHighlightedTrip(trip)
+                 },
+                 onTextSelected: { selection in
+                     handleTextSelection(selection)
+                 },
+                 onTapOutside: {
+                     dismissPopup()
+                 },
+                 onReport: {
+                     ReportService.report(
+                         post: post,
+                         index: index,
+                         boardURL: boardURL,
+                         threadId: thread.id,
+                         threadTitle: thread.title ?? posts.first?.threadTitle
+                     )
+                 },
+                 media: mediaByPost[index] ?? [],
+                 onOpenMedia: { item in
+                     dismissPopup()
+                     openGallery(at: item)
+                 },
+                 textStyle: appearance.postStyle,
+                 hidesName: appearance.hideDefaultNames && post.trip == nil
+                    && defaultName != nil && post.name == defaultName,
+                 threadTitle: index == 0 ? resolvedTitle : nil,
+                 // In tree mode the replies are right there underneath.
+                 showsReplyButton: !showsTree)
+    }
+
+    /// The "read up to here" line goes above the first new post.
+    private func showsReadMarker(at index: Int) -> Bool {
+        guard let newPostsStart, newPostsStart > 0, index == newPostsStart else { return false }
+        return !showsTree
+    }
+
+    private func collapseButton(index: Int) -> some View {
+        let isCollapsed = collapsed.contains(index)
+        let count = tree.descendantCount[index]
+        return Button {
+            Haptics.play(.selection)
+            withAnimation(.snappy) {
+                if isCollapsed { collapsed.remove(index) } else { collapsed.insert(index) }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
+                    .font(.caption2.weight(.bold))
+                Text(isCollapsed ? String(localized: "返信\(count)件を表示") : String(localized: "返信\(count)件を折りたたむ"))
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(Color.accentColor)
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// A link to another thread inside a post.
+    private func open(_ route: ThreadRoute) {
+        dismissPopup()
+        let sameBoard = route.boardURL == boardURL
+        browse.push(.thread(ThreadLink(boardURL: route.boardURL,
+                                       threadId: route.threadId,
+                                       title: nil,
+                                       boardName: sameBoard ? boardName : nil)))
+    }
+
     private func noteSeen(_ index: Int) {
+        if index == posts.count - 1, posts.count > 30, !seen.reachedEnd {
+            seen.reachedEnd = true
+            Haptics.play(.light)
+        }
         guard index > seen.maxSeen else { return }
         seen.maxSeen = index
         let now = Date.now
@@ -394,6 +527,7 @@ struct ThreadView: View {
                         // no row to scroll to until the filters are lifted.
                         popularThreshold = nil
                         postSearch = ""
+                        collapsed.removeAll()
                         Task {
                             try? await Task.sleep(for: .milliseconds(200))
                             withAnimation(.snappy) {
@@ -408,7 +542,7 @@ struct ThreadView: View {
                 },
                 onThreadRoute: { route in
                     replyStack.removeAll()
-                    threadRoute = route
+                    open(route)
                 },
                 onShowReplies: { indices in
                     replyStack.append(indices)
@@ -433,12 +567,13 @@ struct ThreadView: View {
     @ViewBuilder
     private func positionIndicator(proxy: ScrollViewProxy, boardURL: String, threadId: Int) -> some View {
         let lastIndex = visibleIndices.last ?? 0
-        let below = Self.count(in: visibleIndices, above: maxSeenIndex)
-        let unseenNew = newPostsStart.map { start in
+        // In tree order the indices aren't sorted, so there's no "below".
+        let below = showsTree ? 0 : Self.count(in: visibleIndices, above: maxSeenIndex)
+        let unseenNew = showsTree ? 0 : (newPostsStart.map { start in
             Self.count(in: visibleIndices, above: max(start - 1, maxSeenIndex))
-        } ?? 0
+        } ?? 0)
 
-        if posts.count > 15 {
+        if posts.count > 15 || autoRefresh {
             Menu {
                 Button {
                     scroll(proxy, to: visibleIndices.first ?? 0)
@@ -463,8 +598,15 @@ struct ThreadView: View {
                 } label: {
                     Label("更新", systemImage: "arrow.clockwise")
                 }
+                Toggle(isOn: autoRefreshBinding) {
+                    Label("自動更新（\(behavior.autoRefreshInterval)秒）", systemImage: "dot.radiowaves.left.and.right")
+                }
             } label: {
                 HStack(spacing: 6) {
+                    if autoRefresh {
+                        RefreshCountdown(start: refreshCycleStart,
+                                         interval: TimeInterval(behavior.autoRefreshInterval))
+                    }
                     if unseenNew > 0 {
                         Text(verbatim: "\(unseenNew)")
                             .foregroundStyle(.white)
@@ -486,6 +628,7 @@ struct ThreadView: View {
                 .overlay(Capsule().stroke(Color.primary.opacity(0.08), lineWidth: 1))
                 .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
             } primaryAction: {
+                Haptics.play(.light)
                 if unseenNew > 0, let newPostsStart, newPostsStart > maxSeenIndex {
                     scroll(proxy, to: newPostsStart)
                 } else {
@@ -519,7 +662,11 @@ struct ThreadView: View {
     private func nextThreadRow(thread: Thread, boardURL: String) -> some View {
         Button {
             if let nextThread {
-                threadRoute = ThreadRoute(boardURL: boardURL, threadId: nextThread.id)
+                browse.push(.thread(ThreadLink(boardURL: boardURL,
+                                               threadId: nextThread.id,
+                                               title: nextThread.title,
+                                               boardName: boardName,
+                                               responseCount: nextThread.responseCount)))
             } else {
                 Task { await findNextThread(boardURL: boardURL, current: thread) }
             }
@@ -619,6 +766,26 @@ struct ThreadView: View {
             }
 
             Section {
+                Toggle(isOn: autoRefreshBinding) {
+                    Label("自動更新", systemImage: "dot.radiowaves.left.and.right")
+                }
+                Picker(selection: Binding(
+                    get: { behavior.autoRefreshInterval },
+                    set: { behavior.autoRefreshInterval = $0 }
+                )) {
+                    ForEach(BehaviorSettings.refreshIntervals, id: \.self) { seconds in
+                        Text("\(seconds)秒ごと").tag(seconds)
+                    }
+                } label: {
+                    Label("更新の間隔", systemImage: "timer")
+                }
+                .pickerStyle(.menu)
+                Toggle(isOn: $treeMode) {
+                    Label("ツリー表示", systemImage: "list.bullet.indent")
+                }
+            }
+
+            Section {
                 Picker(selection: $popularThreshold) {
                     Label("すべてのレス", systemImage: "list.bullet")
                         .tag(Int?.none)
@@ -673,8 +840,10 @@ struct ThreadView: View {
     /// From the gallery's "jump to post": close it and bring the post on screen.
     private func jumpToPost(_ postIndex: Int) {
         withTransaction(Transaction.noAnimation) { galleryRequest = nil }
-        if popularThreshold != nil && !visibleIndices.contains(postIndex) {
+        if !visibleIndices.contains(postIndex) {
             popularThreshold = nil
+            postSearch = ""
+            collapsed.removeAll()
         }
         resumeIndex = postIndex
     }
@@ -836,7 +1005,9 @@ struct ThreadView: View {
     }
 
     private func apply(_ newPosts: [Post], boardURL: String, threadId: Int, isInitialLoad: Bool) {
+        let previousCount = posts.count
         posts = newPosts
+        tree = showsTree || treeMode ? ReplyTree(posts: newPosts) : .empty
         recomputeVisibleIndices()
         updateMedia(for: newPosts, boardURL: boardURL, threadId: threadId)
         (idIndices, tripIndices) = Self.buildHighlightIndices(posts: newPosts)
@@ -853,14 +1024,20 @@ struct ThreadView: View {
                state.lastReadCount > 0, state.lastReadCount < newPosts.count {
                 newPostsStart = state.lastReadCount
             }
-            // Only resume if there's unread content below the saved position —
-            // if the last visit already reached the end, scrolling the final row
-            // to the top would have nothing below it to anchor against.
-            if let state = ReadStateStore.shared.state(for: key),
-               newPosts.count > 1,
-               state.lastReadIndex < newPosts.count - 1 {
-                resumeIndex = max(0, state.lastReadIndex)
+            // Back to where the screen was when the thread was left, or,
+            // from older builds, the furthest post read. The furthest post is
+            // only used when there's unread content below it: scrolling the
+            // final row to the top would have nothing below to anchor against.
+            if let state = ReadStateStore.shared.state(for: key), newPosts.count > 1 {
+                if let top = state.lastTopIndex, top > 0, top < newPosts.count {
+                    resumeIndex = top
+                } else if state.lastReadIndex < newPosts.count - 1 {
+                    resumeIndex = max(0, state.lastReadIndex)
+                }
             }
+        } else if newPosts.count > previousCount, previousCount > 0, newPostsStart == nil {
+            // Posts that arrive while reading are tinted as new, too.
+            newPostsStart = previousCount
         }
 
         let title = resolvedTitle
@@ -1006,8 +1183,70 @@ struct ThreadView: View {
     private func persistReadState(boardURL: String, threadId: Int) {
         guard !posts.isEmpty else { return }
         let key = ReadStateStore.key(boardURL: boardURL, threadId: threadId)
-        ReadStateStore.shared.update(key: key, postCount: posts.count, readIndex: max(maxSeenIndex, seen.maxSeen))
+        ReadStateStore.shared.update(key: key,
+                                     postCount: posts.count,
+                                     readIndex: max(maxSeenIndex, seen.maxSeen),
+                                     topIndex: topVisibleIndex)
         favorites.readStateDidChange()
+    }
+
+    /// The post at the top of the screen (in thread order, the earliest
+    /// visible one; in tree order, the first in the list that's visible).
+    private var topVisibleIndex: Int? {
+        guard !seen.visible.isEmpty else { return nil }
+        if showsTree {
+            return visibleIndices.first { seen.visible.contains($0) }
+        }
+        return seen.visible.min()
+    }
+
+    // MARK: Auto-refresh
+
+    private var autoRefreshBinding: Binding<Bool> {
+        Binding(get: { autoRefresh },
+                set: { newValue in
+                    autoRefresh = newValue
+                    Haptics.play(.selection)
+                })
+    }
+
+    /// Restarts the refresh loop whenever something that affects it changes.
+    private var autoRefreshKey: String {
+        "\(autoRefresh)|\(behavior.autoRefreshInterval)|\(browse.isActive)|\(isOnScreen)|\(scenePhase == .active)"
+    }
+
+    /// 実況 boards live under directories starting with "live" (livejupiter,
+    /// livenhk, …), where threads move fast enough to watch.
+    private static func isLiveBoard(_ boardURL: String) -> Bool {
+        guard let url = URL(string: boardURL) else { return false }
+        let directory = url.pathComponents.first { $0 != "/" } ?? ""
+        return directory.hasPrefix("live")
+    }
+
+    private func runAutoRefresh(boardURL: String, threadId: Int) async {
+        guard autoRefresh, browse.isActive, isOnScreen, scenePhase == .active else { return }
+        let interval = max(behavior.autoRefreshInterval, 5)
+        while !Task.isCancelled {
+            refreshCycleStart = .now
+            try? await Task.sleep(for: .seconds(interval))
+            guard !Task.isCancelled, !posts.isEmpty else { return }
+            // A finished thread won't grow; stop rather than poll it.
+            if posts.count >= 1000 {
+                autoRefresh = false
+                return
+            }
+            let before = posts.count
+            let lastVisible = visibleIndices.last
+            let wasAtBottom = lastVisible.map { seen.visible.contains($0) } ?? false
+            await loadThread(boardURL: boardURL, threadId: threadId)
+            if posts.count > before {
+                Haptics.play(.light)
+                if behavior.followNewPosts, wasAtBottom, replyStack.isEmpty, popups.isEmpty,
+                   let newLast = visibleIndices.last {
+                    followTarget = newLast
+                }
+            }
+        }
     }
 
     /// The board's default name is simply the most common name without a
@@ -1202,6 +1441,8 @@ struct PostView: View {
     var hidesName: Bool = false
     /// Shown above the first post, in the theme's title colour.
     var threadTitle: String? = nil
+    /// The 返信N件 button under the post.
+    var showsReplyButton: Bool = true
 
     @Environment(UserConfig.self) private var userConfig
     @State private var appearance = AppearanceSettings.shared
@@ -1213,7 +1454,8 @@ struct PostView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        let density = appearance.density
+        VStack(alignment: .leading, spacing: density.spacing) {
             if let threadTitle {
                 Text(threadTitle)
                     .font(.headline)
@@ -1228,24 +1470,8 @@ struct PostView: View {
 
             let mediaItems = resolvedMedia
             HStack(alignment: .top, spacing: 10) {
-                if let first = mediaItems.first {
-                    Button {
-                        open(first)
-                    } label: {
-                        MediaThumbnailView(item: first, side: 72, cornerRadius: 6)
-                            .overlay(alignment: .topTrailing) {
-                                if mediaItems.count > 1 {
-                                    Text(verbatim: "+\(mediaItems.count - 1)")
-                                        .font(.system(size: 10, weight: .bold).monospacedDigit())
-                                        .foregroundStyle(.white)
-                                        .padding(.horizontal, 4)
-                                        .padding(.vertical, 1)
-                                        .background(Capsule().fill(.black.opacity(0.6)))
-                                        .padding(3)
-                                }
-                            }
-                    }
-                    .buttonStyle(.plain)
+                if !appearance.thumbnailOnRight {
+                    thumbnail(mediaItems)
                 }
 
                 // Native text with its own tap-to-lookup (see PostTextView).
@@ -1258,9 +1484,13 @@ struct PostView: View {
                     onPostReply: onPostReply,
                     onThreadRoute: onThreadRoute
                 )
+
+                if appearance.thumbnailOnRight {
+                    thumbnail(mediaItems)
+                }
             }
 
-            if replyCount > 0 {
+            if replyCount > 0, showsReplyButton {
                 HStack {
                     Spacer()
                     Button {
@@ -1278,7 +1508,7 @@ struct PostView: View {
                 }
             }
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, appearance.density.rowPadding)
         .contextMenu {
             if !post.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Button {
@@ -1327,6 +1557,31 @@ struct PostView: View {
                 withTransaction(Transaction.noAnimation) { localGalleryItem = nil }
             }
             .presentationBackground(.clear)
+        }
+    }
+
+    @ViewBuilder
+    private func thumbnail(_ mediaItems: [MediaItem]) -> some View {
+        if let first = mediaItems.first {
+            Button {
+                open(first)
+            } label: {
+                MediaThumbnailView(item: first, side: appearance.thumbnailSize.side, cornerRadius: 6)
+                    .overlay(alignment: .topTrailing) {
+                        if mediaItems.count > 1 {
+                            Text(verbatim: "+\(mediaItems.count - 1)")
+                                .font(.system(size: 10, weight: .bold).monospacedDigit())
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 1)
+                                .background(Capsule().fill(.black.opacity(0.6)))
+                                .padding(3)
+                        }
+                    }
+                    // Where the gallery zooms out of and back into.
+                    .reportsMediaFrame(for: first.id)
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -1482,8 +1737,75 @@ private struct AbornPlaceholder: View {
     ThreadView(thread: nil, boardURL: nil)
 }
 
+/// "ここまで読んだ": where the last visit stopped.
+private struct ReadMarker: View {
+    var body: some View {
+        HStack(spacing: 8) {
+            Rectangle()
+                .fill(Color.accentColor.opacity(0.6))
+                .frame(height: 1.5)
+            Text("ここまで読んだ")
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(Color.accentColor)
+                .fixedSize()
+            Rectangle()
+                .fill(Color.accentColor.opacity(0.6))
+                .frame(height: 1.5)
+        }
+        .padding(.top, 2)
+        .padding(.bottom, 6)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// Vertical lines down the left of a nested post, one per level, as
+/// Chance draws its tree.
+private struct TreeGuides: View {
+    let depth: Int
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(0..<depth, id: \.self) { level in
+                Rectangle()
+                    .fill(Color.accentColor.opacity(level == depth - 1 ? 0.45 : 0.18))
+                    .frame(width: 2)
+                    .frame(width: 14, alignment: .center)
+            }
+        }
+        .padding(.vertical, 2)
+        .allowsHitTesting(false)
+    }
+}
+
+/// A small ring filling up until the next automatic refresh.
+private struct RefreshCountdown: View {
+    let start: Date
+    let interval: TimeInterval
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 0.5)) { context in
+            let progress = min(max(context.date.timeIntervalSince(start) / interval, 0), 1)
+            ZStack {
+                Circle()
+                    .stroke(Color.secondary.opacity(0.25), lineWidth: 2)
+                Circle()
+                    .trim(from: 0, to: progress)
+                    .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    .animation(.linear(duration: 0.5), value: progress)
+            }
+            .frame(width: 13, height: 13)
+        }
+        .accessibilityLabel(Text("自動更新中"))
+    }
+}
+
 /// Not observable on purpose; see `ThreadView.seen`.
 private final class SeenTracker {
     var maxSeen = 0
     var lastPublished = Date.distantPast
+    /// Rows on screen right now.
+    var visible = Set<Int>()
+    /// The end of the thread has been reached this visit (for the haptic).
+    var reachedEnd = false
 }

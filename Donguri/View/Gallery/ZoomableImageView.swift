@@ -18,7 +18,10 @@ struct ZoomableImageView: UIViewRepresentable {
     /// 0 at rest, 1 once the swipe is far enough to close; drives the
     /// background fade.
     var onDismissProgress: (CGFloat) -> Void = { _ in }
-    var onDismiss: () -> Void = {}
+    /// Called with the image's frame on screen (window coordinates) when a
+    /// swipe closes the gallery. Returning true means the gallery animates
+    /// the image back into its thumbnail itself, so it isn't flung away.
+    var onDismiss: (CGRect) -> Bool = { _ in false }
 
     func makeCoordinator() -> Coordinator {
         Coordinator()
@@ -45,7 +48,7 @@ struct ZoomableImageView: UIViewRepresentable {
         func tapped() { parent?.onTap() }
         func zoomChanged(_ zoomed: Bool) { parent?.onZoomChange(zoomed) }
         func dismissProgress(_ progress: CGFloat) { parent?.onDismissProgress(progress) }
-        func dismissed() { parent?.onDismiss() }
+        func dismissed(from frame: CGRect) -> Bool { parent?.onDismiss(frame) ?? false }
     }
 }
 
@@ -210,14 +213,19 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate {
             let shouldClose = recognizer.state == .ended
                 && (abs(translation.y) > Self.dismissDistance || abs(velocity) > 900)
             if shouldClose {
-                let direction: CGFloat = translation.y >= 0 ? 1 : -1
-                UIView.animate(withDuration: 0.2, delay: 0, options: .curveEaseOut) {
-                    self.imageView.transform = CGAffineTransform(translationX: 0,
-                                                                 y: direction * self.bounds.height)
-                    self.imageView.alpha = 0
-                }
+                let frame = imageView.convert(imageView.bounds, to: nil)
                 callbacks?.dismissProgress(1)
-                callbacks?.dismissed()
+                if callbacks?.dismissed(from: frame) == true {
+                    // The gallery's zoom-out takes over from here.
+                    imageView.alpha = 0
+                } else {
+                    let direction: CGFloat = translation.y >= 0 ? 1 : -1
+                    UIView.animate(withDuration: 0.2, delay: 0, options: .curveEaseOut) {
+                        self.imageView.transform = CGAffineTransform(translationX: 0,
+                                                                     y: direction * self.bounds.height)
+                        self.imageView.alpha = 0
+                    }
+                }
             } else {
                 UIView.animate(withDuration: 0.3, delay: 0,
                                usingSpringWithDamping: 0.85, initialSpringVelocity: 0) {

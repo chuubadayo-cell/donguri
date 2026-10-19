@@ -14,6 +14,8 @@ struct NGRule: Codable, Identifiable, Hashable {
         case word
         case id
         case name
+        /// Hides threads from board lists by title.
+        case threadTitle
 
         var id: String { rawValue }
 
@@ -24,6 +26,7 @@ struct NGRule: Codable, Identifiable, Hashable {
             case .word: String(localized: "NGワード")
             case .id: String(localized: "NG ID")
             case .name: String(localized: "NG名前")
+            case .threadTitle: String(localized: "NGスレタイ")
             }
         }
     }
@@ -31,4 +34,14 @@ struct NGRule: Codable, Identifiable, Hashable {
     var id: UUID = UUID()
     var kind: Kind
     var pattern: String
+}
+
+/// A thread hidden from its board's list (スレの非表示).
+struct HiddenThread: Codable, Identifiable, Hashable {
+    var boardURL: String
+    var threadId: Int
+    var title: String
+    var hiddenAt: Date = .now
+
+    var id: String { ReadStateStore.key(boardURL: boardURL, threadId: threadId) }
 }

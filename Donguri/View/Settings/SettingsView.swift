@@ -49,7 +49,27 @@ struct SettingsView: View {
                 } header: {
                     Text("表示")
                 } footer: {
-                    Text("画像の先読みとキャッシュ、特定の語句・ID・名前を含む書き込みの非表示を設定します。")
+                    Text("画像の先読みとキャッシュ、特定の語句・ID・名前を含む書き込みやスレの非表示を設定します。")
+                }
+
+                Section {
+                    NavigationLink {
+                        BehaviorSettingsView()
+                    } label: {
+                        Label("操作", systemImage: "hand.draw")
+                    }
+                    NavigationLink {
+                        NotificationSettingsView()
+                    } label: {
+                        Label("通知", systemImage: "bell.badge")
+                    }
+                    NavigationLink {
+                        BackupView()
+                    } label: {
+                        Label("バックアップ", systemImage: "externaldrive.badge.timemachine")
+                    }
+                } header: {
+                    Text("アプリ")
                 }
             }
             .navigationTitle("設定")

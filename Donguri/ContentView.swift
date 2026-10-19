@@ -7,21 +7,13 @@
 
 import SwiftUI
 
-/// Tabs along the bottom, as in Chance: browse boards, saved threads,
-/// history, the dictionary, and settings.
+/// Tabs along the bottom, as in Chance: browse boards (with browser tabs of
+/// its own), saved threads, history, the dictionary, and settings.
 struct ContentView: View {
-    enum RootTab: String {
-        case boards, saved, history, dictionary, settings
-    }
-
-    @AppStorage("donguri.rootTab") private var selectionRaw = RootTab.boards.rawValue
+    @State private var navigator = AppNavigator.shared
     @State private var favorites = FavoritesStore.shared
     @State private var appearance = AppearanceSettings.shared
-
-    private var selection: Binding<RootTab> {
-        Binding(get: { RootTab(rawValue: selectionRaw) ?? .boards },
-                set: { selectionRaw = $0.rawValue })
-    }
+    @Environment(\.colorScheme) private var colorScheme
 
     /// New replies across all favorite threads, as the 保存 tab's badge.
     private var unreadFavorites: Int {
@@ -29,8 +21,8 @@ struct ContentView: View {
     }
 
     var body: some View {
-        TabView(selection: selection) {
-            BBSMenuView()
+        TabView(selection: $navigator.rootTab) {
+            BrowserTabsView()
                 .tabItem { Label("板", systemImage: "rectangle.stack") }
                 .tag(RootTab.boards)
 
@@ -39,7 +31,7 @@ struct ContentView: View {
                 .badge(unreadFavorites)
                 .tag(RootTab.saved)
 
-            NavigationStack {
+            RouteStack {
                 HistoryView()
             }
             .tabItem { Label("履歴", systemImage: "clock") }
@@ -56,6 +48,13 @@ struct ContentView: View {
                 .tag(RootTab.settings)
         }
         .modifier(ThemedTabBar(palette: appearance.palette))
+        .overlay {
+            NavigatorToast()
+        }
+        // The automatic theme follows the system's light or dark mode.
+        .onChange(of: colorScheme, initial: true) { _, scheme in
+            appearance.systemIsDark = scheme == .dark
+        }
         .task {
             await favorites.refreshThreadCounts()
         }

@@ -72,12 +72,13 @@ final class ReadStateStore {
         cache[key]
     }
 
-    func update(key: String, postCount: Int, readIndex: Int) {
+    func update(key: String, postCount: Int, readIndex: Int, topIndex: Int? = nil) {
         let existing = cache[key]
         cache[key] = ReadState(
             lastReadCount: max(existing?.lastReadCount ?? 0, postCount),
             lastReadIndex: max(existing?.lastReadIndex ?? 0, readIndex),
-            lastVisited: .now
+            lastVisited: .now,
+            lastTopIndex: topIndex ?? existing?.lastTopIndex
         )
         persist()
     }

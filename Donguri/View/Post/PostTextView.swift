@@ -84,6 +84,9 @@ struct PostTextView: UIViewRepresentable {
     /// the first layout pass.
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
         guard let width = proposal.width, width.isFinite, width > 0 else { return nil }
+        // ASCII art is sized to the width it's given, so it's laid out
+        // again whenever that changes.
+        context.coordinator.fitArt(to: width)
         let size = uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
         return CGSize(width: width, height: ceil(size.height))
     }
@@ -102,9 +105,39 @@ struct PostTextView: UIViewRepresentable {
             self.parent = parent
         }
 
+        /// The post is drawn as ASCII art, at this font size.
+        private var artSize: CGFloat?
+        private var isArt = false
+
         func render() {
             guard let textView else { return }
-            textView.attributedText = PostTextFormatter.attributed(parent.text, style: parent.style)
+            isArt = parent.style.detectsAsciiArt && AsciiArt.isArt(parent.text)
+            if isArt {
+                // A first guess for the width; sizeThatFits corrects it.
+                let width = textView.bounds.width > 0 ? textView.bounds.width : 300
+                artSize = AsciiArt.fittingSize(for: parent.text, width: width,
+                                               maximum: parent.style.fontSize)
+            } else {
+                artSize = nil
+            }
+            draw()
+        }
+
+        func fitArt(to width: CGFloat) {
+            guard isArt else { return }
+            let size = AsciiArt.fittingSize(for: parent.text, width: width,
+                                            maximum: parent.style.fontSize)
+            if size != artSize {
+                artSize = size
+                draw()
+            }
+        }
+
+        private func draw() {
+            guard let textView else { return }
+            let style = artSize.map { parent.style.asciiArt(size: $0) } ?? parent.style
+            textView.textContainer.lineBreakMode = style.wraps ? .byWordWrapping : .byClipping
+            textView.attributedText = PostTextFormatter.attributed(parent.text, style: style)
             selectionStart = nil
             textView.invalidateIntrinsicContentSize()
         }
@@ -268,7 +301,7 @@ enum PostTextFormatter {
         let font = style.font
         let paragraph = NSMutableParagraphStyle()
         paragraph.lineHeightMultiple = style.lineSpacing
-        paragraph.lineBreakMode = .byWordWrapping
+        paragraph.lineBreakMode = style.wraps ? .byWordWrapping : .byClipping
 
         let base: [NSAttributedString.Key: Any] = [
             .font: font,

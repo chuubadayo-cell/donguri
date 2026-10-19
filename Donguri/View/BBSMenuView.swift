@@ -13,62 +13,72 @@ struct BBSMenuView: View {
     @State private var searchText: String = ""
 
     var body: some View {
-        NavigationStack {
-            List {
-                // The library sits above the board menu and doesn't depend on
-                // it, so favorites, history and saved threads stay reachable
-                // when the menu can't load (e.g. offline).
-                if searchText.isEmpty {
-                    FavoriteBoardsSection()
+        List {
+            // The library sits above the board menu and doesn't depend on
+            // it, so favorites, history and saved threads stay reachable
+            // when the menu can't load (e.g. offline).
+            if searchText.isEmpty {
+                Section {
+                    NavigationLink(value: BrowseRoute.search("")) {
+                        Label("スレタイ検索（全板）", systemImage: "magnifyingglass")
+                    }
+                    .themedRow()
                 }
 
-                if let menu {
-                    Section {
-                        ForEach(filteredMenuList(menu)) { category in
-                            CategoryDisclosureView(category: category, searchText: searchText)
-                                .themedRow()
-                        }
-                    } header: {
-                        if searchText.isEmpty {
-                            Text("板一覧")
-                        }
+                FavoriteBoardsSection()
+            }
+
+            if let menu {
+                Section {
+                    ForEach(filteredMenuList(menu)) { category in
+                        CategoryDisclosureView(category: category, searchText: searchText)
+                            .themedRow()
                     }
-                } else if let errorMessage {
-                    Section {
-                        ContentUnavailableView {
-                            Label("エラーが発生しました", systemImage: "exclamationmark.triangle")
-                        } description: {
-                            Text(errorMessage)
-                        }
-                        .themedRow()
-                    }
-                } else {
-                    Section {
-                        HStack {
-                            Spacer()
-                            ProgressView("しばらくお待ちください...")
-                            Spacer()
-                        }
-                        .padding(.vertical, 24)
+                } header: {
+                    if searchText.isEmpty {
+                        Text("板一覧")
                     }
                 }
+            } else if let errorMessage {
+                Section {
+                    ContentUnavailableView {
+                        Label("エラーが発生しました", systemImage: "exclamationmark.triangle")
+                    } description: {
+                        Text(errorMessage)
+                    }
+                    .themedRow()
+                }
+            } else {
+                Section {
+                    HStack {
+                        Spacer()
+                        ProgressView("しばらくお待ちください...")
+                        Spacer()
+                    }
+                    .padding(.vertical, 24)
+                }
             }
-            .listStyle(.insetGrouped)
-            // Attached to the stack's root rather than the stack itself, so
-            // boards pushed on top can have a search field of their own.
-            .searchable(
-                text: $searchText,
-                placement: .navigationBarDrawer(displayMode: .automatic),
-                prompt: "フィルタ"
-            )
-            .refreshable {
-                await loadMenu()
-                await FavoritesStore.shared.refreshThreadCounts()
-            }
-            .navigationTitle("５ちゃんねる")
-            .navigationBarTitleDisplayMode(.inline)
-            .themedScreen()
         }
+        .listStyle(.insetGrouped)
+        // Attached to the stack's root rather than the stack itself, so
+        // boards pushed on top can have a search field of their own.
+        .searchable(
+            text: $searchText,
+            placement: .navigationBarDrawer(displayMode: .automatic),
+            prompt: "フィルタ"
+        )
+        .refreshable {
+            await loadMenu()
+            await FavoritesStore.shared.refreshThreadCounts()
+        }
+        .navigationTitle("５ちゃんねる")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                TabsToolbarButton()
+            }
+        }
+        .themedScreen()
         .task {
             await loadMenu()
             await FavoritesStore.shared.refreshThreadCounts()
@@ -119,9 +129,7 @@ struct CategoryDisclosureView: View {
         DisclosureGroup() {
             ForEach(filteredCategoryContent) { board in
                 let isFavorite = favorites.isFavorite(boardURL: board.url)
-                NavigationLink {
-                    BoardView(board: board)
-                } label: {
+                NavigationLink(value: BrowseRoute.board(FavoriteBoard(board))) {
                     HStack(spacing: 10) {
                         Image(systemName: "bubble.left.and.bubble.right")
                             .foregroundStyle(Color.accentColor)
@@ -138,8 +146,9 @@ struct CategoryDisclosureView: View {
                 .themedRow()
                 .contextMenu {
                     FavoriteBoardButton(board: board, isFavorite: isFavorite)
+                    BoardTabButtons(board: FavoriteBoard(board))
                 }
-                .swipeActions(edge: .leading) {
+                .swipeActions(edge: .trailing) {
                     FavoriteBoardButton(board: board, isFavorite: isFavorite)
                         .tint(.yellow)
                 }
@@ -166,6 +175,28 @@ struct FavoriteBoardButton: View {
                 Label("お気に入りから削除", systemImage: "star.slash")
             } else {
                 Label("お気に入りに追加", systemImage: "star")
+            }
+        }
+    }
+}
+
+/// "Open in a new tab" for a board.
+struct BoardTabButtons: View {
+    let board: FavoriteBoard
+    @Environment(BrowseContext.self) private var browseContext: BrowseContext?
+    private var browse: BrowseContext { browseContext ?? .detached }
+
+    var body: some View {
+        Section {
+            Button {
+                browse.openInNewTab(.board(board), inBackground: false)
+            } label: {
+                Label("新しいタブで開く", systemImage: "plus.square.on.square")
+            }
+            Button {
+                browse.openInNewTab(.board(board), inBackground: true)
+            } label: {
+                Label("バックグラウンドで開く", systemImage: "square.on.square.dashed")
             }
         }
     }
