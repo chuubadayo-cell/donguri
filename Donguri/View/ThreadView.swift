@@ -1460,6 +1460,7 @@ struct PostView: View {
 
     @Environment(UserConfig.self) private var userConfig
     @State private var appearance = AppearanceSettings.shared
+    @State private var behavior = BehaviorSettings.shared
     @State private var localGalleryItem: MediaItem?
     @State private var showTranslation = false
 
@@ -1501,6 +1502,14 @@ struct PostView: View {
 
                 if appearance.thumbnailOnRight {
                     thumbnail(mediaItems)
+                }
+            }
+
+            // Embeds for the post's links (YouTube, X, pages…).
+            if behavior.linkPreviewMode != .off {
+                let links = LinkPreviewService.previewableURLs(in: post.text)
+                if !links.isEmpty {
+                    LinkPreviewList(urls: links, postIndex: index)
                 }
             }
 

@@ -1,6 +1,22 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "%@回再生" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ views"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@回再生"
+          }
+        }
+      }
+    },
     "%lld" : {
       "comment" : "Post number badge.",
       "localizations" : {
@@ -455,6 +471,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wi-Fi時はすべて"
+          }
+        }
+      }
+    },
+    "Wi-Fi時は自動" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatic on Wi-Fi"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wi-Fi時は自動"
+          }
+        }
+      }
+    },
+    "YouTubeで開く" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open in YouTube"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "YouTubeで開く"
+          }
+        }
+      }
+    },
+    "YouTubeの動画" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "YouTube video"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "YouTubeの動画"
           }
         }
       }
@@ -1821,6 +1885,38 @@
         }
       }
     },
+    "タップでプレビューを表示" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tap to show preview"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "タップでプレビューを表示"
+          }
+        }
+      }
+    },
+    "タップで読み込む" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tap to Load"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "タップで読み込む"
+          }
+        }
+      }
+    },
     "タブ" : {
       "localizations" : {
         "en" : {
@@ -2025,6 +2121,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "テーマを編集"
+          }
+        }
+      }
+    },
+    "ニコニコ動画" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Niconico"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ニコニコ動画"
           }
         }
       }
@@ -2378,6 +2490,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "リンク"
+          }
+        }
+      }
+    },
+    "リンクのプレビュー" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Link Previews"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "リンクのプレビュー"
           }
         }
       }
@@ -3214,6 +3342,22 @@
         }
       }
     },
+    "常に自動" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Always Automatic"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "常に自動"
+          }
+        }
+      }
+    },
     "幅" : {
       "localizations" : {
         "en" : {
@@ -3626,6 +3770,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "書き込みのフォント"
+          }
+        }
+      }
+    },
+    "書き込みのリンク（YouTube、X、ニコニコ動画、ニュースなど）の下に、内容のプレビューを表示します。YouTubeはアプリ内で再生できます。プレビューを読み込むと、そのサイトに接続します。Xのプレビューには、非公式のサービスFxTwitter（api.fxtwitter.com）を使います。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shows a preview under links in posts (YouTube, X, Niconico, news and more). YouTube plays inside the app. Loading a preview contacts that site. X previews use FxTwitter (api.fxtwitter.com), an unofficial service."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "書き込みのリンク（YouTube、X、ニコニコ動画、ニュースなど）の下に、内容のプレビューを表示します。YouTubeはアプリ内で再生できます。プレビューを読み込むと、そのサイトに接続します。Xのプレビューには、非公式のサービスFxTwitter（api.fxtwitter.com）を使います。"
           }
         }
       }
@@ -4529,6 +4689,22 @@
         }
       }
     },
+    "表示しない" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Off"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "表示しない"
+          }
+        }
+      }
+    },
     "表示密度" : {
       "localizations" : {
         "en" : {
@@ -4605,6 +4781,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "設定アプリで通知を許可"
+          }
+        }
+      }
+    },
+    "読み込み" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "読み込み"
           }
         }
       }

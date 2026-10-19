@@ -280,18 +280,16 @@ struct PopupView: View {
         .frame(width: layout.width, height: layout.height)
     }
     
-    /// The sepia themes give the popup their own card colour.
+    /// The standard light or dark popup, whatever the theme: dark themes
+    /// get the dark one through the colour scheme they set.
     private var popupBackground: AnyShapeStyle {
-        if let palette = AppearanceSettings.shared.palette {
-            return AnyShapeStyle(Color(uiColor: palette.bar))
-        }
-        return userConfig.popupDisableTransparency
+        userConfig.popupDisableTransparency
             ? AnyShapeStyle(Color(.systemBackground))
             : AnyShapeStyle(.ultraThinMaterial)
     }
 
     var body: some View {
-        if #available(iOS 26, *), !userConfig.popupDisableTransparency, AppearanceSettings.shared.palette == nil {
+        if #available(iOS 26, *), !userConfig.popupDisableTransparency {
             GlassEffectContainer {
                 if isVisible, let selectionData, let layout, !content.isEmpty {
                     popupContent(selectionData: selectionData, layout: layout)

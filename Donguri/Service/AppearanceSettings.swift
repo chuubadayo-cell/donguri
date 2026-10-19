@@ -375,43 +375,14 @@ final class AppearanceSettings {
                             activeThemeID, paletteSignature].joined(separator: "|"))
     }
 
-    /// Prepended to the popup's custom CSS. `body *` matches the specificity
+    /// Prepended to the popup's custom CSS. Only the font: the popup always
+    /// uses its standard light or dark look, following the theme's mode. `body *` matches the specificity
     /// of popup.css's own `!important` font rule and comes later, so it wins.
     var dictionaryCSS: String {
         var css = ""
         let family = dictionaryFontFamily.replacingOccurrences(of: "\"", with: "")
         if !family.isEmpty {
             css += "html, body, body * { font-family: \"\(family)\", \"Hiragino Sans\", sans-serif !important; }\n"
-        }
-        if let palette {
-            // Every themed colour in the popup, not just the body text:
-            // popup.js paints each dictionary's entries plain black or white
-            // by light/dark mode, which is what made every theme's popup
-            // look like the default one.
-            let text = palette.text.hexString.cssColor
-            let secondary = palette.secondaryText.hexString.cssColor
-            let accent = palette.accent.hexString.cssColor
-            let link = palette.link.hexString.cssColor
-            let title = palette.title.hexString.cssColor
-            let background = palette.background.hexString.cssColor
-            css += """
-            html, body {
-              --text-color: \(text) !important;
-              --accent-color: \(accent) !important;
-              --text-color-light1: \(secondary) !important;
-              --text-color-light2: \(secondary) !important;
-              --text-color-light3: \(secondary) !important;
-              --text-color-light4: \(secondary) !important;
-              --background-color-dark1: \(background) !important;
-              --gloss-image-background-color: \(background) !important;
-              color: \(text) !important;
-            }
-            html body [data-dictionary] { color: \(text) !important; }
-            html body a, html body .gloss-link { color: \(link) !important; }
-            html body .expression { color: \(title) !important; }
-            html body .dict-name, html body .dict-label, html body .frequency-dict-label, html body .pitch-dict-label { color: \(secondary) !important; }
-
-            """
         }
         return css
     }

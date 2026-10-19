@@ -10,6 +10,7 @@ import SwiftUI
 struct MediaSettingsView: View {
     @AppStorage(MediaPrefetchMode.defaultsKey) private var prefetchRaw = MediaPrefetchMode.nearby.rawValue
 
+    @State private var behavior = BehaviorSettings.shared
     @State private var cachedBytes: Int64?
     @State private var pinnedBytes: Int64?
     @State private var confirmClear = false
@@ -26,6 +27,18 @@ struct MediaSettingsView: View {
                 Text("画像の先読み")
             } footer: {
                 Text("「近くの画像のみ」は、スクロールに合わせて少し先の画像を読み込みます。「すべて」はスレを開いた時点でスレ内の画像をすべて読み込みます（Wi-Fi時のみ、またはモバイル通信でも）。")
+            }
+
+            Section {
+                Picker("読み込み", selection: $behavior.linkPreviewMode) {
+                    ForEach(LinkPreviewMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+            } header: {
+                Text("リンクのプレビュー")
+            } footer: {
+                Text("書き込みのリンク（YouTube、X、ニコニコ動画、ニュースなど）の下に、内容のプレビューを表示します。YouTubeはアプリ内で再生できます。プレビューを読み込むと、そのサイトに接続します。Xのプレビューには、非公式のサービスFxTwitter（api.fxtwitter.com）を使います。")
             }
 
             Section {
@@ -52,6 +65,7 @@ struct MediaSettingsView: View {
             Button("キャッシュを消去", role: .destructive) {
                 Task {
                     await MediaStore.shared.clearCache()
+                    await LinkPreviewService.shared.clear()
                     await DatCache.shared.clear()
                     await refreshSizes()
                 }

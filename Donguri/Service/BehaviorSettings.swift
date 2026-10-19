@@ -37,6 +37,12 @@ final class BehaviorSettings {
     /// Add a found 次スレ to favorites automatically.
     var autoFavoriteNextThread: Bool { didSet { save(autoFavoriteNextThread, "autoFavoriteNextThread") } }
 
+    // MARK: Link previews
+
+    var linkPreviewMode: LinkPreviewMode {
+        didSet { UserDefaults.standard.set(linkPreviewMode.rawValue, forKey: LinkPreviewMode.defaultsKey) }
+    }
+
     static let refreshIntervals = [5, 10, 20, 30, 60]
     static let notifyThresholds = [1, 5, 10, 30, 100]
 
@@ -52,6 +58,7 @@ final class BehaviorSettings {
         notifyThreshold = d.object(forKey: p + "notifyThreshold") as? Int ?? 1
         notifyNextThread = d.object(forKey: p + "notifyNextThread") as? Bool ?? false
         autoFavoriteNextThread = d.object(forKey: p + "autoFavoriteNextThread") as? Bool ?? true
+        linkPreviewMode = d.string(forKey: LinkPreviewMode.defaultsKey).flatMap(LinkPreviewMode.init(rawValue:)) ?? .wifi
     }
 
     var anyNotifications: Bool { notifyNewPosts || notifyNextThread }
