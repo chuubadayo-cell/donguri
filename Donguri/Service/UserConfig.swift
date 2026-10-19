@@ -188,7 +188,9 @@ class UserConfig {
         self.popupScale = defaults.object(forKey: "popupScale") as? Double ?? 1.0
         self.popupActionBar = defaults.object(forKey: "popupActionBar") as? Bool ?? false
         self.popupDisableTransparency = defaults.object(forKey: "popupDisableTransparency") as? Bool ?? false
-        self.popupFullWidth = defaults.object(forKey: "popupFullWidth") as? Bool ?? false
+        // On by default here (Hoshi defaults it off): in a scrolling thread a
+        // full-width panel along the bottom reads better than a floating box.
+        self.popupFullWidth = defaults.object(forKey: "popupFullWidth") as? Bool ?? true
         self.popupSwipeToDismiss = defaults.object(forKey: "popupSwipeToDismiss") as? Bool ?? false
         self.popupSwipeThreshold = defaults.object(forKey: "popupSwipeThreshold") as? Int ?? 40
 

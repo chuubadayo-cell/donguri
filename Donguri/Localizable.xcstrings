@@ -363,6 +363,22 @@
         }
       }
     },
+    "「全幅で下に表示」では、辞書が画面の下に横幅いっぱいで表示されます。オフにすると、タップした語のそばに表示されます。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "With “Full Width at Bottom”, the dictionary appears across the bottom of the screen. Turn it off to show it next to the word you tapped."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「全幅で下に表示」では、辞書が画面の下に横幅いっぱいで表示されます。オフにすると、タップした語のそばに表示されます。"
+          }
+        }
+      }
+    },
     "「名無しを隠す」は、そのスレで最も多い名前（名無しさん、風吹けば名無しなど）を表示しません。トリップ付きの名前は常に表示されます。": {
       "localizations": {
         "en": {
@@ -696,6 +712,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "ゆっくり順"
+          }
+        }
+      }
+    },
+    "アクションバーを表示": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show Action Bar"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アクションバーを表示"
           }
         }
       }
@@ -1129,6 +1161,38 @@
           "stringUnit": {
             "state": "translated",
             "value": "スレ内を検索"
+          }
+        }
+      }
+    },
+    "スワイプで閉じる": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Swipe to Dismiss"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "スワイプで閉じる"
+          }
+        }
+      }
+    },
+    "スワイプの距離": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Swipe Threshold"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "スワイプの距離"
           }
         }
       }
@@ -1630,6 +1694,22 @@
         }
       }
     },
+    "全幅で下に表示": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Full Width at Bottom"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全幅で下に表示"
+          }
+        }
+      }
+    },
     "共有": {
       "localizations": {
         "en": {
@@ -1914,6 +1994,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "常にすべて"
+          }
+        }
+      }
+    },
+    "幅": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Width"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "幅"
           }
         }
       }
@@ -2706,6 +2802,22 @@
         }
       }
     },
+    "辞書ポップアップ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dictionary Popup"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "辞書ポップアップ"
+          }
+        }
+      }
+    },
     "辞書ポップアップと辞書検索の文字です。": {
       "localizations": {
         "en": {
@@ -2837,6 +2949,22 @@
         }
       }
     },
+    "透明にしない": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disable Transparency"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "透明にしない"
+          }
+        }
+      }
+    },
     "通報する": {
       "comment": "Post context menu action.",
       "localizations": {
@@ -2930,6 +3058,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "閲覧履歴をすべて消去しますか？"
+          }
+        }
+      }
+    },
+    "高さ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Height"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "高さ"
           }
         }
       }

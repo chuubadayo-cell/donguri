@@ -121,6 +121,61 @@ struct AppearanceView: View {
                 Text("辞書ポップアップと辞書検索の文字です。")
             }
 
+            // Hoshi Reader's "Popup" settings.
+            Section {
+                Toggle("全幅で下に表示", isOn: $userConfig.popupFullWidth)
+                if !userConfig.popupFullWidth {
+                    VStack {
+                        HStack {
+                            Text("幅")
+                            Spacer()
+                            Text(verbatim: "\(userConfig.popupWidth)")
+                                .monospacedDigit()
+                                .foregroundStyle(.secondary)
+                        }
+                        Slider(value: .init(
+                            get: { Double(userConfig.popupWidth) },
+                            set: { userConfig.popupWidth = Int($0) }
+                        ), in: 100...700, step: 10)
+                    }
+                }
+                VStack {
+                    HStack {
+                        Text("高さ")
+                        Spacer()
+                        Text(verbatim: "\(userConfig.popupHeight)")
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                    }
+                    Slider(value: .init(
+                        get: { Double(userConfig.popupHeight) },
+                        set: { userConfig.popupHeight = Int($0) }
+                    ), in: 100...800, step: 10)
+                }
+                Toggle("アクションバーを表示", isOn: $userConfig.popupActionBar)
+                Toggle("透明にしない", isOn: $userConfig.popupDisableTransparency)
+                Toggle("スワイプで閉じる", isOn: $userConfig.popupSwipeToDismiss)
+                if userConfig.popupSwipeToDismiss {
+                    VStack {
+                        HStack {
+                            Text("スワイプの距離")
+                            Spacer()
+                            Text(verbatim: "\(userConfig.popupSwipeThreshold)")
+                                .monospacedDigit()
+                                .foregroundStyle(.secondary)
+                        }
+                        Slider(value: .init(
+                            get: { Double(userConfig.popupSwipeThreshold) },
+                            set: { userConfig.popupSwipeThreshold = Int($0) }
+                        ), in: 20...80, step: 5)
+                    }
+                }
+            } header: {
+                Text("辞書ポップアップ")
+            } footer: {
+                Text("「全幅で下に表示」では、辞書が画面の下に横幅いっぱいで表示されます。オフにすると、タップした語のそばに表示されます。")
+            }
+
             Section {
                 Button("すべて初期設定に戻す", role: .destructive) {
                     confirmReset = true
