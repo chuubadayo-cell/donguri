@@ -299,7 +299,17 @@ struct ThreadView: View {
                 await runAutoRefresh(boardURL: boardURL, threadId: thread.id)
             }
             .refreshable {
+                let before = posts.count
                 await loadThread(boardURL: boardURL, threadId: thread.id)
+                // Say what the pull found, so an empty refresh isn't a mystery.
+                guard before > 0, errorMessage == nil else { return }
+                let added = posts.count - before
+                if added > 0 {
+                    Haptics.play(.success)
+                    flashSaveFeedback(String(localized: "新着レス \(added)件"))
+                } else {
+                    flashSaveFeedback(String(localized: "新着はありません"))
+                }
             }
             .onAppear {
                 isOnScreen = true
@@ -899,21 +909,32 @@ struct ThreadView: View {
 
     /// Works out the thread's media and starts any whole-thread preloading
     /// the user asked for in Settings.
-    private func updateMedia(for newPosts: [Post], boardURL: String, threadId: Int) {
+    /// `previousCount` is how many posts were there before; on a refresh
+    /// only the new posts' media is preloaded and pinned, rather than the
+    /// whole thread's again every few seconds.
+    private func updateMedia(for newPosts: [Post], boardURL: String, threadId: Int, previousCount: Int) {
         let items = MediaItem.items(for: newPosts)
         mediaItems = items
         mediaByPost = Dictionary(grouping: items, by: \.postIndex)
-        prefetcher.reset()
+        let isRefresh = previousCount > 0 && newPosts.count >= previousCount
+        let newItems = isRefresh ? items.filter { $0.postIndex >= previousCount } : items
+        if !isRefresh {
+            prefetcher.reset()
+        }
 
         let mode = MediaPrefetchMode.current
         let wantsAll = mode == .all || (mode == .allOnWiFi && !NetworkMonitor.shared.isExpensive)
-        if wantsAll {
-            prefetcher.prefetchAll(items)
+        if wantsAll, !newItems.isEmpty {
+            if isRefresh {
+                prefetcher.prefetchMore(newItems)
+            } else {
+                prefetcher.prefetchAll(newItems)
+            }
         }
 
         // A saved thread keeps its images current as it grows.
-        if savedThreads.isSaved(boardURL: boardURL, threadId: threadId) {
-            let images = items.filter { $0.kind == .image }.map(\.url)
+        if savedThreads.isSaved(boardURL: boardURL, threadId: threadId), !newItems.isEmpty {
+            let images = newItems.filter { $0.kind == .image }.map(\.url)
             Task.detached(priority: .utility) {
                 for url in images {
                     try? await MediaStore.shared.pin(url)
@@ -1167,7 +1188,7 @@ struct ThreadView: View {
         posts = newPosts
         tree = showsTree || treeMode ? ReplyTree(posts: newPosts) : .empty
         recomputeVisibleIndices()
-        updateMedia(for: newPosts, boardURL: boardURL, threadId: threadId)
+        updateMedia(for: newPosts, boardURL: boardURL, threadId: threadId, previousCount: previousCount)
         (idIndices, tripIndices) = Self.buildHighlightIndices(posts: newPosts)
         highlightedID = nil
         highlightedTrip = nil
@@ -1719,7 +1740,7 @@ struct PostView: View {
         // The system translator, as Messages and Safari present it. It wants the
         // visible text, not PostService's `[>>N](donguri://res/N)` markdown.
         .translationPresentation(isPresented: $showTranslation,
-                                 text: post.text.asPlainPostText)
+                                 text: post.text.cachedPlainPostText)
         .fullScreenCover(item: $localGalleryItem) { item in
             let items = resolvedMedia
             GalleryView(items: items, initialIndex: items.firstIndex(of: item) ?? 0) {

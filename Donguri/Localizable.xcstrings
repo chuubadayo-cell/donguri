@@ -3630,6 +3630,22 @@
         }
       }
     },
+    "新着はありません" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No new posts"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新着はありません"
+          }
+        }
+      }
+    },
     "新着へ（>>%lld）" : {
       "localizations" : {
         "en" : {

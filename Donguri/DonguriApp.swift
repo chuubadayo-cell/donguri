@@ -46,6 +46,7 @@ struct DonguriApp: App {
         .onChange(of: scenePhase) { _, phase in
             // Favorites are checked for notifications in the background.
             if phase == .background {
+                ReadStateStore.shared.flush()
                 FavoriteWatcher.shared.schedule()
             }
         }

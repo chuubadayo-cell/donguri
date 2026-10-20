@@ -239,6 +239,17 @@ final class NearbyPrefetcher {
         }
     }
 
+    /// Adds items (new posts from a refresh) without stopping a whole-thread
+    /// preload that's still running.
+    func prefetchMore(_ items: [MediaItem]) {
+        let images = items.filter { $0.kind == .image }
+        guard !images.isEmpty else { return }
+        let size = MediaThumbnailView.rowPixelSize
+        Task.detached(priority: .utility) {
+            await NearbyPrefetcher.loadThumbnails(images, size: size)
+        }
+    }
+
     /// Four at a time: quick, without starving what's on screen.
     private nonisolated static func loadThumbnails(_ items: [MediaItem], size: CGFloat) async {
         var index = 0

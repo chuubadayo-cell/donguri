@@ -95,19 +95,37 @@ enum PostDate {
         return date
     }
 
+    // Formatting a date is far slower than looking a string up, and every
+    // post row and thread row formats one or two on every redraw.
+    private static var shortLabels: [String: String] = [:]
+    private static var relativeLabels: [String: String] = [:]
+
     /// "21:04" today, "10/18 21:04" this year, otherwise the full date.
     static func shortLabel(for date: Date, now: Date = .now) -> String {
         let local = Calendar.current
+        // Keyed by day too: "today" changes at midnight.
+        let key = "\(Int(date.timeIntervalSince1970))|\(local.ordinality(of: .day, in: .era, for: now) ?? 0)"
+        if let cached = shortLabels[key] { return cached }
+        let label: String
         if local.isDate(date, inSameDayAs: now) {
-            return date.formatted(date: .omitted, time: .shortened)
+            label = date.formatted(date: .omitted, time: .shortened)
+        } else if local.component(.year, from: date) == local.component(.year, from: now) {
+            label = date.formatted(.dateTime.month(.defaultDigits).day().hour().minute())
+        } else {
+            label = date.formatted(date: .numeric, time: .shortened)
         }
-        if local.component(.year, from: date) == local.component(.year, from: now) {
-            return date.formatted(.dateTime.month(.defaultDigits).day().hour().minute())
-        }
-        return date.formatted(date: .numeric, time: .shortened)
+        if shortLabels.count > 6000 { shortLabels.removeAll() }
+        shortLabels[key] = label
+        return label
     }
 
     static func relativeLabel(for date: Date, now: Date = .now) -> String {
-        date.formatted(.relative(presentation: .numeric, unitsStyle: .abbreviated))
+        // Good to the half minute, which is all "5分前" needs.
+        let key = "\(Int(date.timeIntervalSince1970))|\(Int(now.timeIntervalSince1970) / 30)"
+        if let cached = relativeLabels[key] { return cached }
+        let label = date.formatted(.relative(presentation: .numeric, unitsStyle: .abbreviated))
+        if relativeLabels.count > 6000 { relativeLabels.removeAll() }
+        relativeLabels[key] = label
+        return label
     }
 }

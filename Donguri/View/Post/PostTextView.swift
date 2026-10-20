@@ -290,7 +290,7 @@ extension ThreadRoute {
 enum PostTextFormatter {
     private static let cache: NSCache<NSString, NSAttributedString> = {
         let cache = NSCache<NSString, NSAttributedString>()
-        cache.countLimit = 3000
+        cache.countLimit = 6000
         return cache
     }()
 

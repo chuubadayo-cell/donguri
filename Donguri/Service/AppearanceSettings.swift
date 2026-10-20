@@ -172,12 +172,12 @@ final class AppearanceSettings {
     // MARK: Posts
 
     /// Empty means the system font.
-    var postFontFamily: String { didSet { save(postFontFamily, "postFontFamily") } }
-    var postFontSize: Double { didSet { save(postFontSize, "postFontSize") } }
-    var postLineSpacing: Double { didSet { save(postLineSpacing, "postLineSpacing") } }
-    var postTextColorHex: String? { didSet { save(postTextColorHex, "postTextColor") } }
-    var linkColorHex: String? { didSet { save(linkColorHex, "linkColor") } }
-    var highlightColorHex: String? { didSet { save(highlightColorHex, "highlightColor") } }
+    var postFontFamily: String { didSet { save(postFontFamily, "postFontFamily"); invalidatePostStyle() } }
+    var postFontSize: Double { didSet { save(postFontSize, "postFontSize"); invalidatePostStyle() } }
+    var postLineSpacing: Double { didSet { save(postLineSpacing, "postLineSpacing"); invalidatePostStyle() } }
+    var postTextColorHex: String? { didSet { save(postTextColorHex, "postTextColor"); invalidatePostStyle() } }
+    var linkColorHex: String? { didSet { save(linkColorHex, "linkColor"); invalidatePostStyle() } }
+    var highlightColorHex: String? { didSet { save(highlightColorHex, "highlightColor"); invalidatePostStyle() } }
     var threadBackgroundHex: String? { didSet { save(threadBackgroundHex, "threadBackground") } }
 
     // MARK: Thread layout
@@ -195,10 +195,10 @@ final class AppearanceSettings {
     var postSeparators: Bool { didSet { save(postSeparators, "postSeparators") } }
     /// Detect ASCII art and draw it in an MS P Gothic–compatible font,
     /// scaled to fit the screen, so it lines up.
-    var asciiArtFont: Bool { didSet { save(asciiArtFont, "asciiArtFont") } }
+    var asciiArtFont: Bool { didSet { save(asciiArtFont, "asciiArtFont"); invalidatePostStyle() } }
     /// Show links as the site's name ("Imgur", "X @user") instead of the
     /// whole URL.
-    var shortenLinks: Bool { didSet { save(shortenLinks, "shortenLinks") } }
+    var shortenLinks: Bool { didSet { save(shortenLinks, "shortenLinks"); invalidatePostStyle() } }
 
     // MARK: Dictionary
 
@@ -338,6 +338,7 @@ final class AppearanceSettings {
         activeThemeID = id
         palette = palette(forTheme: id)
         paletteSignature = palette?.signature ?? "-"
+        invalidatePostStyle()
     }
 
     private func saveCustomThemes() {
@@ -361,8 +362,22 @@ final class AppearanceSettings {
 
     /// Everything post rendering needs, as one value: reading it in a view's
     /// body is what makes posts redraw when a setting changes.
+    /// Bumped whenever anything in `postStyle` changes, so views that read
+    /// the cached style still redraw.
+    private(set) var postStyleRevision = 0
+    @ObservationIgnored private var cachedPostStyle: PostTextStyle?
+
+    private func invalidatePostStyle() {
+        cachedPostStyle = nil
+        postStyleRevision &+= 1
+    }
+
+    /// Built once and reused: every post row asks for it on every redraw,
+    /// and building it parses colours and joins a cache key.
     var postStyle: PostTextStyle {
-        PostTextStyle(fontFamily: postFontFamily,
+        _ = postStyleRevision
+        if let cachedPostStyle { return cachedPostStyle }
+        let style = PostTextStyle(fontFamily: postFontFamily,
                       fontSize: CGFloat(postFontSize),
                       lineSpacing: CGFloat(postLineSpacing),
                       textColor: postTextColorHex.flatMap(UIColor.init(hex:)) ?? palette?.text ?? .label,
@@ -373,11 +388,14 @@ final class AppearanceSettings {
                       key: [asciiArtFont ? "aa" : "-", shortenLinks ? "short" : "-", postFontFamily, "\(postFontSize)", "\(postLineSpacing)",
                             postTextColorHex ?? "-", linkColorHex ?? "-", highlightColorHex ?? "-",
                             activeThemeID, paletteSignature].joined(separator: "|"))
+        cachedPostStyle = style
+        return style
     }
 
     /// Prepended to the popup's custom CSS. Only the font: the popup always
-    /// uses its standard light or dark look, following the theme's mode. `body *` matches the specificity
-    /// of popup.css's own `!important` font rule and comes later, so it wins.
+    /// uses its standard light or dark look, following the theme's mode.
+    /// `body *` matches the specificity of popup.css's own `!important` font
+    /// rule and comes later, so it wins.
     var dictionaryCSS: String {
         var css = ""
         let family = dictionaryFontFamily.replacingOccurrences(of: "\"", with: "")

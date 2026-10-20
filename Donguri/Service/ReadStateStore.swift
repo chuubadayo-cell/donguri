@@ -80,6 +80,28 @@ final class ReadStateStore {
             lastVisited: .now,
             lastTopIndex: topIndex ?? existing?.lastTopIndex
         )
+        schedulePersist()
+    }
+
+    /// Up to 3000 entries are written as one blob; leaving a thread, then
+    /// switching tabs, then backgrounding can each update, so the writes are
+    /// gathered into one.
+    private var pendingWrite: Task<Void, Never>?
+
+    private func schedulePersist() {
+        pendingWrite?.cancel()
+        pendingWrite = Task {
+            try? await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled else { return }
+            persist()
+        }
+    }
+
+    /// Writes now (the app is going to the background).
+    func flush() {
+        guard pendingWrite != nil else { return }
+        pendingWrite?.cancel()
+        pendingWrite = nil
         persist()
     }
 

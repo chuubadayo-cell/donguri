@@ -27,6 +27,15 @@ extension String {
         }
     }
 
+    /// `asPlainPostText`, remembered: rows ask for it on every redraw.
+    var cachedPlainPostText: String {
+        let key = self as NSString
+        if let cached = PlainPostTextCache.cache.object(forKey: key) { return cached as String }
+        let plain = asPlainPostText
+        PlainPostTextCache.cache.setObject(plain as NSString, forKey: key)
+        return plain
+    }
+
     nonisolated var asPostHTML: String {
         var s = self
             .replacingOccurrences(of: "&", with: "&amp;")
@@ -61,4 +70,12 @@ extension String {
 
         return s.replacingOccurrences(of: "\n", with: "<br>")
     }
+}
+
+private enum PlainPostTextCache {
+    static let cache: NSCache<NSString, NSString> = {
+        let cache = NSCache<NSString, NSString>()
+        cache.countLimit = 3000
+        return cache
+    }()
 }

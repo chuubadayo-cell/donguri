@@ -20,8 +20,9 @@ struct MediaThumbnailView: View {
     /// reused wherever the item appears.
     var pixelSize: CGFloat = MediaThumbnailView.rowPixelSize
 
-    /// 84pt at 3x. Preloading decodes at this size too.
-    static let rowPixelSize: CGFloat = 252
+    /// 100pt at 3x, so even the large thumbnail setting stays sharp.
+    /// Preloading decodes at this size too.
+    static let rowPixelSize: CGFloat = 300
     static let gridPixelSize: CGFloat = 360
 
     @State private var image: UIImage?
