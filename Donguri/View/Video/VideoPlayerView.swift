@@ -15,6 +15,7 @@
 
 import SwiftUI
 import AVFoundation
+import WebKit
 import UniformTypeIdentifiers
 
 struct VideoPlayerView: View {
@@ -106,7 +107,11 @@ struct VideoPlayerView: View {
 
     private func videoArea(fullScreen: Bool) -> some View {
         ZStack {
-            PlayerSurface(player: model.player)
+            if model.engine == .web, let web = model.web {
+                WebPlayerSurface(webView: web.webView)
+            } else {
+                PlayerSurface(player: model.player)
+            }
 
             // Taps: one shows or hides the controls; two on either side
             // jump a line (or ten seconds) back or forward.
@@ -131,7 +136,13 @@ struct VideoPlayerView: View {
                 .transition(.opacity)
             }
 
-            subtitleOverlay(fullScreen: fullScreen)
+            if !model.isAd {
+                subtitleOverlay(fullScreen: fullScreen)
+            }
+
+            if model.isAd {
+                adBadge(fullScreen: fullScreen)
+            }
 
             controls(fullScreen: fullScreen)
                 .opacity(controlsVisible ? 1 : 0)
@@ -208,8 +219,7 @@ struct VideoPlayerView: View {
     @ViewBuilder
     private func subtitleOverlay(fullScreen: Bool) -> some View {
         if settings.showSubtitles, let cue = model.activeCue {
-            let blurred = settings.blurSubtitles && model.revealedCueID != cue.id
-                && !(settings.unblurWhenPaused && !model.isPlaying)
+            let blurred = isBlurred(cue)
             VStack {
                 if settings.subtitlePosition == .bottom { Spacer() }
                 ZStack {
@@ -226,7 +236,7 @@ struct VideoPlayerView: View {
                         Color.clear
                             .contentShape(Rectangle())
                             .onTapGesture {
-                                withAnimation(.easeOut(duration: 0.15)) { model.revealedCueID = cue.id }
+                                reveal(cue)
                             }
                     }
                 }
@@ -240,6 +250,65 @@ struct VideoPlayerView: View {
                 if settings.subtitlePosition == .top { Spacer() }
             }
             .animation(.easeInOut(duration: 0.2), value: controlsVisible)
+        }
+    }
+
+    /// Blurred until tapped (or paused, if that's the setting).
+    private func isBlurred(_ cue: SubtitleCue) -> Bool {
+        settings.blurSubtitles && !model.revealedCueIDs.contains(cue.id)
+            && !(settings.unblurWhenPaused && !model.isPlaying)
+    }
+
+    private func reveal(_ cue: SubtitleCue) {
+        _ = withAnimation(.easeOut(duration: 0.15)) { model.revealedCueIDs.insert(cue.id) }
+    }
+
+    /// Shown → blurred → hidden, for every place subtitles appear.
+    private func cycleSubtitleMode() {
+        if !settings.showSubtitles {
+            settings.showSubtitles = true
+            settings.blurSubtitles = false
+        } else if !settings.blurSubtitles {
+            settings.blurSubtitles = true
+            model.revealedCueIDs.removeAll()
+        } else {
+            settings.showSubtitles = false
+        }
+        Haptics.play(.selection)
+    }
+
+    private var subtitleModeIcon: String {
+        if !settings.showSubtitles { return "eye.slash" }
+        return settings.blurSubtitles ? "eye.trianglebadge.exclamationmark" : "eye"
+    }
+
+    private func adBadge(fullScreen: Bool) -> some View {
+        VStack {
+            Spacer()
+            HStack {
+                Text("広告")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.black)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(Color.yellow))
+                Spacer()
+                if model.canSkipAd {
+                    Button {
+                        model.skipAd()
+                    } label: {
+                        Label("スキップ", systemImage: "forward.end.fill")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(Capsule().fill(.black.opacity(0.7)))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, fullScreen ? 40 : 12)
+            .padding(.bottom, controlsVisible ? (fullScreen ? 70 : 44) : 12)
         }
     }
 
@@ -510,8 +579,13 @@ struct VideoPlayerView: View {
             }
             .accessibilityLabel(Text("前の字幕"))
             Group {
-                if let index = model.lastCueIndex, model.cues.indices.contains(index) {
+                if !settings.showSubtitles, !model.cues.isEmpty {
+                    Text("字幕は非表示")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                } else if let index = model.lastCueIndex, model.cues.indices.contains(index) {
                     let cue = model.cues[index]
+                    let blurred = isBlurred(cue)
                     PostTextView(text: cue.text,
                                  scanNonJapaneseText: userConfig.scanNonJapaneseText,
                                  style: AppearanceSettings.shared.postStyle,
@@ -521,6 +595,15 @@ struct VideoPlayerView: View {
                                  onThreadRoute: { _ in })
                         .id(cue.id)
                         .opacity(model.activeCue?.id == cue.id ? 1 : 0.6)
+                        .blur(radius: blurred ? 6 : 0)
+                        .allowsHitTesting(!blurred)
+                        .overlay {
+                            if blurred {
+                                Color.clear
+                                    .contentShape(Rectangle())
+                                    .onTapGesture { reveal(cue) }
+                            }
+                        }
                 } else if model.loadingSubtitles {
                     HStack(spacing: 8) {
                         ProgressView()
@@ -558,6 +641,13 @@ struct VideoPlayerView: View {
                     .frame(width: 32, height: 44)
             }
             .accessibilityLabel(Text("次の字幕"))
+            Button {
+                cycleSubtitleMode()
+            } label: {
+                Image(systemName: subtitleModeIcon)
+                    .frame(width: 32, height: 44)
+            }
+            .accessibilityLabel(Text("字幕の表示（表示・ぼかし・非表示）"))
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
@@ -623,6 +713,16 @@ struct VideoPlayerView: View {
                     }
                 }
             }
+        } else if !settings.showSubtitles {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("字幕は非表示です")
+                    .foregroundStyle(.secondary)
+                Button {
+                    settings.showSubtitles = true
+                } label: {
+                    Label("字幕を表示", systemImage: "eye")
+                }
+            }
         } else {
             if model.subtitleDelay != 0 || model.item.isFile {
                 DelayRow(model: model)
@@ -630,7 +730,9 @@ struct VideoPlayerView: View {
             ForEach(model.cues) { cue in
                 TranscriptRow(cue: cue,
                               isCurrent: cue.id == model.cues[safe: model.lastCueIndex]?.id,
+                              blurred: isBlurred(cue),
                               onSeek: { model.play(cue) },
+                              onReveal: { reveal(cue) },
                               onSelect: { selection in lookUp(selection, in: cue) },
                               onTapOutside: { model.popups.closeAll() })
                     .id(cue.id)
@@ -642,7 +744,9 @@ struct VideoPlayerView: View {
 private struct TranscriptRow: View {
     let cue: SubtitleCue
     let isCurrent: Bool
+    let blurred: Bool
     let onSeek: () -> Void
+    let onReveal: () -> Void
     let onSelect: (SelectionData) -> Int?
     let onTapOutside: () -> Void
     @Environment(UserConfig.self) private var userConfig
@@ -664,6 +768,15 @@ private struct TranscriptRow: View {
                          onTapOutside: onTapOutside,
                          onPostReply: { _ in },
                          onThreadRoute: { _ in })
+                .blur(radius: blurred ? 6 : 0)
+                .allowsHitTesting(!blurred)
+                .overlay {
+                    if blurred {
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .onTapGesture(perform: onReveal)
+                    }
+                }
         }
         .listRowBackground(isCurrent ? Color.accentColor.opacity(0.12) : Color.clear)
     }
@@ -690,6 +803,14 @@ private struct DelayRow: View {
 }
 
 // MARK: - Pieces
+
+/// YouTube's own player, styled down to its video.
+private struct WebPlayerSurface: UIViewRepresentable {
+    let webView: WKWebView
+
+    func makeUIView(context: Context) -> WKWebView { webView }
+    func updateUIView(_ uiView: WKWebView, context: Context) {}
+}
 
 private struct PlayerSurface: UIViewRepresentable {
     let player: AVPlayer

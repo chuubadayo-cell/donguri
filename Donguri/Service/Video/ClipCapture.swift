@@ -82,6 +82,26 @@ nonisolated enum ClipCapture {
         }
     }
 
+    /// Audio from an MP4 init segment followed by fragments, the first of
+    /// which starts at `firstTime` on the video's timeline.
+    static func cutFragmentedMP4(_ data: Data, firstTime: Double, start: Double, end: Double) async -> URL? {
+        let joined = newFile("mp4")
+        do { try data.write(to: joined) } catch { return nil }
+        defer { try? FileManager.default.removeItem(at: joined) }
+        let asset = AVURLAsset(url: joined)
+        // AVFoundation may put the first fragment at its own decode time or
+        // at zero; the track says which.
+        var trackStart = 0.0
+        if let track = try? await asset.loadTracks(withMediaType: .audio).first,
+           let range = try? await track.load(.timeRange) {
+            trackStart = range.start.seconds.isFinite ? range.start.seconds : 0
+        }
+        let offset = trackStart - firstTime
+        let from = max(trackStart, start + offset)
+        let to = max(from + 0.1, end + offset)
+        return await exportAudio(asset: asset, range: from...to)
+    }
+
     // MARK: Pictures
 
     static func image(from source: ClipSource, kind: ClipImageKind, start: Double, end: Double,
@@ -306,17 +326,7 @@ nonisolated enum HLSAudio {
         var file = Data()
         if let initURL { file.append(try await fetch(initURL)) }
         for data in datas { file.append(data) }
-        let joined = ClipCapture.newFile("mp4")
-        try file.write(to: joined)
-        defer { try? FileManager.default.removeItem(at: joined) }
-        let asset = AVURLAsset(url: joined)
-        var trackStart = 0.0
-        if let track = try? await asset.loadTracks(withMediaType: .audio).first,
-           let range = try? await track.load(.timeRange) {
-            trackStart = range.start.seconds.isFinite ? range.start.seconds : 0
-        }
-        let offset = trackStart - needed[0].start
-        guard let clip = await ClipCapture.exportAudio(asset: asset, range: (start + offset)...(end + offset)) else {
+        guard let clip = await ClipCapture.cutFragmentedMP4(file, firstTime: needed[0].start, start: start, end: end) else {
             throw Failure.empty
         }
         return clip

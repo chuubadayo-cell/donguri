@@ -105,6 +105,9 @@ final class PopupStack {
 /// Draws a PopupStack. Put it in an overlay of the screen it belongs to.
 struct PopupStackLayer: View {
     @Bindable var stack: PopupStack
+    /// Space at the bottom of the window popups must keep clear of (a tab
+    /// bar, a toolbar). Nil is just the home indicator.
+    var bottomInset: CGFloat? = nil
     @Environment(UserConfig.self) private var userConfig
 
     var body: some View {
@@ -122,7 +125,7 @@ struct PopupStackLayer: View {
                         isVertical: false,
                         isFullWidth: popup.isFullWidth,
                         topInset: UIApplication.topSafeArea,
-                        bottomInset: UIApplication.bottomSafeArea,
+                        bottomInset: max(bottomInset ?? 0, UIApplication.bottomSafeArea),
                         coverURL: stack.coverURL,
                         documentTitle: stack.documentTitle,
                         clearSelection: popup.clearSelection,

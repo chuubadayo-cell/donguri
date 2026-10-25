@@ -91,9 +91,21 @@ final class YouTubeClient {
         return loaded
     }
 
+    /// Signed in if Google's session cookies for YouTube are there. The
+    /// page's own LOGGED_IN flag is also asked, but it depends on how the
+    /// page is served, so the cookies decide.
     func refreshSignInState() async -> Bool {
         config = nil
-        return (try? await loadConfig())?.loggedIn ?? false
+        let jar = await cookies()
+        let names = Set(jar.map(\.name))
+        let hasSession = names.contains("SAPISID") || names.contains("__Secure-3PAPISID") || names.contains("LOGIN_INFO")
+        let pageSaysSignedIn = (try? await loadConfig())?.loggedIn ?? false
+        print("[iroha] YouTube sign-in: cookies=\(hasSession) page=\(pageSaysSignedIn) (\(jar.count) cookies)")
+        if hasSession, var config, !config.loggedIn {
+            config.loggedIn = true
+            self.config = config
+        }
+        return hasSession || pageSaysSignedIn
     }
 
     // MARK: Requests
@@ -176,8 +188,10 @@ final class YouTubeClient {
 
         let (data, response) = try await session.data(for: request)
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            print("[iroha] InnerTube \(endpoint) HTTP \(http.statusCode): \(String(decoding: data.prefix(300), as: UTF8.self))")
             throw URLError(.badServerResponse)
         }
+        print("[iroha] InnerTube \(endpoint) \(data.count) bytes")
         return data
     }
 
@@ -244,6 +258,7 @@ final class YouTubeClient {
             }
         }
         guard let info else { throw URLError(.cannotParseResponse) }
+        print("[iroha] player \(videoID): playable=\(info.playable) hls=\(info.hlsURL != nil) tracks=\(info.captionTracks.count) reason=\(info.reason ?? "-")")
         return info
     }
 

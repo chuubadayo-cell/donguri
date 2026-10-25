@@ -2,9 +2,14 @@
 //  VideoPlayerModel.swift
 //  Donguri
 //
-//  One video being watched: YouTube (played natively from its HLS stream)
-//  or a file from the device, its subtitles, where playback is, and the
-//  clips mined cards get.
+//  One video being watched: YouTube or a file from the device, its
+//  subtitles, where playback is, and the clips mined cards get.
+//
+//  YouTube plays natively from its HLS stream when YouTube allows it, and
+//  otherwise in YouTube's own player (YouTubeWebPlayer). The switch is
+//  automatic: a stream that fails, or hasn't started after a few seconds,
+//  falls back, and the fallback is remembered for a while so the next
+//  video starts there straight away.
 //
 
 import SwiftUI
@@ -56,6 +61,12 @@ final class VideoPlayerModel {
     private(set) var info: YTPlayerInfo?
     private(set) var related: [YTVideo] = []
 
+    enum Engine { case native, web }
+    private(set) var engine: Engine = .native
+    private(set) var web: YouTubeWebPlayer?
+    private(set) var isAd = false
+    private(set) var canSkipAd = false
+
     // Subtitles
     private(set) var tracks: [YTCaptionTrack] = []
     private(set) var selectedTrack: YTCaptionTrack?
@@ -73,8 +84,8 @@ final class VideoPlayerModel {
     private(set) var activeCue: SubtitleCue?
     /// The most recent line to have started, for previous/next.
     private(set) var lastCueIndex: Int?
-    /// A blurred line the user has revealed.
-    var revealedCueID: Int?
+    /// Blurred lines the user has tapped to read.
+    var revealedCueIDs: Set<Int> = []
 
     @ObservationIgnored private var timeObserver: Any?
     @ObservationIgnored private var observations: [NSKeyValueObservation] = []
@@ -82,8 +93,22 @@ final class VideoPlayerModel {
     @ObservationIgnored private var started = false
     /// A file picked from Files stays readable while it plays.
     @ObservationIgnored private var scopedFile: URL?
+    /// The native stream has shown it plays (time moved).
+    @ObservationIgnored private var nativeStarted = false
+    @ObservationIgnored private var nativeStartTime: Double = 0
+    @ObservationIgnored private var userPaused = false
+    @ObservationIgnored private var itemObservation: NSKeyValueObservation?
+    @ObservationIgnored private var errorObserver: NSObjectProtocol?
+    @ObservationIgnored private var lastSaved = Date.distantPast
 
     private static let positionsKey = "iroha.video.positions"
+    private static let nativeFailedKey = "iroha.video.nativeFailedAt"
+
+    /// The direct stream failed recently; go straight to YouTube's player.
+    private static var nativeRecentlyFailed: Bool {
+        guard let date = UserDefaults.standard.object(forKey: nativeFailedKey) as? Date else { return false }
+        return Date.now.timeIntervalSince(date) < 6 * 3600
+    }
 
     init(item: VideoItem) {
         self.item = item
@@ -92,8 +117,16 @@ final class VideoPlayerModel {
 
     var clipSource: ClipSource? {
         switch item {
-        case .file(let url): return .file(url)
-        case .youtube: return info?.hlsURL.map(ClipSource.stream)
+        case .file(let url):
+            return .file(url)
+        case .youtube:
+            if engine == .web {
+                // YouTube's page playing plain HLS: that stream works for clips.
+                guard let source = web?.state.source, source.hasPrefix("http"), source.contains("m3u8"),
+                      let url = URL(string: source) else { return nil }
+                return .stream(url)
+            }
+            return info?.hlsURL.map(ClipSource.stream)
         }
     }
 
@@ -128,28 +161,98 @@ final class VideoPlayerModel {
             }
         case .youtube(let id, let knownTitle):
             title = knownTitle ?? ""
-            do {
-                let info = try await YouTubeClient.shared.playerInfo(id)
-                self.info = info
+            let info = try? await YouTubeClient.shared.playerInfo(id)
+            self.info = info
+            if let info {
                 if !info.title.isEmpty { title = info.title }
                 channel = info.channel
                 channelID = info.channelID
                 viewCount = info.viewCount
                 details = info.description
                 tracks = info.captionTracks
-                guard let hls = info.hlsURL else {
-                    phase = .failed(info.reason ?? String(localized: "この動画はアプリ内で再生できません"))
-                    return
-                }
-                prepare(AVURLAsset(url: hls, options: [AVURLAssetHTTPUserAgentKey: YouTubeClient.userAgent]))
-                phase = .ready
-                restorePosition()
-                player.play()
                 Task { await loadSubtitles(track: YouTubeClient.defaultTrack(in: info.captionTracks)) }
-                Task { related = (try? await YouTubeClient.shared.related(id).videos) ?? [] }
-            } catch {
-                phase = .failed(String(localized: "動画を読み込めませんでした"))
             }
+            Task { related = (try? await YouTubeClient.shared.related(id).videos) ?? [] }
+            if let hls = info?.hlsURL, info?.playable == true, !Self.nativeRecentlyFailed {
+                startNative(hls)
+            } else {
+                // No usable stream (or it failed lately): YouTube's player
+                // can play anything the site can.
+                startWeb(at: savedPosition() ?? 0)
+            }
+        }
+    }
+
+    private func startNative(_ hls: URL) {
+        engine = .native
+        prepare(AVURLAsset(url: hls, options: [AVURLAssetHTTPUserAgentKey: YouTubeClient.userAgent]))
+        phase = .ready
+        restorePosition()
+        nativeStartTime = clock.time
+        player.play()
+        if let item = player.currentItem {
+            itemObservation = item.observe(\.status, options: [.new]) { [weak self] item, _ in
+                let failed = item.status == .failed
+                let message = item.error?.localizedDescription ?? ""
+                Task { @MainActor in
+                    guard failed else { return }
+                    print("[iroha] native stream failed: \(message)")
+                    self?.fallBackToWeb()
+                }
+            }
+            errorObserver = NotificationCenter.default.addObserver(forName: AVPlayerItem.newErrorLogEntryNotification,
+                                                                   object: item, queue: .main) { notification in
+                guard let event = (notification.object as? AVPlayerItem)?.errorLog()?.events.last else { return }
+                print("[iroha] native stream error \(event.errorStatusCode) \(event.errorDomain): \(event.errorComment ?? "") \(event.uri ?? "")")
+            }
+        }
+        // A stream that hasn't started moving in this long isn't going to.
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(9))
+            guard let self, self.engine == .native, !self.nativeStarted, !self.userPaused else { return }
+            print("[iroha] native stream didn't start; using YouTube's player")
+            self.fallBackToWeb()
+        }
+    }
+
+    private func fallBackToWeb() {
+        guard engine == .native, case .youtube = item else { return }
+        UserDefaults.standard.set(Date.now, forKey: Self.nativeFailedKey)
+        let position = clock.time
+        player.pause()
+        player.replaceCurrentItem(with: nil)
+        itemObservation = nil
+        if let errorObserver { NotificationCenter.default.removeObserver(errorObserver) }
+        errorObserver = nil
+        startWeb(at: position)
+    }
+
+    private func startWeb(at position: Double) {
+        guard case .youtube(let id, _) = item else { return }
+        engine = .web
+        isBuffering = true
+        let web = YouTubeWebPlayer(videoID: id, startAt: position)
+        web.onState = { [weak self] state in self?.webStateChanged(state) }
+        self.web = web
+        web.load()
+        phase = .ready
+        if position > 0 { clock.time = position }
+    }
+
+    private func webStateChanged(_ state: YouTubeWebPlayer.State) {
+        guard engine == .web else { return }
+        isAd = state.isAd
+        canSkipAd = state.canSkipAd
+        isPlaying = state.ready && !state.paused
+        isBuffering = !state.ready || state.waiting
+        guard state.ready, !state.isAd else { return }
+        clock.time = state.time
+        if state.duration > 0, clock.duration != state.duration { clock.duration = state.duration }
+        clock.buffered = state.buffered
+        updateCue(at: state.time)
+        if Date.now.timeIntervalSince(lastSaved) > 5 {
+            lastSaved = .now
+            savePosition(state.time)
         }
     }
 
@@ -176,7 +279,8 @@ final class VideoPlayerModel {
     }
 
     private func tick(_ time: Double) {
-        guard time.isFinite else { return }
+        guard time.isFinite, engine == .native else { return }
+        if !nativeStarted, time > nativeStartTime + 0.3 { nativeStarted = true }
         clock.time = time
         if let item = player.currentItem {
             let duration = item.duration.seconds
@@ -188,7 +292,10 @@ final class VideoPlayerModel {
             clock.duration = info.duration
         }
         updateCue(at: time)
-        if Int(time) % 5 == 0 { savePosition(time) }
+        if Date.now.timeIntervalSince(lastSaved) > 5 {
+            lastSaved = .now
+            savePosition(time)
+        }
     }
 
     private func updateCue(at time: Double) {
@@ -208,7 +315,6 @@ final class VideoPlayerModel {
         let active = last.flatMap { cues[$0].end > time ? cues[$0] : nil }
         if active?.id != activeCue?.id {
             activeCue = active
-            if revealedCueID != nil, revealedCueID != active?.id { revealedCueID = nil }
         }
     }
 
@@ -216,27 +322,49 @@ final class VideoPlayerModel {
 
     func togglePlay() {
         if isPlaying {
-            player.pause()
+            pause()
         } else {
             if clock.duration > 0, clock.time >= clock.duration - 0.5 { seek(to: 0) }
-            player.playImmediately(atRate: Float(VideoSettings.shared.playbackRate))
+            resume()
         }
         Haptics.play(.selection)
     }
 
     func pause() {
-        player.pause()
+        userPaused = true
+        switch engine {
+        case .native: player.pause()
+        case .web: web?.pause()
+        }
+    }
+
+    func resume() {
+        userPaused = false
+        let rate = VideoSettings.shared.playbackRate
+        switch engine {
+        case .native: player.playImmediately(atRate: Float(rate))
+        case .web: web?.play(rate: rate)
+        }
+    }
+
+    func skipAd() {
+        web?.skipAd()
     }
 
     func seek(to time: Double, play: Bool? = nil) {
         let target = max(0, clock.duration > 0 ? min(time, clock.duration - 0.1) : time)
         clock.time = target
         updateCue(at: target)
-        player.seek(to: CMTime(seconds: target, preferredTimescale: 600),
-                    toleranceBefore: CMTime(seconds: 0.03, preferredTimescale: 600),
-                    toleranceAfter: CMTime(seconds: 0.03, preferredTimescale: 600))
-        if play == true { player.playImmediately(atRate: Float(VideoSettings.shared.playbackRate)) }
-        if play == false { player.pause() }
+        switch engine {
+        case .native:
+            player.seek(to: CMTime(seconds: target, preferredTimescale: 600),
+                        toleranceBefore: CMTime(seconds: 0.03, preferredTimescale: 600),
+                        toleranceAfter: CMTime(seconds: 0.03, preferredTimescale: 600))
+        case .web:
+            web?.seek(to: target)
+        }
+        if play == true { resume() }
+        if play == false { pause() }
     }
 
     func skip(by seconds: Double) {
@@ -245,8 +373,13 @@ final class VideoPlayerModel {
 
     func setRate(_ rate: Double) {
         VideoSettings.shared.playbackRate = rate
-        player.defaultRate = Float(rate)
-        if isPlaying { player.rate = Float(rate) }
+        switch engine {
+        case .native:
+            player.defaultRate = Float(rate)
+            if isPlaying { player.rate = Float(rate) }
+        case .web:
+            web?.setRate(rate)
+        }
     }
 
     /// Back to the start of the line on screen, or the one before it if
@@ -326,11 +459,15 @@ final class VideoPlayerModel {
     /// A word tapped in `cue`: pause if wanted, and start making the
     /// card's clip so it's ready by the time the + is pressed.
     func prepareLookup(in cue: SubtitleCue) {
-        if VideoSettings.shared.pauseOnLookup { player.pause() }
+        if VideoSettings.shared.pauseOnLookup { pause() }
         let stillTime = (cue.start...max(cue.start, cue.end)).contains(clock.time) ? clock.time : (cue.start + cue.end) / 2
         popups.documentTitle = title.isEmpty ? nil : title
         popups.coverURL = nil
-        _ = mediaTask(for: cue, still: stillTime)
+        // In YouTube's player a GIF means playing the line again, which
+        // would jump the video about; that waits for the + instead.
+        if !(engine == .web && VideoSettings.shared.cardImage == .gif) {
+            _ = mediaTask(for: cue, still: stillTime)
+        }
         popups.mediaProvider = { [weak self] in
             guard let self else { return nil }
             return await self.mediaTask(for: cue, still: stillTime).value
@@ -341,11 +478,20 @@ final class VideoPlayerModel {
         let settings = VideoSettings.shared
         let key = "\(cue.id)|\(cue.start)|\(settings.cardImage.rawValue)|\(settings.cardAudio)|\(settings.paddingBefore)|\(settings.paddingAfter)"
         if let task = mediaTasks[key] { return task }
-        guard let source = clipSource else { return Task { CardMedia() } }
         let start = max(0, cue.start - Double(settings.paddingBefore) / 1000)
         let end = max(start + 0.2, cue.end + Double(settings.paddingAfter) / 1000)
         let imageKind = settings.cardImage
         let wantsAudio = settings.cardAudio
+        if engine == .web, let web {
+            let stream = clipSource
+            let task = Task<CardMedia, Never> {
+                await Self.webMedia(web: web, stream: stream, start: start, end: end, still: still,
+                                    imageKind: imageKind, wantsAudio: wantsAudio)
+            }
+            mediaTasks[key] = task
+            return task
+        }
+        guard let source = clipSource else { return Task { CardMedia() } }
         let task = Task<CardMedia, Never> {
             async let audio: URL? = wantsAudio ? await ClipCapture.audio(from: source, start: start, end: end) : nil
             async let image: URL? = await ClipCapture.image(from: source, kind: imageKind,
@@ -354,6 +500,42 @@ final class VideoPlayerModel {
         }
         mediaTasks[key] = task
         return task
+    }
+
+    /// Card media from YouTube's player: the audio out of what it has
+    /// buffered (or its stream, if it plays plain HLS), the picture from
+    /// its video element.
+    private static func webMedia(web: YouTubeWebPlayer, stream: ClipSource?, start: Double, end: Double,
+                                 still: Double, imageKind: ClipImageKind, wantsAudio: Bool) async -> CardMedia {
+        var media = CardMedia()
+        if wantsAudio {
+            if let stream {
+                media.audioURL = await ClipCapture.audio(from: stream, start: start, end: end)
+            } else if let buffered = await web.bufferedAudio(from: start, to: end) {
+                media.audioURL = await ClipCapture.cutFragmentedMP4(buffered.data, firstTime: buffered.firstTime,
+                                                                    start: start, end: end)
+            }
+            if media.audioURL == nil { print("[iroha] no audio for the card (web player)") }
+        }
+        switch imageKind {
+        case .none:
+            break
+        case .screenshot:
+            if let data = await web.frame(at: still, maxWidth: 960), let image = UIImage(data: data)?.cgImage {
+                media.imageURL = ClipCapture.writeJPEG(image)
+            }
+        case .gif:
+            let length = min(end - start, 8)
+            let fps: Double = length > 5 ? 6 : 8
+            let frames = await web.frames(from: start, to: start + length, fps: fps, maxWidth: 400)
+                .compactMap { UIImage(data: $0)?.cgImage }
+            if frames.count > 1 {
+                media.imageURL = ClipCapture.writeGIF(frames, delay: 1 / fps)
+            } else if let data = await web.frame(at: still, maxWidth: 960), let image = UIImage(data: data)?.cgImage {
+                media.imageURL = ClipCapture.writeJPEG(image)
+            }
+        }
+        return media
     }
 
     // MARK: Resume
@@ -367,9 +549,14 @@ final class VideoPlayerModel {
         UserDefaults.standard.set(positions, forKey: Self.positionsKey)
     }
 
-    private func restorePosition() {
+    private func savedPosition() -> Double? {
         let positions = UserDefaults.standard.dictionary(forKey: Self.positionsKey) as? [String: Double] ?? [:]
-        if let saved = positions[item.id], saved > 5 {
+        guard let saved = positions[item.id], saved > 5 else { return nil }
+        return saved
+    }
+
+    private func restorePosition() {
+        if let saved = savedPosition() {
             player.seek(to: CMTime(seconds: saved, preferredTimescale: 600))
             clock.time = saved
         }
@@ -382,6 +569,11 @@ final class VideoPlayerModel {
         timeObserver = nil
         observations.removeAll()
         player.replaceCurrentItem(with: nil)
+        itemObservation = nil
+        if let errorObserver { NotificationCenter.default.removeObserver(errorObserver) }
+        errorObserver = nil
+        web?.teardown()
+        web = nil
         popups.closeAll()
         scopedFile?.stopAccessingSecurityScopedResource()
         scopedFile = nil

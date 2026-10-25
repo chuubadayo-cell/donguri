@@ -19,6 +19,9 @@ struct BrowserView: View {
     @State private var showsTranscript = false
     @State private var scanning = false
     @AppStorage(BrowserMode.defaultsKey) private var mode = BrowserMode.youtube.rawValue
+    /// From the bottom of the page to the bottom of the window: the
+    /// toolbar, the tab bar and the home indicator. Popups stay above it.
+    @State private var bottomChrome: CGFloat = 0
 
     var body: some View {
         VStack(spacing: 0) {
@@ -46,6 +49,13 @@ struct BrowserView: View {
 
             ZStack {
                 BrowserWebView(webView: model.webView)
+                    .onGeometryChange(for: CGFloat.self) { proxy in
+                        proxy.frame(in: .global).maxY
+                    } action: { pageBottom in
+                        let window = UIApplication.shared.connectedScenes
+                            .compactMap { ($0 as? UIWindowScene)?.keyWindow?.bounds.height }.first ?? pageBottom
+                        bottomChrome = max(0, window - pageBottom)
+                    }
                     .opacity(model.showsStartPage ? 0 : 1)
                 if model.showsStartPage {
                     BrowserStartPage { url in
@@ -66,7 +76,7 @@ struct BrowserView: View {
             toolbar
         }
         .overlay {
-            PopupStackLayer(stack: model.popups)
+            PopupStackLayer(stack: model.popups, bottomInset: bottomChrome)
         }
         .sheet(isPresented: $showsTranscript) {
             TranscriptView(model: model)

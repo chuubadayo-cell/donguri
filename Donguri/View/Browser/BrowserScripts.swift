@@ -27,9 +27,38 @@ enum BrowserScripts {
       // The looked-up word is marked the way Hoshi Reader and the thread
       // view mark it. selection.js sets a CSS highlight; the page needs the
       // rule that draws it.
-      const highlightStyle = document.createElement('style');
-      highlightStyle.textContent = '::highlight(hoshi-selection) { background-color: rgba(160, 160, 160, 0.4) !important; color: inherit; }';
-      (document.head || document.documentElement).appendChild(highlightStyle);
+      function ensureHighlightStyle() {
+        if (document.getElementById('iroha-highlight-style')) { return; }
+        const highlightStyle = document.createElement('style');
+        highlightStyle.id = 'iroha-highlight-style';
+        highlightStyle.textContent = '::highlight(hoshi-selection) { background-color: rgba(160, 160, 160, 0.45) !important; color: inherit; }';
+        (document.head || document.documentElement).appendChild(highlightStyle);
+      }
+      ensureHighlightStyle();
+
+      function highlight(sel, count) {
+        ensureHighlightStyle();
+        if (window.CSS && CSS.highlights) {
+          sel.highlightSelection(count);
+          return;
+        }
+        // No highlight API: fall back to a plain text selection.
+        try {
+          const first = sel.selection.ranges[0];
+          const range = document.createRange();
+          range.setStart(first.node, first.start);
+          let remaining = count, node = first.node, end = first.start;
+          for (const r of sel.selection.ranges) {
+            const take = Math.min(remaining, r.end - r.start);
+            node = r.node; end = r.start + take; remaining -= take;
+            if (remaining <= 0) { break; }
+          }
+          range.setEnd(node, end);
+          const selection = window.getSelection();
+          selection.removeAllRanges();
+          selection.addRange(range);
+        } catch (e) {}
+      }
 
       // Like hoshiSelection.selectText, but links and images don't stop it:
       // in lookup mode every tap is a lookup.
@@ -65,19 +94,60 @@ enum BrowserScripts {
           offset = 0;
         }
         if (!text) { return null; }
-        sel.selection = { startNode: hit.node, startOffset: hit.offset, ranges: ranges, text: text };
+        const current = { startNode: hit.node, startOffset: hit.offset, ranges: ranges, text: text };
+        sel.selection = current;
         const sentence = sel.getSentence(hit.node, hit.offset);
-        webkit.messageHandlers.textSelected.postMessage({ text: text, sentence: sentence, rect: sel.getSelectionRect(x, y) });
+        // The app answers with how many characters the dictionary matched,
+        // and the highlight goes on as soon as it does.
+        const reply = webkit.messageHandlers.textSelected.postMessage({ text: text, sentence: sentence, rect: sel.getSelectionRect(x, y) });
+        if (reply && reply.then) {
+          reply.then(function (count) {
+            if (count > 0 && sel.selection === current) { highlight(sel, count); }
+          }).catch(function () {});
+        }
         return text;
       }
 
+      function editable(target) {
+        const element = target && target.nodeType === 3 ? target.parentElement : target;
+        return !!(element && element.closest && element.closest('input, textarea, select, [contenteditable="true"]'));
+      }
+
+      // Touches are answered on touchend, without waiting for the click
+      // the browser sends some time later.
+      let touch = null;
+      let suppressClickUntil = 0;
+      document.addEventListener('touchstart', function (e) {
+        if (!window.irohaLookup || e.touches.length !== 1) { touch = null; return; }
+        const t = e.touches[0];
+        touch = { x: t.clientX, y: t.clientY, time: Date.now(), moved: false };
+      }, { passive: true, capture: true });
+      document.addEventListener('touchmove', function (e) {
+        if (!touch) { return; }
+        const t = e.touches[0];
+        if (Math.abs(t.clientX - touch.x) > 10 || Math.abs(t.clientY - touch.y) > 10) { touch.moved = true; }
+      }, { passive: true, capture: true });
+      document.addEventListener('touchend', function (e) {
+        const start = touch;
+        touch = null;
+        if (!start || start.moved || !window.irohaLookup || Date.now() - start.time > 600) { return; }
+        if (editable(e.target)) { return; }
+        const t = e.changedTouches[0];
+        e.preventDefault();
+        e.stopPropagation();
+        suppressClickUntil = Date.now() + 800;
+        if (!select(t.clientX, t.clientY, window.scanLength || 16)) {
+          webkit.messageHandlers.tapOutside.postMessage(null);
+        }
+      }, { passive: false, capture: true });
+
       document.addEventListener('click', function (e) {
         if (!window.irohaLookup) { return; }
-        const target = e.target && e.target.nodeType === 3 ? e.target.parentElement : e.target;
-        if (target && target.closest && target.closest('input, textarea, select, [contenteditable="true"]')) { return; }
+        if (editable(e.target)) { return; }
         e.preventDefault();
         e.stopPropagation();
         e.stopImmediatePropagation();
+        if (Date.now() < suppressClickUntil) { return; }
         if (!select(e.clientX, e.clientY, window.scanLength || 16)) {
           webkit.messageHandlers.tapOutside.postMessage(null);
         }

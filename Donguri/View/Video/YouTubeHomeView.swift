@@ -392,34 +392,90 @@ private struct VideoThumbnail: View {
 /// so signing in here signs in everywhere in the app.
 struct YouTubeSignInView: View {
     @Environment(\.dismiss) private var dismiss
+    @State private var signedIn = false
+
+    /// YouTube's own mobile sign-in link: Google's sign-in, then back
+    /// through youtube.com/signin, which is what sets YouTube's cookies.
+    private static let signInURL = URL(string: "https://accounts.google.com/ServiceLogin?service=youtube&uilel=3&passive=true&hl=ja&continue=https%3A%2F%2Fwww.youtube.com%2Fsignin%3Faction_handle_signin%3Dtrue%26app%3Dm%26hl%3Dja%26next%3Dhttps%253A%252F%252Fm.youtube.com%252F")!
 
     var body: some View {
         NavigationStack {
-            SignInWebView(url: URL(string: "https://accounts.google.com/ServiceLogin?service=youtube&continue=https%3A%2F%2Fm.youtube.com%2F")!)
-                .ignoresSafeArea(edges: .bottom)
-                .navigationTitle(Text("YouTubeにログイン"))
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("完了") { dismiss() }
-                    }
+            SignInWebView(url: Self.signInURL) {
+                signedIn = true
+                // A moment to see it worked.
+                Task {
+                    try? await Task.sleep(for: .milliseconds(600))
+                    dismiss()
                 }
+            }
+            .ignoresSafeArea(edges: .bottom)
+            .navigationTitle(Text("YouTubeにログイン"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完了") { dismiss() }
+                }
+            }
+            .overlay(alignment: .bottom) {
+                if signedIn {
+                    Label("ログインしました", systemImage: "checkmark.circle.fill")
+                        .font(.subheadline.weight(.semibold))
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(.regularMaterial, in: Capsule())
+                        .padding(.bottom, 40)
+                }
+            }
         }
     }
 }
 
 private struct SignInWebView: UIViewRepresentable {
     let url: URL
+    let onSignedIn: () -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(onSignedIn: onSignedIn) }
 
     func makeUIView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .default()
         let webView = WKWebView(frame: .zero, configuration: configuration)
         // Google refuses sign-in from browsers it doesn't recognise.
-        webView.customUserAgent = BrowserModel.shared.webView.customUserAgent
+        webView.customUserAgent = SafariUserAgent.mobile
+        webView.navigationDelegate = context.coordinator
+        webView.uiDelegate = context.coordinator
         webView.load(URLRequest(url: url))
         return webView
     }
 
     func updateUIView(_ webView: WKWebView, context: Context) {}
+
+    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
+        let onSignedIn: () -> Void
+        private var reported = false
+
+        init(onSignedIn: @escaping () -> Void) {
+            self.onSignedIn = onSignedIn
+        }
+
+        /// Back on YouTube with its session cookies: done.
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            guard !reported, let host = webView.url?.host, host.hasSuffix("youtube.com") else { return }
+            Task {
+                let cookies = await WKWebsiteDataStore.default().httpCookieStore.allCookies()
+                let signedIn = cookies.contains { $0.domain.hasSuffix("youtube.com") && ["SAPISID", "__Secure-3PAPISID", "LOGIN_INFO"].contains($0.name) }
+                if signedIn, !reported {
+                    reported = true
+                    onSignedIn()
+                }
+            }
+        }
+
+        // Google opens some steps in a new window; keep them here.
+        func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
+                     for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
+            if navigationAction.targetFrame == nil { webView.load(navigationAction.request) }
+            return nil
+        }
+    }
 }

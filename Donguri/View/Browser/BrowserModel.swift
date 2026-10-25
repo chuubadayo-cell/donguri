@@ -94,15 +94,16 @@ final class BrowserModel: NSObject {
         webView.allowsLinkPreview = true
         // Safari's own user agent: Google won't let embedded browsers sign
         // in, and pages serve their normal mobile layout.
-        let version = UIDevice.current.systemVersion.replacingOccurrences(of: ".", with: "_")
-        let short = UIDevice.current.systemVersion.split(separator: ".").prefix(2).joined(separator: ".")
-        webView.customUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS \(version) like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/\(short) Mobile/15E148 Safari/604.1"
+        webView.customUserAgent = SafariUserAgent.mobile
         super.init()
 
         let bridge = BrowserBridge(model: self)
-        for name in ["textSelected", "tapOutside", "scrolled", "caption"] {
+        for name in ["tapOutside", "scrolled", "caption"] {
             controller.add(bridge, contentWorld: BrowserScripts.world, name: name)
         }
+        // Answered, so the page can highlight the word the moment the
+        // lookup is done.
+        controller.addScriptMessageHandler(bridge, contentWorld: BrowserScripts.world, name: "textSelected")
         webView.navigationDelegate = bridge
         webView.uiDelegate = bridge
         self.bridge = bridge
@@ -269,20 +270,21 @@ final class BrowserModel: NSObject {
                                    in: nil, in: BrowserScripts.world, completionHandler: nil)
     }
 
-    fileprivate func textSelected(text: String, sentence: String, rect: CGRect) {
-        guard let userConfig else { return }
+    /// Returns how many characters matched, for the page to highlight.
+    fileprivate func textSelected(text: String, sentence: String, rect: CGRect) -> Int {
+        guard let userConfig else { return 0 }
         let inset = webView.scrollView.adjustedContentInset
         let local = CGRect(x: rect.minX + inset.left, y: rect.minY + inset.top, width: rect.width, height: rect.height)
         let windowRect = webView.convert(local, to: nil)
         popups.coverURL = nil
+        popups.mediaProvider = nil
         popups.documentTitle = title.isEmpty ? nil : title
         let selection = SelectionData(text: text, sentence: sentence, rect: windowRect)
         if let matched = popups.replace(with: selection, userConfig: userConfig) {
-            webView.evaluateJavaScript("window.hoshiSelection.highlightSelection(\(matched))",
-                                       in: nil, in: BrowserScripts.world, completionHandler: nil)
-        } else {
-            clearPageSelection()
+            return matched
         }
+        clearPageSelection()
+        return 0
     }
 
     fileprivate func tappedOutside() {
@@ -382,24 +384,32 @@ final class BrowserModel: NSObject {
 }
 
 /// Delegates and script messages for the browser's web view.
-private final class BrowserBridge: NSObject, WKScriptMessageHandler, WKNavigationDelegate, WKUIDelegate {
+private final class BrowserBridge: NSObject, WKScriptMessageHandler, WKScriptMessageHandlerWithReply, WKNavigationDelegate, WKUIDelegate {
     weak var model: BrowserModel?
 
     init(model: BrowserModel) {
         self.model = model
     }
 
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage,
+                               replyHandler: @escaping @MainActor @Sendable (Any?, String?) -> Void) {
+        guard let model, message.name == "textSelected",
+              let body = message.body as? [String: Any],
+              let text = body["text"] as? String,
+              let sentence = body["sentence"] as? String,
+              let rect = body["rect"] as? [String: Any],
+              let x = rect["x"] as? Double, let y = rect["y"] as? Double,
+              let width = rect["width"] as? Double, let height = rect["height"] as? Double else {
+            replyHandler(0, nil)
+            return
+        }
+        let matched = model.textSelected(text: text, sentence: sentence, rect: CGRect(x: x, y: y, width: width, height: height))
+        replyHandler(matched, nil)
+    }
+
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         guard let model else { return }
         switch message.name {
-        case "textSelected":
-            guard let body = message.body as? [String: Any],
-                  let text = body["text"] as? String,
-                  let sentence = body["sentence"] as? String,
-                  let rect = body["rect"] as? [String: Any],
-                  let x = rect["x"] as? Double, let y = rect["y"] as? Double,
-                  let width = rect["width"] as? Double, let height = rect["height"] as? Double else { return }
-            model.textSelected(text: text, sentence: sentence, rect: CGRect(x: x, y: y, width: width, height: height))
         case "tapOutside":
             model.tappedOutside()
         case "scrolled":

@@ -1534,6 +1534,7 @@
       }
     },
     "この動画はアプリ内で再生できません" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1705,6 +1706,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "しばらくお待ちください..."
+          }
+        }
+      }
+    },
+    "スキップ" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skip"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "スキップ"
           }
         }
       }
@@ -3103,6 +3120,22 @@
         }
       }
     },
+    "ログインしました" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Signed in"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ログインしました"
+          }
+        }
+      }
+    },
     "ログインすると表示されます" : {
       "localizations" : {
         "en" : {
@@ -3936,6 +3969,7 @@
       }
     },
     "動画を読み込めませんでした" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4272,6 +4306,22 @@
         }
       }
     },
+    "字幕の表示（表示・ぼかし・非表示）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Subtitles: Shown, Blurred or Hidden"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "字幕の表示（表示・ぼかし・非表示）"
+          }
+        }
+      }
+    },
     "字幕の音声" : {
       "localizations" : {
         "en" : {
@@ -4300,6 +4350,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "字幕バーを表示"
+          }
+        }
+      }
+    },
+    "字幕は非表示" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Subtitles hidden"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "字幕は非表示"
+          }
+        }
+      }
+    },
+    "字幕は非表示です" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Subtitles are hidden"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "字幕は非表示です"
           }
         }
       }
@@ -4559,6 +4641,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "幅"
+          }
+        }
+      }
+    },
+    "広告" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ad"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "広告"
           }
         }
       }

@@ -75,7 +75,7 @@ struct PopupLayout {
         
         if isFullWidth {
             x = width / 2 + screenBorderPadding
-            y = screenSize.height - height / 2 - screenBorderPadding
+            y = screenSize.height - bottomInset - height / 2 - screenBorderPadding
         } else {
             if isVertical {
                 if showOnRight {
