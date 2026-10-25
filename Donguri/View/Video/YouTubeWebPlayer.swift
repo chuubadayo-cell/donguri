@@ -188,51 +188,33 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
     }
 
     struct Recording {
-        var audio: Data?
-        /// The loudest sample the page heard while recording (-1: unknown).
-        var peak: Double = -1
-        var note = ""
-        var audioExtension = "m4a"
         var frames: [Data] = []
         var still: Data?
     }
 
-    /// One pass over [start, end] that keeps the audio and the pictures
-    /// together (see `record` in the page script).
+    /// The line played once more for its GIF frames or screenshot (see
+    /// `record` in the page script).
     func record(from start: Double, to end: Double, fps: Double, maxWidth: Int,
-                audio: Bool, frames: Bool, stillAt: Double?) async -> Recording {
-        var arguments: [String: Any] = ["start": start, "end": end, "fps": fps, "width": maxWidth,
-                                        "audio": audio, "frames": frames]
+                frames: Bool, stillAt: Double?) async -> Recording {
+        var arguments: [String: Any] = ["start": start, "end": end, "fps": fps, "width": maxWidth, "frames": frames]
         arguments["still"] = stillAt ?? NSNull()
         let result = try? await webView.callAsyncJavaScript(
-            "return await irohaPlayer.record(start, end, fps, width, audio, frames, still)",
+            "return await irohaPlayer.record(start, end, fps, width, false, frames, still)",
             arguments: arguments, in: nil, contentWorld: Self.world)
         var recording = Recording()
         guard let dictionary = result as? [String: Any] else {
             print("[iroha] card recording: no result from the page")
             return recording
         }
-        if let error = dictionary["audioError"] as? String { print("[iroha] card audio recording: \(error)") }
         if let error = dictionary["error"] as? String { print("[iroha] card recording: \(error)") }
-        recording.audio = (dictionary["audio"] as? String).flatMap(Self.decodeDataURL)
-        recording.peak = dictionary["peak"] as? Double ?? -1
-        var parts: [String] = []
-        if let error = dictionary["audioError"] as? String { parts.append(error) }
-        if let error = dictionary["error"] as? String { parts.append(error) }
-        parts.append("page peak \(String(format: "%.4f", recording.peak))")
-        parts.append("context \(dictionary["context"] as? String ?? "?")")
-        parts.append("src \(dictionary["src"] as? String ?? "?")")
-        recording.note = parts.joined(separator: ", ")
-        if let mime = dictionary["mime"] as? String, mime.contains("webm") { recording.audioExtension = "webm" }
         recording.frames = (dictionary["frames"] as? [String] ?? []).compactMap(Self.decodeDataURL)
         recording.still = (dictionary["still"] as? String).flatMap(Self.decodeDataURL)
-        print("[iroha] card recording: audio \(recording.audio?.count ?? 0) bytes, \(recording.frames.count) frames, still \(recording.still != nil)")
         return recording
     }
 
     /// The audio YouTube has buffered for a stretch: an MP4 init segment and
     /// the fragments covering it, and where the first fragment starts.
-    func bufferedAudio(from start: Double, to end: Double) async -> (clip: (data: Data, firstTime: Double)?, error: String) {
+    func bufferedAudio(from start: Double, to end: Double) async -> (clip: (data: Data, firstTime: Double, isWebM: Bool)?, error: String) {
         let result = try? await webView.callAsyncJavaScript("return window.__irohaAudioClip ? window.__irohaAudioClip(start, end) : null",
                                                            arguments: ["start": start, "end": end],
                                                            in: nil, contentWorld: .page)
@@ -247,7 +229,7 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
               let base64 = dictionary["data"] as? String,
               let data = Data(base64Encoded: base64),
               let first = dictionary["first"] as? Double else { return (nil, error.isEmpty ? "nothing returned" : error) }
-        return ((data, first), "")
+        return ((data, first, (dictionary["kind"] as? String) == "webm"), "")
     }
 
     private static func decodeDataURL(_ string: String) -> Data? {
@@ -304,7 +286,7 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
       }
       function storeFor(buffer) {
         if (!buffer.__irohaStore) {
-          buffer.__irohaStore = { init: null, timescale: 0, frags: [], bytes: 0, current: null };
+          buffer.__irohaStore = { kind: buffer.__irohaAudio, init: null, timescale: 0, frags: [], bytes: 0, current: null };
           stores.push(buffer.__irohaStore);
           while (stores.length > 4) { stores.shift(); }
         }
@@ -315,35 +297,12 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
         for (let i = 0; i < a.length; i++) { if (a[i] !== b[i]) { return false; } }
         return true;
       }
-      function keep(store, data) {
-        let b;
-        if (data instanceof ArrayBuffer) { b = new Uint8Array(data.slice(0)); }
-        else if (ArrayBuffer.isView(data)) { b = new Uint8Array(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)); }
-        else { return; }
-        if (b.length < 8) { return; }
-        if (find(b, 0, b.length, ['moov'])) {
-          const scale = timescale(b);
-          if (scale && !same(store.init, b)) {
-            // A different format (a quality change): older fragments don't
-            // belong with this init segment.
-            store.init = b; store.timescale = scale; store.frags = []; store.bytes = 0; store.current = null;
-          }
-          return;
-        }
-        if (!store.timescale) { return; }
-        const ticks = decodeTime(b);
-        if (ticks === null) {
-          // The rest of the fragment being appended in pieces; it belongs to
-          // the one appended last, which after a seek isn't the latest in time.
-          const current = store.current;
-          if (current) {
-            const joined = new Uint8Array(current.data.length + b.length);
-            joined.set(current.data); joined.set(b, current.data.length);
-            store.bytes += b.length; current.data = joined;
-          }
-          return;
-        }
-        const t = ticks / store.timescale;
+      function bytesOf(data) {
+        if (data instanceof ArrayBuffer) { return new Uint8Array(data.slice(0)); }
+        if (ArrayBuffer.isView(data)) { return new Uint8Array(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)); }
+        return null;
+      }
+      function addFragment(store, t, b) {
         store.frags = store.frags.filter(function (f) { if (Math.abs(f.t - t) < 0.001) { store.bytes -= f.data.length; return false; } return true; });
         const fragment = { t: t, data: b };
         store.frags.push(fragment);
@@ -356,6 +315,109 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
           if (dropped === store.current) { store.current = null; }
         }
       }
+      function continueFragment(store, b) {
+        // The rest of the fragment being appended in pieces; it belongs to
+        // the one appended last, which after a seek isn't the latest in time.
+        const current = store.current;
+        if (!current) { return; }
+        const joined = new Uint8Array(current.data.length + b.length);
+        joined.set(current.data); joined.set(b, current.data.length);
+        store.bytes += b.length; current.data = joined;
+      }
+
+      // WebM (Opus), which YouTube sends Safari: an init segment (EBML
+      // header, Info, Tracks), then Clusters, each timed by its Timecode.
+      function ebmlId(b, p) {
+        const f = b[p];
+        const len = f >= 0x80 ? 1 : f >= 0x40 ? 2 : f >= 0x20 ? 3 : f >= 0x10 ? 4 : 0;
+        if (!len || p + len > b.length) { return null; }
+        let id = 0;
+        for (let i = 0; i < len; i++) { id = id * 256 + b[p + i]; }
+        return { id: id, len: len };
+      }
+      function ebmlSize(b, p) {
+        const f = b[p];
+        if (f === undefined) { return null; }
+        let len = 1, mask = 0x80;
+        while (len <= 8 && !(f & mask)) { mask >>= 1; len++; }
+        if (len > 8 || p + len > b.length) { return null; }
+        let v = f & (mask - 1), unknown = v === mask - 1;
+        for (let i = 1; i < len; i++) { v = v * 256 + b[p + i]; if (b[p + i] !== 0xff) { unknown = false; } }
+        return { v: v, len: len, unknown: unknown };
+      }
+      function uint(b, p, n) { let v = 0; for (let i = 0; i < n; i++) { v = v * 256 + b[p + i]; } return v; }
+      function indexOf(b, pattern, from) {
+        outer: for (let i = from || 0; i + pattern.length <= b.length; i++) {
+          for (let j = 0; j < pattern.length; j++) { if (b[i + j] !== pattern[j]) { continue outer; } }
+          return i;
+        }
+        return -1;
+      }
+      const CLUSTER = [0x1f, 0x43, 0xb6, 0x75];
+      function startsWith(b, pattern) { return indexOf(b.subarray(0, pattern.length), pattern, 0) === 0; }
+      /// Ticks of the Cluster starting at 0, or null.
+      function clusterTicks(b) {
+        const id = ebmlId(b, 0);
+        if (!id || id.id !== 0x1f43b675) { return null; }
+        const size = ebmlSize(b, id.len);
+        if (!size) { return null; }
+        let p = id.len + size.len;
+        const end = Math.min(b.length, size.unknown ? b.length : p + size.v);
+        while (p < end) {
+          const child = ebmlId(b, p); if (!child) { return null; }
+          const childSize = ebmlSize(b, p + child.len); if (!childSize) { return null; }
+          const body = p + child.len + childSize.len;
+          if (child.id === 0xe7) { return body + childSize.v <= b.length ? uint(b, body, childSize.v) : null; }
+          if (childSize.unknown) { return null; }
+          p = body + childSize.v;
+        }
+        return null;
+      }
+      /// Seconds per tick, from the init segment's TimecodeScale (ns).
+      function tickSeconds(init) {
+        const at = indexOf(init, [0x2a, 0xd7, 0xb1], 0);
+        if (at < 0) { return 0.001; }
+        const size = ebmlSize(init, at + 3);
+        if (!size || size.v > 8) { return 0.001; }
+        return uint(init, at + 3 + size.len, size.v) / 1e9;
+      }
+      function keepWebM(store, b) {
+        if (startsWith(b, [0x1a, 0x45, 0xdf, 0xa3])) {
+          // The init segment, possibly with the first cluster after it.
+          const cluster = indexOf(b, CLUSTER, 4);
+          const init = cluster > 0 ? b.slice(0, cluster) : b;
+          if (!same(store.init, init)) {
+            store.init = init; store.timescale = tickSeconds(init);
+            store.frags = []; store.bytes = 0; store.current = null;
+          }
+          if (cluster > 0) { keepWebM(store, b.slice(cluster)); }
+          return;
+        }
+        if (!store.timescale) { return; }
+        const ticks = startsWith(b, CLUSTER) ? clusterTicks(b) : null;
+        if (ticks === null) { continueFragment(store, b); return; }
+        addFragment(store, ticks * store.timescale, b);
+      }
+
+      function keep(store, data) {
+        const b = bytesOf(data);
+        if (!b || b.length < 4) { return; }
+        if (store.kind === 'webm') { keepWebM(store, b); return; }
+        if (b.length < 8) { return; }
+        if (find(b, 0, b.length, ['moov'])) {
+          const scale = timescale(b);
+          if (scale && !same(store.init, b)) {
+            // A different format (a quality change): older fragments don't
+            // belong with this init segment.
+            store.init = b; store.timescale = scale; store.frags = []; store.bytes = 0; store.current = null;
+          }
+          return;
+        }
+        if (!store.timescale) { return; }
+        const ticks = decodeTime(b);
+        if (ticks === null) { continueFragment(store, b); return; }
+        addFragment(store, ticks / store.timescale, b);
+      }
 
       function hookSources(M) {
         if (!M || !M.prototype || M.prototype.__irohaHooked) { return; }
@@ -366,7 +428,7 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
           try {
             (window.__irohaMimes = window.__irohaMimes || []).push(String(mime).slice(0, 48));
             if (window.__irohaMimes.length > 6) { window.__irohaMimes.shift(); }
-            if (/^audio\\/mp4/i.test(String(mime))) { buffer.__irohaAudio = true; }
+            if (/^audio\\//i.test(String(mime))) { buffer.__irohaAudio = /webm/i.test(String(mime)) ? 'webm' : 'mp4'; }
           } catch (e) {}
           return buffer;
         };
@@ -434,7 +496,7 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
         out.set(store.init);
         let offset = store.init.length;
         for (let i = best.first; i <= best.last; i++) { out.set(store.frags[i].data, offset); offset += store.frags[i].data.length; }
-        return { data: base64(out), first: store.frags[best.first].t };
+        return { data: base64(out), first: store.frags[best.first].t, kind: store.kind || 'mp4' };
       };
     })();
     """
@@ -573,58 +635,20 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
           return frames;
         },
 
-        // Plays the line once (out loud, at normal speed) and keeps what a
-        // card needs from that one pass: the audio, recorded through Web
-        // Audio, and the GIF frames or the screenshot. Audio and pictures
-        // cover exactly the same stretch.
+        // Plays the line once at normal speed for its GIF frames or
+        // screenshot. (Its audio can't be recorded here: WebKit gives Web
+        // Audio silence for this player, and routing the video through Web
+        // Audio muted it. The audio comes from the buffer copy instead.)
         record: async function (start, end, fps, width, wantAudio, wantFrames, stillTime) {
           const v = video();
           if (!v) { return { error: 'no video' }; }
           const back = v.currentTime, wasPaused = v.paused, rate = v.playbackRate;
-          let recorder = null, destination = null, graph = null, audioError = null;
-          const chunks = [];
-          let analyser = null, peak = 0;
-          const samples = new Float32Array(1024);
-          if (wantAudio) {
-            try {
-              // Web Audio is "ambient" by default on iOS: the silent switch
-              // mutes it. As playback it sounds (and records) like the video.
-              try { if (navigator.audioSession) { navigator.audioSession.type = 'playback'; } } catch (e) {}
-              graph = window.__irohaAudioGraph;
-              if (!graph || graph.element !== v) {
-                // Routing the element through Web Audio is permanent, so it
-                // is set up once per element and also kept playing out loud.
-                const Context = window.AudioContext || window.webkitAudioContext;
-                const context = (graph && graph.context) || new Context();
-                const source = context.createMediaElementSource(v);
-                source.connect(context.destination);
-                v.addEventListener('play', function () { try { context.resume(); } catch (e) {} });
-                graph = window.__irohaAudioGraph = { context: context, source: source, element: v };
-              }
-              await graph.context.resume();
-              if (graph.context.state !== 'running') { throw new Error('audio context is ' + graph.context.state); }
-              destination = graph.context.createMediaStreamDestination();
-              graph.source.connect(destination);
-              // To tell a recording of silence from one with sound.
-              analyser = graph.context.createAnalyser();
-              analyser.fftSize = 1024;
-              graph.source.connect(analyser);
-              const type = (window.MediaRecorder && MediaRecorder.isTypeSupported('audio/mp4')) ? 'audio/mp4' : '';
-              recorder = new MediaRecorder(destination.stream, type ? { mimeType: type, audioBitsPerSecond: 128000 } : undefined);
-              recorder.ondataavailable = function (e) { if (e.data && e.data.size) { chunks.push(e.data); } };
-            } catch (e) {
-              recorder = null;
-              audioError = String(e && e.message || e);
-            }
-          }
           v.pause();
-          unmute(v);
           v.playbackRate = 1;
           await seekTo(v, start);
           unmute(v);
           const frames = [];
           let still = null, next = start;
-          if (recorder) { recorder.start(); }
           await v.play().catch(function () {});
           const deadline = Date.now() + (end - start) * 1000 + 8000;
           while (v.currentTime < end && Date.now() < deadline) {
@@ -635,40 +659,14 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
               next += 1 / fps;
             }
             if (still === null && stillTime !== null && t >= stillTime) { still = draw(v, 960); }
-            // YouTube's player can mute the element again after a seek.
-            if (v.muted || v.volume < 1) { unmute(v); }
-            if (analyser) {
-              analyser.getFloatTimeDomainData(samples);
-              for (let i = 0; i < samples.length; i++) { const a = Math.abs(samples[i]); if (a > peak) { peak = a; } }
-            }
             await wait(15);
           }
           v.pause();
-          let audio = null, mime = null;
-          if (recorder) {
-            await new Promise(function (resolve) { recorder.onstop = resolve; recorder.stop(); });
-            try { graph.source.disconnect(destination); } catch (e) {}
-            try { if (analyser) { graph.source.disconnect(analyser); } } catch (e) {}
-            const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/mp4' });
-            mime = blob.type;
-            if (blob.size > 0) {
-              audio = await new Promise(function (resolve) {
-                const reader = new FileReader();
-                reader.onloadend = function () { resolve(reader.result); };
-                reader.onerror = function () { resolve(null); };
-                reader.readAsDataURL(blob);
-              });
-            } else {
-              audioError = 'recording was empty';
-            }
-          }
           if (still === null && stillTime !== null) { still = draw(v, 960); }
           v.playbackRate = rate;
           await seekTo(v, back);
           if (!wasPaused) { v.play().catch(function () {}); }
-          return { audio: audio, mime: mime, frames: frames, still: still, audioError: audioError,
-                   peak: analyser ? peak : -1, src: String(v.currentSrc || '').slice(0, 40),
-                   context: graph && graph.context ? graph.context.state : 'none' };
+          return { audio: null, frames: frames, still: still };
         }
       };
     })();

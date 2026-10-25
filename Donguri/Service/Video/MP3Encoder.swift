@@ -24,9 +24,20 @@ nonisolated enum MP3Encoder {
 
     private static func encodeNow(_ source: URL) -> URL? {
         guard let audio = pcm(from: source), !audio.samples.isEmpty else { return nil }
+        return write(samples: audio.samples, rate: audio.rate)
+    }
+
+    /// Mono samples (-1...1) at a rate MP3 supports, as an MP3 file.
+    static func write(mono: [Float], rate: Int) -> URL? {
+        guard !mono.isEmpty, mp3Rates.contains(rate) else { return nil }
+        return write(samples: mono.map { Int16(max(-1, min(1, $0)) * 32767) }, rate: rate)
+    }
+
+    private static func write(samples: [Int16], rate: Int) -> URL? {
+        guard !samples.isEmpty else { return nil }
         var size = 0
-        let buffer: UnsafeMutablePointer<UInt8>? = audio.samples.withUnsafeBufferPointer { pointer in
-            iroha_mp3_encode_mono(pointer.baseAddress, pointer.count, Int32(audio.rate), bitrate, &size)
+        let buffer: UnsafeMutablePointer<UInt8>? = samples.withUnsafeBufferPointer { pointer in
+            iroha_mp3_encode_mono(pointer.baseAddress, pointer.count, Int32(rate), bitrate, &size)
         }
         guard let buffer, size > 0 else { return nil }
         defer { iroha_mp3_free(buffer) }

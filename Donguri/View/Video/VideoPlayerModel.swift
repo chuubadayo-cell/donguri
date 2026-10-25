@@ -618,70 +618,20 @@ final class VideoPlayerModel {
             if (!wantsAudio || media.audioURL != nil), (imageKind == .none || media.imageURL != nil) { return media }
         }
 
-        // One pass over the line, as asbplayer does it: audio and pictures
-        // recorded together, so they cover exactly the same stretch.
-        let length = end - start
-        let fps: Double = length > 5 ? 6 : 8
-        let stillTime = imageKind == .screenshot ? min(max(still, start), end - 0.05) : nil
-        let recording = await web.record(from: start, to: end, fps: fps, maxWidth: 400,
-                                         audio: wantsAudio && media.audioURL == nil,
-                                         frames: imageKind == .gif && media.imageURL == nil,
-                                         stillAt: media.imageURL == nil ? stillTime : nil)
-
-        if wantsAudio, media.audioURL == nil {
-            if let audio = recording.audio {
-                let raw = ClipCapture.newFile(recording.audioExtension)
-                if (try? audio.write(to: raw)) != nil {
-                    // Re-encoded to a plain .m4a, which every Anki plays.
-                    var file = raw
-                    if let clean = await ClipCapture.exportAudio(asset: AVURLAsset(url: raw), range: nil) {
-                        try? FileManager.default.removeItem(at: raw)
-                        file = clean
-                    }
-                    // A recording of silence (the page's audio didn't reach
-                    // Web Audio) is no use; the fallbacks below get a go.
-                    let peak = await MP3Encoder.peak(file)
-                    if let peak, peak < 0.002 {
-                        media.audioNotes.append("recording silent (peak \(String(format: "%.4f", peak)); \(recording.note))")
-                    } else {
-                        media.audioURL = file
-                        media.audioNotes.append("recording ok (peak \(peak.map { String(format: "%.3f", $0) } ?? "unreadable"))")
-                    }
-                } else {
-                    media.audioNotes.append("recording couldn't be saved")
-                }
-            } else {
-                media.audioNotes.append("recording: nothing (\(recording.note))")
-            }
-        }
-        if media.imageURL == nil {
-            switch imageKind {
-            case .none:
-                break
-            case .screenshot:
-                if let data = recording.still, let image = UIImage(data: data)?.cgImage {
-                    media.imageURL = ClipCapture.writeJPEG(image)
-                }
-            case .gif:
-                var frames = recording.frames.compactMap { UIImage(data: $0)?.cgImage }
-                // A long line keeps an even spread of at most 64 frames.
-                if frames.count > 64 {
-                    let step = Double(frames.count) / 64
-                    frames = (0..<64).map { frames[Int(Double($0) * step)] }
-                }
-                if frames.count > 1 {
-                    media.imageURL = ClipCapture.writeGIF(frames, delay: length / Double(frames.count))
-                }
-            }
-        }
-
-        // Fallbacks, if the recording missed something.
+        // The audio, from the copy of what the player has buffered (WebM
+        // with Opus on iPhone, MP4 elsewhere). Nothing has to play again.
         if wantsAudio, media.audioURL == nil {
             let buffered = await web.bufferedAudio(from: start, to: end)
             if let clip = buffered.clip {
-                media.audioURL = await ClipCapture.cutFragmentedMP4(clip.data, firstTime: clip.firstTime,
-                                                                    start: start, end: end)
-                media.audioNotes.append("player's buffer: \(media.audioURL == nil ? "couldn't cut it" : "ok")")
+                if clip.isWebM {
+                    let result = await WebMAudio.clip(clip.data, start: start, end: end)
+                    media.audioURL = result.url
+                    media.audioNotes.append("player's buffer (WebM): \(result.url == nil ? result.note : "ok")")
+                } else {
+                    media.audioURL = await ClipCapture.cutFragmentedMP4(clip.data, firstTime: clip.firstTime,
+                                                                        start: start, end: end)
+                    media.audioNotes.append("player's buffer (MP4): \(media.audioURL == nil ? "couldn't cut it" : "ok")")
+                }
             } else {
                 media.audioNotes.append("player's buffer: \(buffered.error)")
             }
@@ -691,8 +641,27 @@ final class VideoPlayerModel {
             }
             if media.audioURL == nil { print("[iroha] no audio for the card (web player)") }
         }
+
+        // The pictures. A GIF needs the line played again; a screenshot is
+        // one frame.
+        if media.imageURL == nil, imageKind == .gif {
+            let length = end - start
+            let fps: Double = length > 5 ? 6 : 8
+            let recording = await web.record(from: start, to: end, fps: fps, maxWidth: 400,
+                                             frames: true, stillAt: nil)
+            var frames = recording.frames.compactMap { UIImage(data: $0)?.cgImage }
+            // A long line keeps an even spread of at most 64 frames.
+            if frames.count > 64 {
+                let step = Double(frames.count) / 64
+                frames = (0..<64).map { frames[Int(Double($0) * step)] }
+            }
+            if frames.count > 1 {
+                media.imageURL = ClipCapture.writeGIF(frames, delay: length / Double(frames.count))
+            }
+        }
         if imageKind != .none, media.imageURL == nil,
-           let data = await web.frame(at: still, maxWidth: 960), let image = UIImage(data: data)?.cgImage {
+           let data = await web.frame(at: min(max(still, start), end - 0.05), maxWidth: 960),
+           let image = UIImage(data: data)?.cgImage {
             media.imageURL = ClipCapture.writeJPEG(image)
         }
         return media
