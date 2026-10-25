@@ -260,6 +260,7 @@ struct DictionarySearchView: View {
             return
         }
         
+        StatsStore.shared.noteLookup()
         let styles = LookupEngine.shared.getStyles()
         constructHtml(results: results, styles: styles)
     }
@@ -279,6 +280,7 @@ struct DictionarySearchView: View {
         popups.append(popup)
         
         if let firstResult = lookupResults.first {
+            StatsStore.shared.noteLookup()
             withAnimation(.default.speed(2.2)) {
                 popups = popups.map {
                     var p = $0

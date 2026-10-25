@@ -128,6 +128,71 @@ nonisolated enum CaptionSentences {
         return regrouped.isEmpty ? cues : regrouped
     }
 
+    // MARK: Long lines
+
+    /// The longest line shown as it is: past this a subtitle covers half
+    /// the picture, so it is split (in half, then again) at its most
+    /// natural break, with the time shared out by length.
+    static let maxJapaneseLength = 40
+    static let maxSpacedLength = 90
+
+    static func splitLong(_ cues: [SubtitleCue]) -> [SubtitleCue] {
+        guard !cues.isEmpty else { return cues }
+        let spaced = usesSpaces(cues.prefix(200).map { Piece(start: $0.start, end: $0.end, text: $0.text) })
+        let limit = spaced ? maxSpacedLength : maxJapaneseLength
+        guard cues.contains(where: { $0.text.count > limit }) else { return cues }
+        var out: [SubtitleCue] = []
+        for cue in cues {
+            for piece in split(Array(cue.text.trimmingCharacters(in: .whitespacesAndNewlines)),
+                               start: cue.start, end: cue.end, limit: limit, spaced: spaced) {
+                out.append(SubtitleCue(id: out.count, start: piece.start, end: piece.end, text: piece.text))
+            }
+        }
+        return out
+    }
+
+    private static let strongBreaks: Set<Character> = ["。", "！", "？", "!", "?", "…", "．"]
+    private static let closers: Set<Character> = ["」", "』", "）", ")", "】", "〉", "》", "\"", "'"]
+    private static let commas: Set<Character> = ["、", "，", ",", ";", "；", ":", "："]
+    private static let particles = ["から", "けど", "ので", "のに", "は", "が", "を", "に", "で", "と", "も", "へ", "て"]
+
+    private static func split(_ text: [Character], start: Double, end: Double, limit: Int, spaced: Bool) -> [Piece] {
+        let trimmed = String(text).trimmingCharacters(in: .whitespacesAndNewlines)
+        let characters = Array(trimmed)
+        let count = characters.count
+        guard count > limit, count >= 8 else { return trimmed.isEmpty ? [] : [Piece(start: start, end: end, text: trimmed)] }
+        let middle = Double(count) / 2
+        var best = count / 2
+        var bestScore = -Double.infinity
+        for index in 4..<(count - 3) {
+            let score = breakScore(characters, at: index, spaced: spaced) - abs(Double(index) - middle) / Double(count) * 3
+            if score > bestScore {
+                bestScore = score
+                best = index
+            }
+        }
+        let cut = start + (end - start) * Double(best) / Double(count)
+        return split(Array(characters[..<best]), start: start, end: cut, limit: limit, spaced: spaced)
+            + split(Array(characters[best...]), start: cut, end: end, limit: limit, spaced: spaced)
+    }
+
+    /// How good a place to break the gap before `index` is.
+    private static func breakScore(_ characters: [Character], at index: Int, spaced: Bool) -> Double {
+        let previous = characters[index - 1]
+        let next = characters[index]
+        if previous == "\n" { return 3 }
+        if closers.contains(next) { return -5 }
+        if strongBreaks.contains(previous) { return 2.5 }
+        if closers.contains(previous), index >= 2, strongBreaks.contains(characters[index - 2]) { return 2.5 }
+        if commas.contains(previous) { return 1.5 }
+        if previous == " " || next == " " { return spaced ? 1.2 : 0.8 }
+        if !spaced {
+            let before = String(characters[max(0, index - 2)..<index])
+            if particles.contains(where: { before.hasSuffix($0) }) { return 0.6 }
+        }
+        return 0
+    }
+
     private static func usesSpaces(_ pieces: [Piece]) -> Bool {
         let sample = pieces.prefix(200).map(\.text).joined()
         let letters = sample.unicodeScalars.filter { $0.properties.isAlphabetic }

@@ -29,6 +29,16 @@ nonisolated struct YTFeedPage: Sendable {
     var continuation: String?
 }
 
+/// The watch page's data beyond the player: what to watch next, and the
+/// signed-in account's like and subscription for this video.
+nonisolated struct YTWatchNext: Sendable {
+    var page: YTFeedPage
+    var liked: Bool?
+    var likeCount: Int?
+    var subscribed: Bool?
+    var subscriberText: String?
+}
+
 nonisolated struct YTCaptionTrack: Hashable, Sendable, Identifiable {
     let baseURL: String
     let languageCode: String

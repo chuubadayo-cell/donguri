@@ -1296,6 +1296,7 @@ struct ThreadView: View {
             scanLength: userConfig.scanLength
         )
         guard let first = results.first else { return nil }
+        StatsStore.shared.noteLookup()
 
         let styles = LookupEngine.shared.stylesByDictionary()
 

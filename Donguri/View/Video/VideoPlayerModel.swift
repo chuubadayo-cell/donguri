@@ -61,6 +61,18 @@ final class VideoPlayerModel {
     private(set) var info: YTPlayerInfo?
     private(set) var related: [YTVideo] = []
 
+    // The signed-in account and this video (YouTube only).
+    private(set) var liked = false
+    /// Likes not counting the account's own.
+    private(set) var likeCount: Int?
+    private(set) var subscribed = false
+    private(set) var subscriberText: String?
+    private(set) var inWatchLater = false
+    /// A short message over the player (an action that needs signing in,
+    /// or one YouTube refused).
+    private(set) var toast: String?
+    @ObservationIgnored private var toastTask: Task<Void, Never>?
+
     enum Engine { case native, web }
     private(set) var engine: Engine = .native
     private(set) var web: YouTubeWebPlayer?
@@ -70,6 +82,66 @@ final class VideoPlayerModel {
     /// Why the last card has no sentence audio, shown for a while.
     private(set) var cardNotice: String?
     @ObservationIgnored private var cardNoticeTask: Task<Void, Never>?
+
+    func showToast(_ text: String) {
+        toast = text
+        toastTask?.cancel()
+        toastTask = Task {
+            try? await Task.sleep(for: .seconds(2.5))
+            if !Task.isCancelled { self.toast = nil }
+        }
+    }
+
+    // MARK: YouTube actions
+
+    /// Shown at once, sent after, and put back if YouTube refuses.
+    private func act(_ apply: @escaping () -> Void, undo: @escaping () -> Void, done: String,
+                     _ request: @escaping () async throws -> Void) {
+        Task {
+            // The YouTube tab may not have checked yet (a video opened from
+            // a link).
+            if !YouTubeFeedModel.shared.signedIn, !(await YouTubeClient.shared.refreshSignInState()) {
+                showToast(String(localized: "YouTubeにログインすると使えます"))
+                return
+            }
+            apply()
+            Haptics.play(.selection)
+            do {
+                try await request()
+                showToast(done)
+            } catch {
+                undo()
+                showToast(String(localized: "YouTubeに反映できませんでした"))
+            }
+        }
+    }
+
+    func toggleLike() {
+        guard let id = videoID else { return }
+        let target = !liked
+        act({ self.liked = target }, undo: { self.liked = !target },
+            done: target ? String(localized: "高評価しました") : String(localized: "高評価を取り消しました")) {
+            try await YouTubeClient.shared.setLiked(target, videoID: id)
+        }
+    }
+
+    func toggleSubscribe() {
+        guard let channelID else { return }
+        let target = !subscribed
+        act({ self.subscribed = target }, undo: { self.subscribed = !target },
+            done: target ? String(localized: "チャンネル登録しました") : String(localized: "登録を解除しました")) {
+            try await YouTubeClient.shared.setSubscribed(target, channelID: channelID)
+        }
+    }
+
+    func toggleWatchLater() {
+        guard let id = videoID else { return }
+        let target = !inWatchLater
+        act({ self.inWatchLater = target }, undo: { self.inWatchLater = !target },
+            done: target ? String(localized: "後で見るに追加しました") : String(localized: "後で見るから削除しました")) {
+            try await YouTubeClient.shared.setWatchLater(target, videoID: id)
+        }
+    }
 
     func showCardNotice(_ text: String) {
         cardNotice = text
@@ -197,7 +269,14 @@ final class VideoPlayerModel {
                 tracks = info.captionTracks
                 Task { await loadSubtitles(track: YouTubeClient.defaultTrack(in: info.captionTracks)) }
             }
-            Task { related = (try? await YouTubeClient.shared.related(id).videos) ?? [] }
+            Task {
+                guard let next = try? await YouTubeClient.shared.watchNext(id) else { return }
+                related = next.page.videos
+                liked = next.liked ?? false
+                likeCount = next.likeCount
+                subscribed = next.subscribed ?? false
+                subscriberText = next.subscriberText
+            }
             if let hls = info?.hlsURL, info?.playable == true, !Self.nativeRecentlyFailed {
                 startNative(hls)
             } else {
@@ -276,6 +355,7 @@ final class VideoPlayerModel {
             update(\.isPlaying, state.ready && !state.paused)
         }
         update(\.isBuffering, !state.ready || state.waiting)
+        noteWatching()
         guard state.ready, !state.isAd else { return }
         if clock.time != state.time { clock.time = state.time }
         if state.duration > 0, clock.duration != state.duration { clock.duration = state.duration }
@@ -313,8 +393,33 @@ final class VideoPlayerModel {
         ]
     }
 
+    // MARK: Watch time (学習の記録)
+
+    @ObservationIgnored private var lastWatchTick: Date?
+    @ObservationIgnored private var pendingWatch: Double = 0
+
+    /// Called with every report from the player: time between reports
+    /// while it plays (not ads, not a card's replay) is time watched.
+    private func noteWatching() {
+        let now = Date.now
+        let watching = isPlaying && !isAd && !isMakingCard && !isBuffering
+        if watching, let last = lastWatchTick {
+            let elapsed = now.timeIntervalSince(last)
+            if elapsed > 0, elapsed < 2 { pendingWatch += elapsed }
+        }
+        lastWatchTick = watching ? now : nil
+        if pendingWatch >= 10 { flushWatch() }
+    }
+
+    private func flushWatch() {
+        guard pendingWatch > 0 else { return }
+        StatsStore.shared.addWatch(seconds: pendingWatch, videoID: item.id)
+        pendingWatch = 0
+    }
+
     private func tick(_ time: Double) {
         guard time.isFinite, engine == .native else { return }
+        noteWatching()
         if !nativeStarted, time > nativeStartTime + 0.3 { nativeStarted = true }
         clock.time = time
         if let item = player.currentItem {
@@ -500,7 +605,8 @@ final class VideoPlayerModel {
     }
 
     private func setCues(_ new: [SubtitleCue], source: String) {
-        rawCues = new
+        // Lines too long to read over the video come in pieces.
+        rawCues = CaptionSentences.splitLong(new)
         subtitleSource = source
         subtitleDelay = 0
         applyDelay()
@@ -693,6 +799,7 @@ final class VideoPlayerModel {
 
     func stop() {
         savePosition(clock.time)
+        flushWatch()
         player.pause()
         if let timeObserver { player.removeTimeObserver(timeObserver) }
         timeObserver = nil

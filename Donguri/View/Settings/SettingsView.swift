@@ -17,6 +17,14 @@ struct SettingsView: View {
             List {
                 Section {
                     NavigationLink {
+                        StatsView()
+                    } label: {
+                        StatsSummaryRow()
+                    }
+                }
+
+                Section {
+                    NavigationLink {
                         DictionaryView()
                     } label: {
                         Label("辞書", systemImage: "character.book.closed.ja")
@@ -96,4 +104,29 @@ struct SettingsView: View {
 
 #Preview {
     SettingsView()
+}
+
+/// 学習の記録's entry: today's numbers at a glance.
+private struct StatsSummaryRow: View {
+    @State private var store = StatsStore.shared
+
+    var body: some View {
+        let today = store.day(.now)
+        HStack(spacing: 12) {
+            Image(systemName: "chart.bar.xaxis")
+                .font(.title2)
+                .foregroundStyle(.white)
+                .frame(width: 44, height: 44)
+                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.accentColor.gradient))
+            VStack(alignment: .leading, spacing: 3) {
+                Text("学習の記録")
+                    .font(.headline)
+                Text("今日 \(StatsStore.formatMinutes(StatsStore.Metric.watchTime.value(today)))・\(today.lookups)語調べた・\(today.cards)枚追加")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
+        .padding(.vertical, 4)
+    }
 }

@@ -330,8 +330,18 @@ struct YouTubeHomeView: View {
                                 Label("チャンネルを見る", systemImage: "person.crop.square")
                             }
                         }
-                        ShareLink(item: video.watchURL) {
-                            Label("共有", systemImage: "square.and.arrow.up")
+                        if model.signedIn {
+                            Button {
+                                Task {
+                                    if (try? await YouTubeClient.shared.setWatchLater(true, videoID: video.id)) != nil {
+                                        Haptics.play(.success)
+                                    } else {
+                                        Haptics.play(.warning)
+                                    }
+                                }
+                            } label: {
+                                Label("後で見るに追加", systemImage: "clock")
+                            }
                         }
                         Button {
                             AppNavigator.shared.openInBrowser(video.watchURL, allowNativePlayer: false)

@@ -100,6 +100,19 @@ struct VideoPlayerView: View {
                 cardNoticeView(notice)
             }
         }
+        .overlay(alignment: .center) {
+            if let toast = model.toast {
+                Text(verbatim: toast)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(Capsule().fill(Color.black.opacity(0.8)))
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: model.toast)
         .overlay {
             PopupStackLayer(stack: model.popups)
         }
@@ -790,26 +803,11 @@ struct VideoPlayerView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             Text(verbatim: model.title)
                 .font(.headline)
                 .lineLimit(3)
             HStack(spacing: 8) {
-                if !model.channel.isEmpty {
-                    if let channelID = model.channelID {
-                        Button {
-                            onClose()
-                            AppNavigator.shared.showYouTubeChannel(id: channelID, name: model.channel)
-                        } label: {
-                            Text(verbatim: model.channel)
-                                .font(.subheadline.weight(.semibold))
-                        }
-                        .buttonStyle(.plain)
-                    } else {
-                        Text(verbatim: model.channel)
-                            .font(.subheadline.weight(.semibold))
-                    }
-                }
                 if let views = model.viewCount, let count = Int(views) {
                     // 12万回視聴, as YouTube writes it.
                     Text("\(count.formatted(.number.notation(.compactName)))回視聴")
@@ -823,14 +821,97 @@ struct VideoPlayerView: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
-                if let id = model.videoID, let url = URL(string: "https://www.youtube.com/watch?v=\(id)") {
-                    ShareLink(item: url) {
-                        Image(systemName: "square.and.arrow.up")
-                    }
-                }
+            }
+            if !model.channel.isEmpty {
+                channelRow
+            }
+            if model.videoID != nil {
+                actionRow
             }
         }
         .padding(.vertical, 4)
+    }
+
+    /// The channel and its 登録 button, as in the YouTube app.
+    private var channelRow: some View {
+        HStack(spacing: 10) {
+            Button {
+                guard let channelID = model.channelID else { return }
+                onClose()
+                AppNavigator.shared.showYouTubeChannel(id: channelID, name: model.channel)
+            } label: {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(verbatim: model.channel)
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(1)
+                    if let subscribers = model.subscriberText {
+                        Text(verbatim: subscribers)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(model.channelID == nil)
+            Spacer(minLength: 8)
+            if model.channelID != nil {
+                Button {
+                    model.toggleSubscribe()
+                } label: {
+                    Text(model.subscribed ? "登録済み" : "登録")
+                        .font(.subheadline.weight(.semibold))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 7)
+                        .foregroundStyle(model.subscribed ? Color.primary : Color(.systemBackground))
+                        .background(Capsule().fill(model.subscribed ? Color.secondary.opacity(0.18) : Color.primary))
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .animation(.snappy, value: model.subscribed)
+            }
+        }
+    }
+
+    private var actionRow: some View {
+        HStack(spacing: 8) {
+            actionPill(systemImage: model.liked ? "hand.thumbsup.fill" : "hand.thumbsup",
+                       title: likeLabel, active: model.liked) {
+                model.toggleLike()
+            }
+            .accessibilityLabel(model.liked ? Text("高評価を取り消す") : Text("高評価"))
+            actionPill(systemImage: model.inWatchLater ? "clock.fill" : "clock",
+                       title: String(localized: "後で見る"), active: model.inWatchLater) {
+                model.toggleWatchLater()
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    /// The like count including the account's own like.
+    private var likeLabel: String {
+        guard let count = model.likeCount else { return String(localized: "高評価") }
+        return (count + (model.liked ? 1 : 0)).formatted(.number.notation(.compactName))
+    }
+
+    private func actionPill(systemImage: String, title: String, active: Bool,
+                            action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label {
+                Text(verbatim: title)
+            } icon: {
+                Image(systemName: systemImage)
+            }
+            .font(.footnote.weight(.semibold))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .foregroundStyle(active ? Color.accentColor : Color.primary)
+            .background(Capsule().fill(active ? Color.accentColor.opacity(0.15) : Color.secondary.opacity(0.14)))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .animation(.snappy, value: active)
     }
 
     @ViewBuilder

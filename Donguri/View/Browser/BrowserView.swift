@@ -17,6 +17,8 @@ struct BrowserView: View {
     @Environment(UserConfig.self) private var userConfig
     @FocusState private var addressFocused: Bool
     @State private var showsTranscript = false
+    @State private var showsBookmarks = false
+    @State private var bookmarks = BookmarkStore.shared
     @State private var scanning = false
     @AppStorage(BrowserMode.defaultsKey) private var mode = BrowserMode.youtube.rawValue
     /// From the bottom of the page to the bottom of the window: the
@@ -58,14 +60,7 @@ struct BrowserView: View {
                     }
                     .opacity(model.showsStartPage ? 0 : 1)
                 if model.showsStartPage {
-                    BrowserStartPage { url in
-                        addressFocused = false
-                        if url.host?.contains("youtube.com") == true {
-                            mode = BrowserMode.youtube.rawValue
-                        } else {
-                            model.load(url)
-                        }
-                    }
+                    BrowserStartPage(open: open)
                 }
             }
 
@@ -81,9 +76,29 @@ struct BrowserView: View {
         .sheet(isPresented: $showsTranscript) {
             TranscriptView(model: model)
         }
+        .background {
+            // On its own view: two presentations on one view fight.
+            Color.clear.sheet(isPresented: $showsBookmarks) {
+                BookmarksView { url in
+                    showsBookmarks = false
+                    open(url)
+                }
+            }
+        }
         .onAppear {
             model.userConfig = userConfig
             model.startIfNeeded()
+        }
+    }
+
+    /// A start-page site or a bookmark. YouTube's home goes to the YouTube
+    /// tab; anything else loads here.
+    private func open(_ url: URL) {
+        addressFocused = false
+        if url.host?.contains("youtube.com") == true, url.path.count <= 1 {
+            mode = BrowserMode.youtube.rawValue
+        } else {
+            model.load(url)
         }
     }
 
@@ -116,6 +131,19 @@ struct BrowserView: View {
                                 .foregroundStyle(.secondary)
                         }
                         .buttonStyle(.plain)
+                    } else if !addressFocused, let url = model.url, !model.showsStartPage {
+                        let saved = bookmarks.contains(url)
+                        Button {
+                            bookmarks.toggle(url: url, title: model.title)
+                            Haptics.play(saved ? .light : .success)
+                        } label: {
+                            Image(systemName: saved ? "star.fill" : "star")
+                                .foregroundStyle(saved ? Color.yellow : Color.secondary)
+                                .frame(width: 28, height: 28)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(saved ? Text("ブックマークから削除") : Text("ブックマークに追加"))
                     }
                 }
                 .padding(.horizontal, 10)
@@ -246,6 +274,11 @@ struct BrowserView: View {
             }
             Divider()
             Button {
+                showsBookmarks = true
+            } label: {
+                Label("ブックマーク", systemImage: "book")
+            }
+            Button {
                 model.goHome()
             } label: {
                 Label("スタートページ", systemImage: "house")
@@ -276,6 +309,7 @@ private struct BrowserWebView: UIViewRepresentable {
 /// Where the browser starts: sites worth reading or watching.
 private struct BrowserStartPage: View {
     var open: (URL) -> Void
+    @State private var store = BookmarkStore.shared
 
     private struct Site: Identifiable {
         let name: String
@@ -302,6 +336,27 @@ private struct BrowserStartPage: View {
                 Text("ブラウザ")
                     .font(.largeTitle.weight(.bold))
                     .padding(.top, 24)
+                if !store.bookmarks.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("ブックマーク")
+                            .font(.headline)
+                        ForEach(store.bookmarks.prefix(8)) { bookmark in
+                            Button {
+                                if let url = URL(string: bookmark.url) { open(url) }
+                            } label: {
+                                BookmarkRow(bookmark: bookmark)
+                            }
+                            .buttonStyle(.plain)
+                            .contextMenu {
+                                Button(role: .destructive) {
+                                    withAnimation { store.remove(bookmark) }
+                                } label: {
+                                    Label("削除", systemImage: "trash")
+                                }
+                            }
+                        }
+                    }
+                }
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 78), spacing: 14)], spacing: 18) {
                     ForEach(sites) { site in
                         Button {
@@ -332,6 +387,113 @@ private struct BrowserStartPage: View {
             }
             .padding(.horizontal, 20)
         }
+    }
+}
+
+/// A bookmark: a letter badge for the site, the title and the address.
+private struct BookmarkRow: View {
+    let bookmark: Bookmark
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(verbatim: String(bookmark.host.prefix(1)).uppercased())
+                .font(.headline)
+                .foregroundStyle(.white)
+                .frame(width: 34, height: 34)
+                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(color.gradient))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(verbatim: bookmark.title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                Text(verbatim: bookmark.host)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
+    }
+
+    /// The same colour for a site every time.
+    private var color: Color {
+        let palette: [Color] = [.red, .orange, .green, .teal, .blue, .indigo, .purple, .pink, .brown]
+        let sum = bookmark.host.unicodeScalars.reduce(0) { $0 &+ Int($1.value) }
+        return palette[sum % palette.count]
+    }
+}
+
+/// Every bookmark: tap to open, swipe to delete, drag to reorder.
+private struct BookmarksView: View {
+    var open: (URL) -> Void
+    @State private var store = BookmarkStore.shared
+    @Environment(\.dismiss) private var dismiss
+    @State private var renaming: Bookmark?
+    @State private var newTitle = ""
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if store.bookmarks.isEmpty {
+                    ContentUnavailableView("ブックマークはありません",
+                                           systemImage: "star",
+                                           description: Text("ページを開いて、アドレスバーの☆をタップすると追加できます。"))
+                } else {
+                    List {
+                        ForEach(store.bookmarks) { bookmark in
+                            Button {
+                                if let url = URL(string: bookmark.url) { open(url) }
+                            } label: {
+                                BookmarkRow(bookmark: bookmark)
+                            }
+                            .buttonStyle(.plain)
+                            .contextMenu {
+                                Button {
+                                    newTitle = bookmark.title
+                                    renaming = bookmark
+                                } label: {
+                                    Label("名前を変更", systemImage: "pencil")
+                                }
+                                Button {
+                                    UIPasteboard.general.string = bookmark.url
+                                } label: {
+                                    Label("リンクをコピー", systemImage: "link")
+                                }
+                                Button(role: .destructive) {
+                                    withAnimation { store.remove(bookmark) }
+                                } label: {
+                                    Label("削除", systemImage: "trash")
+                                }
+                            }
+                        }
+                        .onDelete { store.remove(atOffsets: $0) }
+                        .onMove { store.move(fromOffsets: $0, toOffset: $1) }
+                    }
+                    .listStyle(.plain)
+                }
+            }
+            .navigationTitle(Text("ブックマーク"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    if !store.bookmarks.isEmpty { EditButton() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完了") { dismiss() }
+                }
+            }
+            .alert("名前を変更", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+                TextField("名前", text: $newTitle)
+                Button("キャンセル", role: .cancel) { renaming = nil }
+                Button("保存") {
+                    if let renaming { store.rename(renaming, to: newTitle) }
+                    renaming = nil
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
     }
 }
 

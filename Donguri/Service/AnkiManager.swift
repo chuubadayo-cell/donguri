@@ -649,7 +649,10 @@ class AnkiManager {
         savedWords = words
     }
 
+    /// A card Anki confirmed (AnkiMobile's success callback, or
+    /// AnkiConnect's answer).
     func addWord(_ word: String) {
+        StatsStore.shared.noteCard(word: word)
         savedWords.insert(word)
         try? Self.saveWords(savedWords)
     }

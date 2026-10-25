@@ -280,10 +280,64 @@ final class YouTubeClient {
 
     /// Videos to watch next.
     func related(_ videoID: String) async throws -> YTFeedPage {
+        try await watchNext(videoID).page
+    }
+
+    /// The watch page's data: videos to watch next, and where the account
+    /// stands on this one (liked, subscribed to its channel).
+    func watchNext(_ videoID: String) async throws -> YTWatchNext {
         let data = try await innertube("next", body: ["videoId": videoID])
-        var page = try await Self.parseFeed(data)
-        page.videos.removeAll { $0.id == videoID }
-        return page
+        var next = try await Self.parseWatchNext(data)
+        next.page.videos.removeAll { $0.id == videoID }
+        return next
+    }
+
+    @concurrent
+    private nonisolated static func parseWatchNext(_ data: Data) async throws -> YTWatchNext {
+        let json = try JSONSerialization.jsonObject(with: data)
+        var next = YTWatchNext(page: YTParse.feed(json))
+        if let status = YTParse.firstValue(forKey: "likeStatus", in: json) as? String {
+            next.liked = status == "LIKE"
+        }
+        let raw = YTParse.firstValue(forKey: "likeCountIfIndifferentNumber", in: json)
+        let count = (raw as? String) ?? (raw as? NSNumber)?.stringValue
+        if let count, let number = Int(count) {
+            // The count without the account's own like.
+            next.likeCount = number
+        }
+        if let button = YTParse.firstValue(forKey: "subscribeButtonRenderer", in: json) as? [String: Any],
+           let subscribed = button["subscribed"] as? Bool {
+            next.subscribed = subscribed
+        } else if let subscribed = YTParse.firstValue(forKey: "subscribed", in: json) as? Bool {
+            next.subscribed = subscribed
+        }
+        next.subscriberText = YTParse.text(YTParse.firstValue(forKey: "subscriberCountText", in: json))
+        return next
+    }
+
+    // MARK: Actions (signed in)
+
+    /// 高評価, or taking it back.
+    func setLiked(_ liked: Bool, videoID: String) async throws {
+        _ = try await innertube(liked ? "like/like" : "like/removelike", body: ["target": ["videoId": videoID]])
+    }
+
+    func setSubscribed(_ subscribed: Bool, channelID: String) async throws {
+        _ = try await innertube(subscribed ? "subscription/subscribe" : "subscription/unsubscribe",
+                                body: ["channelIds": [channelID]])
+    }
+
+    /// 後で見る is the playlist "WL".
+    func setWatchLater(_ saved: Bool, videoID: String) async throws {
+        let action: [String: Any] = saved
+            ? ["action": "ACTION_ADD_VIDEO", "addedVideoId": videoID]
+            : ["action": "ACTION_REMOVE_VIDEO_BY_VIDEO_ID", "removedVideoId": videoID]
+        let data = try await innertube("browse/edit_playlist", body: ["playlistId": "WL", "actions": [action]])
+        // A refused edit still answers 200, with a status saying so.
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let status = json["status"] as? String, status != "STATUS_SUCCEEDED" {
+            throw URLError(.badServerResponse)
+        }
     }
 
     @concurrent

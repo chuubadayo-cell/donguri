@@ -32,6 +32,7 @@ final class PopupStack {
                                                  maxResults: userConfig.maxResults,
                                                  scanLength: userConfig.scanLength)
         guard let first = results.first else { return nil }
+        StatsStore.shared.noteLookup()
         let popup = PopupItem(showPopup: false,
                               currentSelection: selection,
                               lookupResults: results,
