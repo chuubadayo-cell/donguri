@@ -491,6 +491,22 @@
         }
       }
     },
+    "YouTubeでは字幕(CC)をオンにすると、字幕をタップして調べたり、Ankiに追加したりできます。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "On YouTube, turn captions (CC) on to tap subtitles for lookups and add them to Anki."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "YouTubeでは字幕(CC)をオンにすると、字幕をタップして調べたり、Ankiに追加したりできます。"
+          }
+        }
+      }
+    },
     "YouTubeで開く" : {
       "localizations" : {
         "en" : {
@@ -908,6 +924,22 @@
         }
       }
     },
+    "この動画の字幕は一度に読み込めませんでした。字幕(CC)をオンにして再生すると、表示された字幕がここに記録されます。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This video's subtitles couldn't be loaded all at once. Turn captions (CC) on and play it, and the subtitles shown are recorded here."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この動画の字幕は一度に読み込めませんでした。字幕(CC)をオンにして再生すると、表示された字幕がここに記録されます。"
+          }
+        }
+      }
+    },
     "この名前をNGにする" : {
       "localizations" : {
         "en" : {
@@ -1112,6 +1144,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "ほかのテーマの色をコピー"
+          }
+        }
+      }
+    },
+    "まだ字幕がありません" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No subtitles yet"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "まだ字幕がありません"
           }
         }
       }
@@ -1565,6 +1613,22 @@
         }
       }
     },
+    "コピーした画像から読み取る" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Read Copied Image"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "コピーした画像から読み取る"
+          }
+        }
+      }
+    },
     "コンパクト" : {
       "localizations" : {
         "en" : {
@@ -1641,6 +1705,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "システム（標準）"
+          }
+        }
+      }
+    },
+    "スタートページ" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start Page"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "スタートページ"
           }
         }
       }
@@ -2350,6 +2430,22 @@
         }
       }
     },
+    "ブラウザ" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Browser"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ブラウザ"
+          }
+        }
+      }
+    },
     "ブラック（有機EL）" : {
       "localizations" : {
         "en" : {
@@ -2542,6 +2638,22 @@
         }
       }
     },
+    "リンクをアプリ内ブラウザで開く" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Links in the In-App Browser"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "リンクをアプリ内ブラウザで開く"
+          }
+        }
+      }
+    },
     "リンクをコピー" : {
       "localizations" : {
         "en" : {
@@ -2650,6 +2762,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "一致する書き込みは「あぼーん」として非表示になります。レス番号は変わりません。"
+          }
+        }
+      }
+    },
+    "下の辞書ボタンで辞書モードに。ページの語をタップすると調べられます。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Turn on dictionary mode with the button below, then tap words on the page to look them up."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下の辞書ボタンで辞書モードに。ページの語をタップすると調べられます。"
           }
         }
       }
@@ -2778,6 +2906,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "今の設定、お気に入り、履歴はバックアップの内容で置き換えられます。"
+          }
+        }
+      }
+    },
+    "今は再生中に表示された字幕だけが並んでいます。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Only the subtitles shown during playback are listed for now."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "今は再生中に表示された字幕だけが並んでいます。"
           }
         }
       }
@@ -2986,6 +3130,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "再試行"
+          }
+        }
+      }
+    },
+    "写真から読み取る" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Read from Photo"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "写真から読み取る"
           }
         }
       }
@@ -3246,6 +3406,70 @@
         }
       }
     },
+    "字幕" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Subtitles"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "字幕"
+          }
+        }
+      }
+    },
+    "字幕(CC)をオンにすると、ここに字幕が出ます" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Turn captions (CC) on to see subtitles here"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "字幕(CC)をオンにすると、ここに字幕が出ます"
+          }
+        }
+      }
+    },
+    "字幕をすべて読み込む" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Load All Subtitles"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "字幕をすべて読み込む"
+          }
+        }
+      }
+    },
+    "字幕バーを表示" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show Subtitle Bar"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "字幕バーを表示"
+          }
+        }
+      }
+    },
     "実況板では自動でオン" : {
       "localizations" : {
         "en" : {
@@ -3390,6 +3614,22 @@
         }
       }
     },
+    "広告をブロック" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Block Ads"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "広告をブロック"
+          }
+        }
+      }
+    },
     "復元しました。アプリを一度終了して開き直すと、すべて反映されます。" : {
       "localizations" : {
         "en" : {
@@ -3530,6 +3770,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "文字の色"
+          }
+        }
+      }
+    },
+    "文字を読み取り中…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reading text…"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文字を読み取り中…"
+          }
+        }
+      }
+    },
+    "文字を読み取る" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Read Text"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文字を読み取る"
+          }
+        }
+      }
+    },
+    "文字読み取りボタンで、画像の中の文字も調べられます。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The text reader button lets you look up text inside images too."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文字読み取りボタンで、画像の中の文字も調べられます。"
           }
         }
       }
@@ -4078,6 +4366,22 @@
         }
       }
     },
+    "検索またはURL" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search or URL"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "検索またはURL"
+          }
+        }
+      }
+    },
     "検索結果: %lld件" : {
       "localizations" : {
         "en" : {
@@ -4430,6 +4734,22 @@
         }
       }
     },
+    "画像の文字を読み取る" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Read Text in an Image"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "画像の文字を読み取る"
+          }
+        }
+      }
+    },
     "画像をすべてダウンロード" : {
       "localizations" : {
         "en" : {
@@ -4506,6 +4826,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "画面のどこからでもスワイプで戻る"
+          }
+        }
+      }
+    },
+    "画面の文字を読み取る" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Read Text on Screen"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "画面の文字を読み取る"
           }
         }
       }
@@ -4946,6 +5282,22 @@
         }
       }
     },
+    "辞書に見つかりませんでした" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not in the dictionary"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "辞書に見つかりませんでした"
+          }
+        }
+      }
+    },
     "辞書のフォント" : {
       "localizations" : {
         "en" : {
@@ -5006,6 +5358,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "辞書ポップアップと辞書検索の文字です。"
+          }
+        }
+      }
+    },
+    "辞書モード" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dictionary Mode"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "辞書モード"
           }
         }
       }

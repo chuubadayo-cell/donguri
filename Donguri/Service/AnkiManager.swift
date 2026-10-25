@@ -532,8 +532,11 @@ class AnkiManager {
             case .popupSelectionText:
                 return content["popupSelectionText"] ?? ""
             case .bookCover:
-                // Donguri has no book cover concept — no LocalFileServer to serve one.
-                return ""
+                // The image a word was read from (OCR) or the video frame
+                // its subtitle was on. AnkiMobile takes it inline.
+                guard let coverURL = context.coverURL,
+                      let data = try? Data(contentsOf: coverURL) else { return "" }
+                return "<img src=\"data:image/jpeg;base64,\(data.base64EncodedString())\">"
             case .audio:
                 return content["audio"] ?? ""
             case .sasayakiAudio:

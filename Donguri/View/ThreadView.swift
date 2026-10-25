@@ -282,6 +282,7 @@ struct ThreadView: View {
                             sourceFrame: { item in
                                 MediaFrameRegistry.shared.frame(for: item.id)
                             },
+                            documentTitle: resolvedTitle,
                             onClose: {
                                 withTransaction(Transaction.noAnimation) { galleryRequest = nil }
                             })

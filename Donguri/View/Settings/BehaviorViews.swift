@@ -16,6 +16,7 @@ struct BehaviorSettingsView: View {
             Section {
                 Toggle("画面のどこからでもスワイプで戻る", isOn: $behavior.fullSwipeBack)
                 Toggle("触覚フィードバック", isOn: $behavior.haptics)
+                Toggle("リンクをアプリ内ブラウザで開く", isOn: $behavior.openLinksInApp)
             } header: {
                 Text("操作")
             } footer: {

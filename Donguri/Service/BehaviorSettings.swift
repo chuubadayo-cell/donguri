@@ -37,6 +37,12 @@ final class BehaviorSettings {
     /// Add a found 次スレ to favorites automatically.
     var autoFavoriteNextThread: Bool { didSet { save(autoFavoriteNextThread, "autoFavoriteNextThread") } }
 
+    // MARK: Browser
+
+    /// Links in posts open in the ブラウザ tab rather than Safari.
+    var openLinksInApp: Bool { didSet { save(openLinksInApp, "openLinksInApp") } }
+    var contentBlocking: Bool { didSet { save(contentBlocking, "contentBlocking") } }
+
     // MARK: Link previews
 
     var linkPreviewMode: LinkPreviewMode {
@@ -58,6 +64,8 @@ final class BehaviorSettings {
         notifyThreshold = d.object(forKey: p + "notifyThreshold") as? Int ?? 1
         notifyNextThread = d.object(forKey: p + "notifyNextThread") as? Bool ?? false
         autoFavoriteNextThread = d.object(forKey: p + "autoFavoriteNextThread") as? Bool ?? true
+        openLinksInApp = d.object(forKey: p + "openLinksInApp") as? Bool ?? true
+        contentBlocking = d.object(forKey: p + "contentBlocking") as? Bool ?? true
         linkPreviewMode = d.string(forKey: LinkPreviewMode.defaultsKey).flatMap(LinkPreviewMode.init(rawValue:)) ?? .wifi
     }
 

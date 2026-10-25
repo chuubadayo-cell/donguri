@@ -22,6 +22,10 @@ struct ZoomableImageView: UIViewRepresentable {
     /// swipe closes the gallery. Returning true means the gallery animates
     /// the image back into its thumbnail itself, so it isn't flung away.
     var onDismiss: (CGRect) -> Bool = { _ in false }
+    /// Recognised text to show and make tappable (OCR), or nil.
+    var ocrLines: [OCRLine]? = nil
+    /// A tap on recognised text, with the character's rect in the window.
+    var onTextTap: ((OCRHit, CGRect) -> Void)? = nil
 
     func makeCoordinator() -> Coordinator {
         Coordinator()
@@ -32,6 +36,7 @@ struct ZoomableImageView: UIViewRepresentable {
         view.callbacks = context.coordinator
         context.coordinator.parent = self
         view.display(image)
+        view.ocrLines = ocrLines
         return view
     }
 
@@ -39,6 +44,9 @@ struct ZoomableImageView: UIViewRepresentable {
         context.coordinator.parent = self
         if view.displayedImage !== image {
             view.display(image)
+        }
+        if view.ocrLines != ocrLines {
+            view.ocrLines = ocrLines
         }
     }
 
@@ -49,6 +57,7 @@ struct ZoomableImageView: UIViewRepresentable {
         func zoomChanged(_ zoomed: Bool) { parent?.onZoomChange(zoomed) }
         func dismissProgress(_ progress: CGFloat) { parent?.onDismissProgress(progress) }
         func dismissed(from frame: CGRect) -> Bool { parent?.onDismiss(frame) ?? false }
+        func textTapped(_ hit: OCRHit, rect: CGRect) { parent?.onTextTap?(hit, rect) }
     }
 }
 
@@ -61,6 +70,14 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate {
     private var wasZoomed = false
 
     private lazy var dismissPan = UIPanGestureRecognizer(target: self, action: #selector(handleDismissPan(_:)))
+
+    /// Boxes around recognised text, drawn over the image (so they zoom
+    /// with it).
+    private let ocrLayer = CAShapeLayer()
+
+    var ocrLines: [OCRLine]? {
+        didSet { drawOCR() }
+    }
 
     /// How far (in points) the image has to travel to close the gallery.
     private static let dismissDistance: CGFloat = 140
@@ -82,11 +99,16 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate {
         imageView.isUserInteractionEnabled = true
         addSubview(imageView)
 
+        ocrLayer.fillColor = UIColor.systemYellow.withAlphaComponent(0.16).cgColor
+        ocrLayer.strokeColor = UIColor.systemYellow.withAlphaComponent(0.75).cgColor
+        ocrLayer.lineWidth = 1
+        imageView.layer.addSublayer(ocrLayer)
+
         let doubleTap = UITapGestureRecognizer(target: self, action: #selector(handleDoubleTap(_:)))
         doubleTap.numberOfTapsRequired = 2
         addGestureRecognizer(doubleTap)
 
-        let singleTap = UITapGestureRecognizer(target: self, action: #selector(handleSingleTap))
+        let singleTap = UITapGestureRecognizer(target: self, action: #selector(handleSingleTap(_:)))
         singleTap.require(toFail: doubleTap)
         addGestureRecognizer(singleTap)
 
@@ -118,8 +140,29 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate {
             zoomScale = 1
             imageView.frame = CGRect(origin: .zero, size: fittedSize())
             contentSize = imageView.frame.size
+            drawOCR()
         }
         centerImage()
+    }
+
+    private func drawOCR() {
+        let bounds = imageView.bounds
+        ocrLayer.frame = bounds
+        guard let ocrLines, bounds.width > 0 else {
+            ocrLayer.path = nil
+            return
+        }
+        let path = UIBezierPath()
+        for line in ocrLines {
+            let rect = denormalize(line.box, in: bounds).insetBy(dx: -2, dy: -2)
+            path.append(UIBezierPath(roundedRect: rect, cornerRadius: 3))
+        }
+        ocrLayer.path = path.cgPath
+    }
+
+    private func denormalize(_ box: CGRect, in bounds: CGRect) -> CGRect {
+        CGRect(x: box.minX * bounds.width, y: box.minY * bounds.height,
+               width: box.width * bounds.width, height: box.height * bounds.height)
     }
 
     private func fittedSize() -> CGSize {
@@ -153,7 +196,16 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate {
 
     // MARK: Taps
 
-    @objc private func handleSingleTap() {
+    @objc private func handleSingleTap(_ recognizer: UITapGestureRecognizer) {
+        if let ocrLines, imageView.bounds.width > 0 {
+            let point = recognizer.location(in: imageView)
+            let normalized = CGPoint(x: point.x / imageView.bounds.width, y: point.y / imageView.bounds.height)
+            if let hit = TextRecognizer.hit(at: normalized, in: ocrLines) {
+                let rect = imageView.convert(denormalize(hit.characterBox, in: imageView.bounds), to: nil)
+                callbacks?.textTapped(hit, rect: rect)
+                return
+            }
+        }
         callbacks?.tapped()
     }
 

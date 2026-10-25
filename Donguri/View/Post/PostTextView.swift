@@ -242,7 +242,7 @@ struct PostTextView: UIViewRepresentable {
                 return
             }
             if url.scheme == "http" || url.scheme == "https" {
-                UIApplication.shared.open(url)
+                ExternalLinks.open(url)
             }
         }
     }

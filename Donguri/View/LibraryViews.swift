@@ -49,7 +49,7 @@ struct FavoriteBoardsSection: View {
 /// replies, and threads kept for offline reading.
 struct SavedTabView: View {
     enum Segment: String, CaseIterable, Identifiable {
-        case favorites, offline
+        case favorites, offline, history
         var id: String { rawValue }
     }
 
@@ -66,12 +66,15 @@ struct SavedTabView: View {
                     FavoriteThreadsList()
                 case .offline:
                     SavedThreadsView()
+                case .history:
+                    HistoryView()
                 }
             }
             .safeAreaInset(edge: .top) {
                 Picker("表示", selection: $segmentRaw) {
                     Text("お気に入り").tag(Segment.favorites.rawValue)
                     Text("オフライン保存").tag(Segment.offline.rawValue)
+                    Text("履歴").tag(Segment.history.rawValue)
                 }
                 .pickerStyle(.segmented)
                 .padding(.horizontal)

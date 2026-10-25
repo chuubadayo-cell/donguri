@@ -35,7 +35,7 @@ enum BrowseRoute: Hashable, Codable {
 }
 
 enum RootTab: String {
-    case boards, saved, history, dictionary, settings
+    case boards, saved, history, browser, dictionary, settings
 }
 
 /// One Chance-style tab: a navigation stack inside the 板 tab.
@@ -97,6 +97,8 @@ final class AppNavigator {
     var showsTabSwitcher = false
     /// A short message over everything, e.g. "opened in a new tab".
     private(set) var toast: String?
+    /// The image scanner, presented over everything (see ContentView).
+    var scanRequest: ScanRequest?
 
     private init() {
         let defaults = UserDefaults.standard
@@ -222,6 +224,12 @@ final class AppNavigator {
     func moveTabs(fromOffsets source: IndexSet, toOffset destination: Int) {
         tabs.move(fromOffsets: source, toOffset: destination)
         persist()
+    }
+
+    /// Opens a web page in the ブラウザ tab.
+    func openInBrowser(_ url: URL) {
+        BrowserModel.shared.load(url)
+        rootTab = .browser
     }
 
     /// From a notification or anywhere outside the 板 tab: show the thread
@@ -358,5 +366,39 @@ struct RouteStack<Root: View>: View {
                 .background(FullSwipeBack())
         }
         .environment(context)
+    }
+}
+
+// MARK: - Scanning images
+
+/// An image to read text from (a photo, a screenshot, a web page), shown
+/// in the gallery with text recognition on.
+struct ScanRequest: Identifiable {
+    let id = UUID()
+    let item: MediaItem
+    let title: String?
+}
+
+extension AppNavigator {
+    /// Shows `image` in the scanner over everything.
+    func scan(_ image: UIImage, title: String? = nil) {
+        guard let data = image.jpegData(compressionQuality: 0.9) else { return }
+        Task {
+            guard let url = await MediaStore.shared.storeLocal(data) else { return }
+            scanRequest = ScanRequest(item: MediaItem(url: url, postIndex: 0, kind: .image), title: title)
+        }
+    }
+}
+
+/// Where links tapped in posts and previews go: the ブラウザ tab, or
+/// Safari if the user prefers.
+enum ExternalLinks {
+    static func open(_ url: URL) {
+        let scheme = url.scheme?.lowercased()
+        if BehaviorSettings.shared.openLinksInApp, scheme == "http" || scheme == "https" {
+            AppNavigator.shared.openInBrowser(url)
+        } else {
+            UIApplication.shared.open(url)
+        }
     }
 }

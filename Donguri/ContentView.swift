@@ -31,14 +31,17 @@ struct ContentView: View {
                 .badge(unreadFavorites)
                 .tag(RootTab.saved)
 
-            RouteStack {
-                HistoryView()
-            }
-            .tabItem { Label("履歴", systemImage: "clock") }
-            .tag(RootTab.history)
+            BrowserView()
+                .tabItem { Label("ブラウザ", systemImage: "safari") }
+                .tag(RootTab.browser)
 
             NavigationStack {
                 DictionarySearchView()
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            ScanPhotoButton()
+                        }
+                    }
             }
             .tabItem { Label("辞書", systemImage: "character.book.closed.ja") }
             .tag(RootTab.dictionary)
@@ -50,6 +53,21 @@ struct ContentView: View {
         .modifier(ThemedTabBar(palette: appearance.palette))
         .overlay {
             NavigatorToast()
+        }
+        // Text recognition on a photo, screenshot or web page.
+        .fullScreenCover(item: $navigator.scanRequest) { request in
+            GalleryView(items: [request.item],
+                        documentTitle: request.title,
+                        startWithOCR: true) {
+                withTransaction(Transaction.noAnimation) { navigator.scanRequest = nil }
+            }
+            .presentationBackground(.clear)
+        }
+        .onAppear {
+            // 履歴 moved into the 保存 tab.
+            if navigator.rootTab == .history {
+                navigator.rootTab = .saved
+            }
         }
         // The automatic theme follows the system's light or dark mode.
         .onChange(of: colorScheme, initial: true) { _, scheme in

@@ -21,9 +21,19 @@ struct GalleryView: View {
     var onJumpToPost: ((Int) -> Void)? = nil
     /// Where an item's thumbnail is on screen, for the zoom in and out.
     var sourceFrame: ((MediaItem) -> CGRect?)? = nil
+    /// The thread's title, for cards mined from text read out of images.
+    var documentTitle: String? = nil
+    /// Scans open with text recognition already on.
+    var startWithOCR = false
     var onClose: () -> Void
 
     @Environment(\.openURL) private var openURL
+    @Environment(UserConfig.self) private var userConfig
+
+    // OCR (文字の読み取り): tap text in images to look it up.
+    @AppStorage("donguri.galleryOCR") private var ocrEnabled = false
+    @State private var popups = PopupStack()
+    @State private var recognizing = false
 
     @State private var currentID: String?
     @State private var showChrome = true
@@ -56,11 +66,15 @@ struct GalleryView: View {
          initiallyShowGrid: Bool = false,
          onJumpToPost: ((Int) -> Void)? = nil,
          sourceFrame: ((MediaItem) -> CGRect?)? = nil,
+         documentTitle: String? = nil,
+         startWithOCR: Bool = false,
          onClose: @escaping () -> Void) {
         self.items = items
         self.initiallyShowGrid = initiallyShowGrid
         self.onJumpToPost = onJumpToPost
         self.sourceFrame = sourceFrame
+        self.documentTitle = documentTitle
+        self.startWithOCR = startWithOCR
         self.onClose = onClose
         let start = items.indices.contains(initialIndex) ? items[initialIndex].id : items.first?.id
         _currentID = State(initialValue: start)
@@ -102,12 +116,15 @@ struct GalleryView: View {
 
             statusPill
 
+            PopupStackLayer(stack: popups)
+
             heroLayer
         }
         .opacity(appeared ? 1 : 0)
         .statusBarHidden(!showChrome && !showGrid)
         .preferredColorScheme(.dark)
         .onAppear {
+            if startWithOCR { ocrEnabled = true }
             if !zoomIn() {
                 withAnimation(.easeOut(duration: 0.2)) { appeared = true }
             }
@@ -115,6 +132,7 @@ struct GalleryView: View {
         }
         .onChange(of: currentID) {
             isZoomed = false
+            popups.closeAll()
             preloadNeighbours()
         }
     }
@@ -127,6 +145,11 @@ struct GalleryView: View {
                 ForEach(items) { item in
                     GalleryPage(item: item,
                                 isCurrent: item.id == currentID,
+                                ocrEnabled: ocrEnabled && item.id == currentID,
+                                onRecognizing: { recognizing = $0 },
+                                onTextTap: { hit, rect, image in
+                                    lookUp(hit, rect: rect, image: image, item: item)
+                                },
                                 onTap: toggleChrome,
                                 onZoomChange: { isZoomed = $0 },
                                 onDismissProgress: { dismissProgress = $0 },
@@ -186,6 +209,18 @@ struct GalleryView: View {
             }
 
             Spacer()
+
+            Button {
+                ocrEnabled.toggle()
+                Haptics.play(.selection)
+                if !ocrEnabled { popups.closeAll() }
+            } label: {
+                Image(systemName: "text.viewfinder")
+                    .font(.headline)
+                    .foregroundStyle(ocrEnabled ? Color.yellow : Color.white)
+                    .frame(width: 44, height: 44)
+            }
+            .accessibilityLabel(Text("文字を読み取る"))
 
             actionsMenu
         }
@@ -398,7 +433,25 @@ struct GalleryView: View {
 
     @ViewBuilder
     private var statusPill: some View {
-        if job.isRunning || toast != nil {
+        if recognizing {
+            VStack {
+                Spacer()
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(.white)
+                    Text("文字を読み取り中…")
+                }
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 9)
+                .background(Capsule().fill(.black.opacity(0.75)))
+                .padding(.bottom, showChrome && !showGrid ? 96 : 32)
+            }
+            .allowsHitTesting(false)
+            .transition(.opacity)
+        } else if job.isRunning || toast != nil {
             VStack {
                 Spacer()
                 HStack(spacing: 8) {
@@ -430,7 +483,23 @@ struct GalleryView: View {
     // MARK: Actions
 
     private func toggleChrome() {
+        // With a dictionary popup open, a tap elsewhere just closes it.
+        if !popups.isEmpty {
+            popups.closeAll()
+            return
+        }
         withAnimation(.easeInOut(duration: 0.2)) { showChrome.toggle() }
+    }
+
+    /// Text tapped in an image: look it up, with the image ready to go on
+    /// an Anki card.
+    private func lookUp(_ hit: OCRHit, rect: CGRect, image: UIImage, item: MediaItem) {
+        popups.coverURL = GalleryCardImages.url(for: item.id, image: image)
+        popups.documentTitle = documentTitle
+        let selection = SelectionData(text: hit.text, sentence: hit.sentence, rect: rect)
+        if popups.replace(with: selection, userConfig: userConfig) == nil {
+            flash(String(localized: "辞書に見つかりませんでした"))
+        }
     }
 
     /// Closes the gallery, zooming the image back into its thumbnail when
@@ -573,6 +642,9 @@ struct GalleryView: View {
 private struct GalleryPage: View {
     let item: MediaItem
     let isCurrent: Bool
+    var ocrEnabled: Bool = false
+    var onRecognizing: (Bool) -> Void = { _ in }
+    var onTextTap: (OCRHit, CGRect, UIImage) -> Void = { _, _, _ in }
     var onTap: () -> Void
     var onZoomChange: (Bool) -> Void
     var onDismissProgress: (CGFloat) -> Void
@@ -584,6 +656,7 @@ private struct GalleryPage: View {
     @State private var image: UIImage?
     @State private var failed = false
     @State private var attempt = 0
+    @State private var ocrLines: [OCRLine]?
 
     var body: some View {
         switch item.kind {
@@ -608,7 +681,12 @@ private struct GalleryPage: View {
                                   onTap: onTap,
                                   onZoomChange: onZoomChange,
                                   onDismissProgress: onDismissProgress,
-                                  onDismiss: { frame in onDismiss(frame) })
+                                  onDismiss: { frame in onDismiss(frame) },
+                                  ocrLines: ocrEnabled ? ocrLines : nil,
+                                  onTextTap: { hit, rect in onTextTap(hit, rect, image) })
+                    .task(id: ocrEnabled) {
+                        await recognizeIfNeeded(image)
+                    }
             } else if failed {
                 messagePage(systemImage: "photo.badge.exclamationmark",
                             text: String(localized: "画像を読み込めませんでした"),
@@ -645,6 +723,19 @@ private struct GalleryPage: View {
             image = loaded
             failed = loaded == nil
         }
+    }
+
+    private func recognizeIfNeeded(_ image: UIImage) async {
+        guard ocrEnabled, ocrLines == nil else { return }
+        if let cached = OCRCache.lines(for: item.id) {
+            ocrLines = cached
+            return
+        }
+        onRecognizing(true)
+        let lines = await TextRecognizer.recognize(image)
+        onRecognizing(false)
+        OCRCache.store(lines, for: item.id)
+        ocrLines = lines
     }
 
     private func messagePage(systemImage: String, text: String, retry: Bool = false) -> some View {
@@ -734,5 +825,34 @@ private struct GalleryVideoPage: View {
         .onDisappear {
             player?.pause()
         }
+    }
+}
+
+/// Recognised text per gallery item, kept while the app runs so paging
+/// back to an image doesn't read it again.
+enum OCRCache {
+    private static var cache: [String: [OCRLine]] = [:]
+    private static var order: [String] = []
+
+    static func lines(for id: String) -> [OCRLine]? { cache[id] }
+
+    static func store(_ lines: [OCRLine], for id: String) {
+        cache[id] = lines
+        order.append(id)
+        if order.count > 60 {
+            cache[order.removeFirst()] = nil
+        }
+    }
+}
+
+/// The small JPEG of each image attached to cards mined from it.
+enum GalleryCardImages {
+    private static var urls: [String: URL] = [:]
+
+    static func url(for id: String, image: UIImage) -> URL? {
+        if let url = urls[id], FileManager.default.fileExists(atPath: url.path) { return url }
+        let url = CardImage.write(image)
+        urls[id] = url
+        return url
     }
 }

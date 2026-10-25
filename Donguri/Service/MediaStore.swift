@@ -87,6 +87,21 @@ actor MediaStore {
         return try await task.value
     }
 
+    /// Keeps an image that came from the device (a scanned photo, a web page
+    /// snapshot) under a made-up URL, so the gallery can show it like any
+    /// downloaded image.
+    func storeLocal(_ data: Data) -> URL? {
+        guard let cacheFolder,
+              let url = URL(string: "https://iroha.local/scan/\(UUID().uuidString).jpg") else { return nil }
+        let destination = cacheFolder.appendingPathComponent(Self.fileName(for: url))
+        do {
+            try data.write(to: destination, options: .atomic)
+            return url
+        } catch {
+            return nil
+        }
+    }
+
     /// Downloads without decoding: used to preload, and by "download all".
     func prefetch(_ url: URL) async -> Bool {
         (try? await file(for: url)) != nil
