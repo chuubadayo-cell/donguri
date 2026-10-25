@@ -506,6 +506,14 @@ final class VideoPlayerModel {
                 media.audioURL = again.audioURL
                 media.imageURL = media.imageURL ?? again.imageURL
             }
+            // MP3, which every Anki plays and AnkiMobile downloads.
+            if let audio = media.audioURL, audio.pathExtension.lowercased() != "mp3" {
+                if let mp3 = await MP3Encoder.encode(audio) {
+                    media.audioURL = mp3
+                } else {
+                    print("[iroha] couldn't convert the card audio to MP3; sending \(audio.pathExtension)")
+                }
+            }
             return media
         }
     }

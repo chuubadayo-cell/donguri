@@ -9,3 +9,6 @@
 //
 
 #include "hoshidicts_c.h"
+
+// MP3 encoding for card audio (shine, vendored; iOS has no MP3 encoder).
+#include "Vendor/shine/iroha_mp3.h"
