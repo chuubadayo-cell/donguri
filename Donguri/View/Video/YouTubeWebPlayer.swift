@@ -57,6 +57,9 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
                                               forMainFrameOnly: true, in: .page))
         controller.addUserScript(WKUserScript(source: Self.controllerScript, injectionTime: .atDocumentStart,
                                               forMainFrameOnly: true, in: Self.world))
+        if BehaviorSettings.shared.contentBlocking {
+            YouTubeAdScripts.install(in: controller, world: Self.world)
+        }
         webView = WKWebView(frame: .zero, configuration: configuration)
         webView.customUserAgent = SafariUserAgent.mobile
         webView.isOpaque = false
@@ -73,7 +76,13 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
     func load() {
         loadedAt = .now
         var components = URLComponents(string: "https://m.youtube.com/watch")!
-        components.queryItems = [URLQueryItem(name: "v", value: videoID), URLQueryItem(name: "hl", value: "ja")]
+        var items = [URLQueryItem(name: "v", value: videoID), URLQueryItem(name: "hl", value: "ja")]
+        // The account chosen in the YouTube screen.
+        if let account = YouTubeAccount.current {
+            items.append(URLQueryItem(name: "authuser", value: String(account.authUser)))
+            if let pageID = account.pageID { items.append(URLQueryItem(name: "pageid", value: pageID)) }
+        }
+        components.queryItems = items
         webView.load(URLRequest(url: components.url!))
     }
 
@@ -343,7 +352,8 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
         '.player-controls-background, .player-controls-content, .player-controls-top, .player-controls-bottom, .player-controls-middle,',
         '.ytm-autonav-bar, .ytp-pause-overlay, .ytp-ce-element, .ytp-endscreen-content, .ytp-watermark, .ytp-paid-content-overlay,',
         '.ytp-spinner, .ytmCuedOverlayHost, .ytp-cued-thumbnail-overlay, ytm-mobile-topbar-renderer, ytm-pivot-bar-renderer,',
-        '.ytm-app-upsell, ytm-upsell-dialog-renderer, .player-control-container { display: none !important; }'
+        '.ytm-app-upsell, ytm-upsell-dialog-renderer, .player-control-container,',
+        '.ytp-unmute, [class*="unmute" i], [class*="Unmute"], .ytp-mute-button, .ytmMuteIndicator { display: none !important; }'
       ].join('\\n');
       function style() {
         if (document.getElementById('iroha-player-style')) { return; }
@@ -370,9 +380,16 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
         if (!v) { post({ ready: false }); return; }
         const box = player() || v.parentElement;
         if (box && !box.classList.contains('iroha-player')) { box.classList.add('iroha-player'); }
-        if (v.muted && !v.__irohaMuted) { v.muted = false; }
+        if (!v.__irohaListening) {
+          // Play, pause and seeks are reported at once, not at the next tick.
+          v.__irohaListening = true;
+          ['play', 'pause', 'seeked', 'playing', 'waiting'].forEach(function (name) {
+            v.addEventListener(name, function () { setTimeout(tick, 0); });
+          });
+        }
         const p = player();
         const ad = !!(p && (p.classList.contains('ad-showing') || p.classList.contains('ad-interrupting')));
+        if (v.muted && !v.__irohaMuted && !ad) { v.muted = false; }
         let buffered = 0;
         try { if (v.buffered.length) { buffered = v.buffered.end(v.buffered.length - 1); } } catch (e) {}
         post({

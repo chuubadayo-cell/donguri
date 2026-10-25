@@ -69,6 +69,19 @@ struct VideoPlayerView: View {
                     .background(Color(.systemBackground))
                 }
             }
+            // On its own view: a sheet and a file importer on the same
+            // view fight, and the settings sheet never opened.
+            .sheet(isPresented: $showsSettings) {
+                NavigationStack {
+                    VideoSettingsView(model: model)
+                        .toolbar {
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("完了") { showsSettings = false }
+                            }
+                        }
+                }
+                .presentationDetents([.medium, .large])
+            }
         }
         .overlay {
             PopupStackLayer(stack: model.popups)
@@ -79,17 +92,7 @@ struct VideoPlayerView: View {
         }
         .onDisappear {
             model.stop()
-        }
-        .sheet(isPresented: $showsSettings) {
-            NavigationStack {
-                VideoSettingsView(model: model)
-                    .toolbar {
-                        ToolbarItem(placement: .confirmationAction) {
-                            Button("完了") { showsSettings = false }
-                        }
-                    }
-            }
-            .presentationDetents([.medium, .large])
+            OrientationLock.returnToPortrait()
         }
         .fileImporter(isPresented: $importingSubtitles,
                       allowedContentTypes: SubtitleFileTypes.all,
@@ -492,10 +495,8 @@ struct VideoPlayerView: View {
     }
 
     private func toggleFullScreen(_ isFullScreen: Bool) {
-        guard let scene = UIApplication.shared.connectedScenes.first(where: { $0 is UIWindowScene }) as? UIWindowScene else { return }
-        let target: UIInterfaceOrientationMask = isFullScreen ? .portrait : .landscapeRight
-        scene.requestGeometryUpdate(.iOS(interfaceOrientations: target)) { _ in }
-        scene.keyWindow?.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
+        OrientationLock.rotate(to: isFullScreen ? .portrait : .landscape)
+        showControls(autoHide: true)
     }
 
     // MARK: Below the video

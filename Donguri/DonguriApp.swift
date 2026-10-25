@@ -10,6 +10,8 @@ import UserNotifications
 
 @main
 struct DonguriApp: App {
+    /// Only for the screen orientations the video player asks for.
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var userConfig = UserConfig()
     // Instantiated at launch (not lazily on first settings visit) so the
     // dictionaries are loaded into LookupEngine before any post is tapped.

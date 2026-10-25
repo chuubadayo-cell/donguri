@@ -88,13 +88,35 @@ struct YouTubeHomeView: View {
     @State private var navigator = AppNavigator.shared
     @State private var query = ""
     @State private var showsSignIn = false
+    @State private var showsAccounts = false
     @State private var importingVideo = false
     @FocusState private var searchFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
             searchBar
+                // Each presentation on its own view: two on one view fight.
+                .sheet(isPresented: $showsSignIn, onDismiss: {
+                    YouTubeClient.shared.reset()
+                    Task {
+                        await model.checkSignIn()
+                        await model.load(model.source)
+                    }
+                }) {
+                    YouTubeSignInView()
+                }
             chips
+                .sheet(isPresented: $showsAccounts) {
+                    YouTubeAccountsView(onAddAccount: {
+                        showsAccounts = false
+                        Task {
+                            try? await Task.sleep(for: .milliseconds(500))
+                            showsSignIn = true
+                        }
+                    }, onChange: {
+                        Task { await model.load(model.source) }
+                    })
+                }
             Divider()
             content
         }
@@ -112,15 +134,6 @@ struct YouTubeHomeView: View {
             guard let channel else { return }
             navigator.youTubeChannel = nil
             Task { await model.load(.channel(id: channel.id, name: channel.name)) }
-        }
-        .sheet(isPresented: $showsSignIn, onDismiss: {
-            YouTubeClient.shared.reset()
-            Task {
-                await model.checkSignIn()
-                await model.load(model.source)
-            }
-        }) {
-            YouTubeSignInView()
         }
         .fileImporter(isPresented: $importingVideo, allowedContentTypes: [.movie, .video, .mpeg4Movie, .quickTimeMovie],
                       allowsMultipleSelection: false) { result in
@@ -167,12 +180,21 @@ struct YouTubeHomeView: View {
                 } label: {
                     Label("ファイルの動画を開く", systemImage: "folder")
                 }
-                Button {
-                    showsSignIn = true
-                } label: {
-                    if model.signedIn {
-                        Label("アカウント", systemImage: "person.crop.circle")
-                    } else {
+                if model.signedIn {
+                    Button {
+                        showsAccounts = true
+                    } label: {
+                        Label("アカウントを切り替え", systemImage: "person.2.circle")
+                    }
+                    Button {
+                        showsSignIn = true
+                    } label: {
+                        Label("アカウントを追加", systemImage: "person.crop.circle.badge.plus")
+                    }
+                } else {
+                    Button {
+                        showsSignIn = true
+                    } label: {
                         Label("ログイン", systemImage: "person.crop.circle.badge.plus")
                     }
                 }
@@ -396,7 +418,10 @@ struct YouTubeSignInView: View {
 
     /// YouTube's own mobile sign-in link: Google's sign-in, then back
     /// through youtube.com/signin, which is what sets YouTube's cookies.
-    private static let signInURL = URL(string: "https://accounts.google.com/ServiceLogin?service=youtube&uilel=3&passive=true&hl=ja&continue=https%3A%2F%2Fwww.youtube.com%2Fsignin%3Faction_handle_signin%3Dtrue%26app%3Dm%26hl%3Dja%26next%3Dhttps%253A%252F%252Fm.youtube.com%252F")!
+    /// Google's account chooser (every signed-in account, plus "use
+    /// another account"), then back through youtube.com/signin, which is
+    /// what sets YouTube's cookies.
+    private static let signInURL = URL(string: "https://accounts.google.com/AccountChooser?service=youtube&hl=ja&continue=https%3A%2F%2Fwww.youtube.com%2Fsignin%3Faction_handle_signin%3Dtrue%26app%3Dm%26hl%3Dja%26next%3Dhttps%253A%252F%252Fm.youtube.com%252F")!
 
     var body: some View {
         NavigationStack {
@@ -477,5 +502,113 @@ private struct SignInWebView: UIViewRepresentable {
             if navigationAction.targetFrame == nil { webView.load(navigationAction.request) }
             return nil
         }
+    }
+}
+
+/// The accounts and channels signed in to this session, to choose which
+/// one the YouTube screen and player use.
+struct YouTubeAccountsView: View {
+    var onAddAccount: () -> Void
+    var onChange: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var accounts: [YouTubeAccount] = []
+    @State private var loading = true
+    @State private var failed = false
+    @State private var selectedID = YouTubeAccount.current?.id
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if loading {
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                } else if failed || accounts.isEmpty {
+                    Text("アカウントを読み込めませんでした")
+                        .foregroundStyle(.secondary)
+                }
+                let groups = Dictionary(grouping: accounts, by: { $0.email ?? "" })
+                ForEach(groups.keys.sorted(), id: \.self) { email in
+                    Section {
+                        ForEach(groups[email] ?? []) { account in
+                            Button {
+                                YouTubeClient.shared.select(account)
+                                selectedID = account.id
+                                Haptics.play(.success)
+                                onChange()
+                                dismiss()
+                            } label: {
+                                row(account)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    } header: {
+                        if !email.isEmpty { Text(verbatim: email) }
+                    }
+                }
+                Section {
+                    Button {
+                        onAddAccount()
+                    } label: {
+                        Label("アカウントを追加", systemImage: "person.crop.circle.badge.plus")
+                    }
+                }
+            }
+            .navigationTitle(Text("アカウント"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完了") { dismiss() }
+                }
+            }
+            .task { await load() }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    private func row(_ account: YouTubeAccount) -> some View {
+        HStack(spacing: 12) {
+            Group {
+                if let photo = account.photo {
+                    RemoteThumbnail(url: photo)
+                } else {
+                    Image(systemName: "person.crop.circle.fill")
+                        .resizable()
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(width: 36, height: 36)
+            .clipShape(Circle())
+            VStack(alignment: .leading, spacing: 2) {
+                Text(verbatim: account.name)
+                    .font(.body.weight(.semibold))
+                if let byline = account.byline {
+                    Text(verbatim: byline)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
+            if isChosen(account) {
+                Image(systemName: "checkmark")
+                    .foregroundStyle(Color.accentColor)
+            }
+        }
+        .contentShape(Rectangle())
+    }
+
+    private func isChosen(_ account: YouTubeAccount) -> Bool {
+        if let selectedID { return selectedID == account.id }
+        return account.isSelected
+    }
+
+    private func load() async {
+        loading = true
+        do {
+            accounts = try await YouTubeClient.shared.accounts()
+            failed = false
+        } catch {
+            failed = true
+        }
+        loading = false
     }
 }

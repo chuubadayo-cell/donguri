@@ -88,6 +88,11 @@ final class BrowserModel: NSObject {
                                               injectionTime: .atDocumentEnd,
                                               forMainFrameOnly: true,
                                               in: BrowserScripts.world))
+        // YouTube's ads come from youtube.com itself, out of the content
+        // blocker's reach; these deal with them on the page.
+        if BehaviorSettings.shared.contentBlocking {
+            YouTubeAdScripts.install(in: controller, world: BrowserScripts.world)
+        }
 
         webView = WKWebView(frame: .zero, configuration: configuration)
         webView.allowsBackForwardNavigationGestures = true

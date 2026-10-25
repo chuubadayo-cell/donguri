@@ -510,3 +510,91 @@ nonisolated enum SubtitleParser {
         return sorted
     }
 }
+
+// MARK: - Accounts
+
+/// A Google account or one of its channels (brand accounts), as YouTube's
+/// account switcher lists them. Requests made "as" it carry its index in
+/// the browser session (X-Goog-AuthUser) and, for a channel, its page ID.
+nonisolated struct YouTubeAccount: Codable, Hashable, Identifiable, Sendable {
+    var name: String
+    var byline: String?
+    var email: String?
+    var photo: URL?
+    var authUser: Int
+    var pageID: String?
+    var isSelected: Bool = false
+
+    var id: String { "\(authUser)|\(pageID ?? "")" }
+
+    private static let key = "iroha.youtube.account"
+
+    /// The account the app uses. Nil is YouTube's default for the session.
+    static var current: YouTubeAccount? {
+        get {
+            UserDefaults.standard.data(forKey: key).flatMap { try? JSONDecoder().decode(YouTubeAccount.self, from: $0) }
+        }
+        set {
+            if let newValue, let data = try? JSONEncoder().encode(newValue) {
+                UserDefaults.standard.set(data, forKey: key)
+            } else {
+                UserDefaults.standard.removeObject(forKey: key)
+            }
+        }
+    }
+
+    static func parse(_ json: Any) -> [YouTubeAccount] {
+        var accounts: [YouTubeAccount] = []
+        collect(json, email: nil, authUser: nil, into: &accounts)
+        var seen = Set<String>()
+        return accounts.filter { seen.insert($0.id).inserted }
+    }
+
+    private static func collect(_ node: Any, email: String?, authUser: Int?, into accounts: inout [YouTubeAccount]) {
+        if let array = node as? [Any] {
+            for child in array { collect(child, email: email, authUser: authUser, into: &accounts) }
+            return
+        }
+        guard let dictionary = node as? [String: Any] else { return }
+
+        // A section per Google account, headed by its address.
+        if let section = dictionary["accountSectionListRenderer"] as? [String: Any] {
+            var sectionEmail = email
+            if let header = YTParse.firstValue(forKey: "googleAccountHeaderRenderer", in: section["header"] ?? [:]) as? [String: Any] {
+                sectionEmail = YTParse.text(header["email"]) ?? sectionEmail
+            }
+            collect(section["contents"] ?? [], email: sectionEmail, authUser: authUser, into: &accounts)
+            return
+        }
+
+        if let item = dictionary["accountItem"] as? [String: Any] {
+            var account = YouTubeAccount(name: YTParse.text(item["accountName"]) ?? "",
+                                         byline: YTParse.text(item["channelHandle"]) ?? YTParse.text(item["accountByline"]),
+                                         email: email,
+                                         photo: YTParse.thumbnail(item["accountPhoto"]),
+                                         authUser: authUser ?? 0,
+                                         pageID: nil,
+                                         isSelected: item["isSelected"] as? Bool ?? false)
+            var tokens: [Any] = []
+            YTParse.allValues(forKey: "supportedTokens", in: item, into: &tokens)
+            for case let list as [[String: Any]] in tokens {
+                for token in list {
+                    if let page = token["pageIdToken"] as? [String: Any], let id = page["pageId"] as? String {
+                        account.pageID = id
+                    }
+                    if let signin = token["accountSigninToken"] as? [String: Any],
+                       let url = signin["signinUrl"] as? String,
+                       let match = url.firstMatch(of: /authuser=(\d+)/), let index = Int(match.1) {
+                        account.authUser = index
+                    }
+                }
+            }
+            if !account.name.isEmpty { accounts.append(account) }
+            return
+        }
+
+        for value in dictionary.values where value is [Any] || value is [String: Any] {
+            collect(value, email: email, authUser: authUser, into: &accounts)
+        }
+    }
+}

@@ -100,6 +100,8 @@ final class VideoPlayerModel {
     @ObservationIgnored private var itemObservation: NSKeyValueObservation?
     @ObservationIgnored private var errorObserver: NSObjectProtocol?
     @ObservationIgnored private var lastSaved = Date.distantPast
+    /// Play/pause shows at once; the page's own report catches up after.
+    @ObservationIgnored private var commandedPlayingUntil = Date.distantPast
 
     private static let positionsKey = "iroha.video.positions"
     private static let nativeFailedKey = "iroha.video.nativeFailedAt"
@@ -140,8 +142,12 @@ final class VideoPlayerModel {
     func start() async {
         guard !started else { return }
         started = true
-        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
-        try? AVAudioSession.sharedInstance().setActive(true)
+        // Off the main thread: activating the session can block for a while,
+        // which froze the player's buttons.
+        Task.detached(priority: .userInitiated) {
+            try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
+            try? AVAudioSession.sharedInstance().setActive(true)
+        }
         observePlayer()
         switch item {
         case .file(let url):
@@ -243,7 +249,9 @@ final class VideoPlayerModel {
         guard engine == .web else { return }
         isAd = state.isAd
         canSkipAd = state.canSkipAd
-        isPlaying = state.ready && !state.paused
+        if Date.now > commandedPlayingUntil {
+            isPlaying = state.ready && !state.paused
+        }
         isBuffering = !state.ready || state.waiting
         guard state.ready, !state.isAd else { return }
         clock.time = state.time
@@ -334,7 +342,10 @@ final class VideoPlayerModel {
         userPaused = true
         switch engine {
         case .native: player.pause()
-        case .web: web?.pause()
+        case .web:
+            isPlaying = false
+            commandedPlayingUntil = .now.addingTimeInterval(0.8)
+            web?.pause()
         }
     }
 
@@ -343,7 +354,10 @@ final class VideoPlayerModel {
         let rate = VideoSettings.shared.playbackRate
         switch engine {
         case .native: player.playImmediately(atRate: Float(rate))
-        case .web: web?.play(rate: rate)
+        case .web:
+            isPlaying = true
+            commandedPlayingUntil = .now.addingTimeInterval(0.8)
+            web?.play(rate: rate)
         }
     }
 

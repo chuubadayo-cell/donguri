@@ -129,7 +129,11 @@ final class YouTubeClient {
         request.setValue(header, forHTTPHeaderField: "Cookie")
         if let auth = Self.authorization(jar) {
             request.setValue(auth, forHTTPHeaderField: "Authorization")
-            request.setValue("0", forHTTPHeaderField: "X-Goog-AuthUser")
+            let account = YouTubeAccount.current
+            request.setValue(String(account?.authUser ?? 0), forHTTPHeaderField: "X-Goog-AuthUser")
+            if let pageID = account?.pageID {
+                request.setValue(pageID, forHTTPHeaderField: "X-Goog-PageId")
+            }
         }
     }
 
@@ -193,6 +197,24 @@ final class YouTubeClient {
         }
         print("[iroha] InnerTube \(endpoint) \(data.count) bytes")
         return data
+    }
+
+    // MARK: Accounts
+
+    /// Every account and channel signed in to this browser session, as
+    /// YouTube's own account switcher lists them.
+    func accounts() async throws -> [YouTubeAccount] {
+        let data = try await innertube("account/accounts_list", body: [
+            "requestType": "ACCOUNTS_LIST_REQUEST_TYPE_CHANNEL_SWITCHER",
+            "callCircumstance": "SWITCHING_USERS_FULL",
+        ])
+        let json = try JSONSerialization.jsonObject(with: data)
+        return YouTubeAccount.parse(json)
+    }
+
+    func select(_ account: YouTubeAccount) {
+        YouTubeAccount.current = account
+        config = nil
     }
 
     // MARK: Feeds
