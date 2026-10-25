@@ -65,6 +65,8 @@ final class VideoPlayerModel {
     private(set) var engine: Engine = .native
     private(set) var web: YouTubeWebPlayer?
     private(set) var isAd = false
+    /// Replaying a line to record a card's audio and pictures.
+    private(set) var isMakingCard = false
     private(set) var canSkipAd = false
 
     // Subtitles
@@ -487,7 +489,10 @@ final class VideoPlayerModel {
         popups.coverURL = nil
         // In YouTube's player a GIF means playing the line again, which
         // would jump the video about; that waits for the + instead.
-        if !(engine == .web && VideoSettings.shared.cardImage == .gif) {
+        // In YouTube's player the card's audio and pictures come from
+        // playing the line again, so that waits for the + instead of
+        // jumping the video about on every lookup.
+        if engine != .web {
             _ = mediaTask(for: cue, still: stillTime)
         }
         popups.mediaProvider = { [weak self] in
@@ -495,7 +500,7 @@ final class VideoPlayerModel {
             var media = await self.mediaTask(for: cue, still: stillTime).value
             // Audio made at lookup time can miss (not buffered yet); try
             // once more now that + has been pressed.
-            if VideoSettings.shared.cardAudio, media.audioURL == nil {
+            if VideoSettings.shared.cardAudio, media.audioURL == nil, self.engine != .web {
                 self.forgetMedia(for: cue)
                 let again = await self.mediaTask(for: cue, still: stillTime).value
                 media.audioURL = again.audioURL
@@ -523,8 +528,10 @@ final class VideoPlayerModel {
             let stream = clipSource
             let hls = info?.hlsURL
             let task = Task<CardMedia, Never> {
-                await Self.webMedia(web: web, stream: stream, hls: hls, start: start, end: end, still: still,
-                                    imageKind: imageKind, wantsAudio: wantsAudio)
+                self.isMakingCard = true
+                defer { self.isMakingCard = false }
+                return await Self.webMedia(web: web, stream: stream, hls: hls, start: start, end: end, still: still,
+                                           imageKind: imageKind, wantsAudio: wantsAudio)
             }
             mediaTasks[key] = task
             return task
@@ -546,39 +553,70 @@ final class VideoPlayerModel {
     private static func webMedia(web: YouTubeWebPlayer, stream: ClipSource?, hls: URL?, start: Double, end: Double,
                                  still: Double, imageKind: ClipImageKind, wantsAudio: Bool) async -> CardMedia {
         var media = CardMedia()
-        if wantsAudio {
-            if let stream {
-                media.audioURL = await ClipCapture.audio(from: stream, start: start, end: end)
+        // YouTube's page playing a plain HLS stream: cut from that, no replay.
+        if let stream {
+            if wantsAudio { media.audioURL = await ClipCapture.audio(from: stream, start: start, end: end) }
+            media.imageURL = await ClipCapture.image(from: stream, kind: imageKind, start: start, end: end, stillAt: still)
+            if (!wantsAudio || media.audioURL != nil), (imageKind == .none || media.imageURL != nil) { return media }
+        }
+
+        // One pass over the line, as asbplayer does it: audio and pictures
+        // recorded together, so they cover exactly the same stretch.
+        let length = end - start
+        let fps: Double = length > 5 ? 6 : 8
+        let stillTime = imageKind == .screenshot ? min(max(still, start), end - 0.05) : nil
+        let recording = await web.record(from: start, to: end, fps: fps, maxWidth: 400,
+                                         audio: wantsAudio && media.audioURL == nil,
+                                         frames: imageKind == .gif && media.imageURL == nil,
+                                         stillAt: media.imageURL == nil ? stillTime : nil)
+
+        if wantsAudio, media.audioURL == nil, let audio = recording.audio {
+            let raw = ClipCapture.newFile(recording.audioExtension)
+            if (try? audio.write(to: raw)) != nil {
+                // Re-encoded to a plain .m4a, which every Anki plays.
+                if let clean = await ClipCapture.exportAudio(asset: AVURLAsset(url: raw), range: nil) {
+                    try? FileManager.default.removeItem(at: raw)
+                    media.audioURL = clean
+                } else {
+                    media.audioURL = raw
+                }
             }
-            if media.audioURL == nil, let buffered = await web.bufferedAudio(from: start, to: end) {
+        }
+        if media.imageURL == nil {
+            switch imageKind {
+            case .none:
+                break
+            case .screenshot:
+                if let data = recording.still, let image = UIImage(data: data)?.cgImage {
+                    media.imageURL = ClipCapture.writeJPEG(image)
+                }
+            case .gif:
+                var frames = recording.frames.compactMap { UIImage(data: $0)?.cgImage }
+                // A long line keeps an even spread of at most 64 frames.
+                if frames.count > 64 {
+                    let step = Double(frames.count) / 64
+                    frames = (0..<64).map { frames[Int(Double($0) * step)] }
+                }
+                if frames.count > 1 {
+                    media.imageURL = ClipCapture.writeGIF(frames, delay: length / Double(frames.count))
+                }
+            }
+        }
+
+        // Fallbacks, if the recording missed something.
+        if wantsAudio, media.audioURL == nil {
+            if let buffered = await web.bufferedAudio(from: start, to: end) {
                 media.audioURL = await ClipCapture.cutFragmentedMP4(buffered.data, firstTime: buffered.firstTime,
                                                                     start: start, end: end)
-                if media.audioURL == nil { print("[iroha] card audio: the buffered audio couldn't be cut") }
             }
-            // Last resort: the stream YouTube offered for direct playback.
-            // It may not play, but its audio segments can often still be fetched.
             if media.audioURL == nil, let hls {
                 media.audioURL = await ClipCapture.audio(from: .stream(hls), start: start, end: end)
             }
             if media.audioURL == nil { print("[iroha] no audio for the card (web player)") }
         }
-        switch imageKind {
-        case .none:
-            break
-        case .screenshot:
-            if let data = await web.frame(at: still, maxWidth: 960), let image = UIImage(data: data)?.cgImage {
-                media.imageURL = ClipCapture.writeJPEG(image)
-            }
-        case .gif:
-            let length = min(end - start, 8)
-            let fps: Double = length > 5 ? 6 : 8
-            let frames = await web.frames(from: start, to: start + length, fps: fps, maxWidth: 400)
-                .compactMap { UIImage(data: $0)?.cgImage }
-            if frames.count > 1 {
-                media.imageURL = ClipCapture.writeGIF(frames, delay: 1 / fps)
-            } else if let data = await web.frame(at: still, maxWidth: 960), let image = UIImage(data: data)?.cgImage {
-                media.imageURL = ClipCapture.writeJPEG(image)
-            }
+        if imageKind != .none, media.imageURL == nil,
+           let data = await web.frame(at: still, maxWidth: 960), let image = UIImage(data: data)?.cgImage {
+            media.imageURL = ClipCapture.writeJPEG(image)
         }
         return media
     }

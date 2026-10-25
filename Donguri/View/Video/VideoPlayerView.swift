@@ -157,6 +157,20 @@ struct VideoPlayerView: View {
                 adBadge(fullScreen: fullScreen)
             }
 
+            if model.isMakingCard {
+                VStack {
+                    Label("カード用に録音中…", systemImage: "waveform")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Capsule().fill(Color.red.opacity(0.85)))
+                        .padding(.top, fullScreen ? 16 : 8)
+                    Spacer()
+                }
+                .allowsHitTesting(false)
+            }
+
             controls(fullScreen: fullScreen)
                 .opacity(controlsVisible ? 1 : 0)
                 .allowsHitTesting(controlsVisible)

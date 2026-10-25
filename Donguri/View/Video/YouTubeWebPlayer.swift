@@ -187,6 +187,38 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
         return (result as? [String] ?? []).compactMap(Self.decodeDataURL)
     }
 
+    struct Recording {
+        var audio: Data?
+        var audioExtension = "m4a"
+        var frames: [Data] = []
+        var still: Data?
+    }
+
+    /// One pass over [start, end] that keeps the audio and the pictures
+    /// together (see `record` in the page script).
+    func record(from start: Double, to end: Double, fps: Double, maxWidth: Int,
+                audio: Bool, frames: Bool, stillAt: Double?) async -> Recording {
+        var arguments: [String: Any] = ["start": start, "end": end, "fps": fps, "width": maxWidth,
+                                        "audio": audio, "frames": frames]
+        arguments["still"] = stillAt ?? NSNull()
+        let result = try? await webView.callAsyncJavaScript(
+            "return await irohaPlayer.record(start, end, fps, width, audio, frames, still)",
+            arguments: arguments, in: nil, contentWorld: Self.world)
+        var recording = Recording()
+        guard let dictionary = result as? [String: Any] else {
+            print("[iroha] card recording: no result from the page")
+            return recording
+        }
+        if let error = dictionary["audioError"] as? String { print("[iroha] card audio recording: \(error)") }
+        if let error = dictionary["error"] as? String { print("[iroha] card recording: \(error)") }
+        recording.audio = (dictionary["audio"] as? String).flatMap(Self.decodeDataURL)
+        if let mime = dictionary["mime"] as? String, mime.contains("webm") { recording.audioExtension = "webm" }
+        recording.frames = (dictionary["frames"] as? [String] ?? []).compactMap(Self.decodeDataURL)
+        recording.still = (dictionary["still"] as? String).flatMap(Self.decodeDataURL)
+        print("[iroha] card recording: audio \(recording.audio?.count ?? 0) bytes, \(recording.frames.count) frames, still \(recording.still != nil)")
+        return recording
+    }
+
     /// The audio YouTube has buffered for a stretch: an MP4 init segment and
     /// the fragments covering it, and where the first fragment starts.
     func bufferedAudio(from start: Double, to end: Double) async -> (data: Data, firstTime: Double)? {
@@ -515,6 +547,85 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
           await seekTo(v, back);
           if (!wasPaused) { v.play().catch(function () {}); }
           return frames;
+        },
+
+        // Plays the line once (out loud, at normal speed) and keeps what a
+        // card needs from that one pass: the audio, recorded through Web
+        // Audio, and the GIF frames or the screenshot. Audio and pictures
+        // cover exactly the same stretch.
+        record: async function (start, end, fps, width, wantAudio, wantFrames, stillTime) {
+          const v = video();
+          if (!v) { return { error: 'no video' }; }
+          const back = v.currentTime, wasPaused = v.paused, rate = v.playbackRate;
+          let recorder = null, destination = null, graph = null, audioError = null;
+          const chunks = [];
+          if (wantAudio) {
+            try {
+              graph = window.__irohaAudioGraph;
+              if (!graph || graph.element !== v) {
+                // Routing the element through Web Audio is permanent, so it
+                // is set up once per element and also kept playing out loud.
+                const Context = window.AudioContext || window.webkitAudioContext;
+                const context = (graph && graph.context) || new Context();
+                const source = context.createMediaElementSource(v);
+                source.connect(context.destination);
+                v.addEventListener('play', function () { try { context.resume(); } catch (e) {} });
+                graph = window.__irohaAudioGraph = { context: context, source: source, element: v };
+              }
+              await graph.context.resume();
+              if (graph.context.state !== 'running') { throw new Error('audio context is ' + graph.context.state); }
+              destination = graph.context.createMediaStreamDestination();
+              graph.source.connect(destination);
+              const type = (window.MediaRecorder && MediaRecorder.isTypeSupported('audio/mp4')) ? 'audio/mp4' : '';
+              recorder = new MediaRecorder(destination.stream, type ? { mimeType: type, audioBitsPerSecond: 128000 } : undefined);
+              recorder.ondataavailable = function (e) { if (e.data && e.data.size) { chunks.push(e.data); } };
+            } catch (e) {
+              recorder = null;
+              audioError = String(e && e.message || e);
+            }
+          }
+          v.pause();
+          v.__irohaMuted = false; v.muted = false;
+          v.playbackRate = 1;
+          await seekTo(v, start);
+          const frames = [];
+          let still = null, next = start;
+          if (recorder) { recorder.start(); }
+          await v.play().catch(function () {});
+          const deadline = Date.now() + (end - start) * 1000 + 8000;
+          while (v.currentTime < end && Date.now() < deadline) {
+            const t = v.currentTime;
+            if (wantFrames && t >= next) {
+              const f = draw(v, width);
+              if (f) { frames.push(f); }
+              next += 1 / fps;
+            }
+            if (still === null && stillTime !== null && t >= stillTime) { still = draw(v, 960); }
+            await wait(15);
+          }
+          v.pause();
+          let audio = null, mime = null;
+          if (recorder) {
+            await new Promise(function (resolve) { recorder.onstop = resolve; recorder.stop(); });
+            try { graph.source.disconnect(destination); } catch (e) {}
+            const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/mp4' });
+            mime = blob.type;
+            if (blob.size > 0) {
+              audio = await new Promise(function (resolve) {
+                const reader = new FileReader();
+                reader.onloadend = function () { resolve(reader.result); };
+                reader.onerror = function () { resolve(null); };
+                reader.readAsDataURL(blob);
+              });
+            } else {
+              audioError = 'recording was empty';
+            }
+          }
+          if (still === null && stillTime !== null) { still = draw(v, 960); }
+          v.playbackRate = rate;
+          await seekTo(v, back);
+          if (!wasPaused) { v.play().catch(function () {}); }
+          return { audio: audio, mime: mime, frames: frames, still: still, audioError: audioError };
         }
       };
     })();

@@ -1813,6 +1813,22 @@
         }
       }
     },
+    "カード用に録音中…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recording for the card…"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "カード用に録音中…"
+          }
+        }
+      }
+    },
     "キャッシュ" : {
       "localizations" : {
         "en" : {
