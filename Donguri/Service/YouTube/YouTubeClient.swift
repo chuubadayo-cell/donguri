@@ -340,7 +340,10 @@ final class YouTubeClient {
            let data = try? await innertube("get_transcript", body: ["params": params]),
            let json = try? JSONSerialization.jsonObject(with: data),
            let cues = YTParse.transcriptCues(json) {
-            return cues
+            // Automatic captions there come in arbitrary chunks; regroup
+            // them into sentences.
+            let automatic = (track ?? Self.defaultTrack(in: info.captionTracks))?.isAutomatic ?? false
+            return automatic ? CaptionSentences.regroup(cues) : cues
         }
         // YouTube's own player, which can get past its token check.
         guard let track else { return nil }
@@ -358,7 +361,9 @@ final class YouTubeClient {
         request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
         await addCookies(to: &request)
         guard let (data, _) = try? await session.data(for: request), !data.isEmpty else { return nil }
-        return YTParse.json3Cues(data) ?? YTParse.xmlCues(String(decoding: data, as: UTF8.self))
+        if let cues = YTParse.json3Cues(data) { return cues }
+        let xml = YTParse.xmlCues(String(decoding: data, as: UTF8.self))
+        return track.isAutomatic ? xml.map(CaptionSentences.regroup) : xml
     }
 
     /// Japanese written by a person, else Japanese automatic captions,

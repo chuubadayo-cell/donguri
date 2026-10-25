@@ -501,6 +501,13 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
         });
       }
       function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+      // Sound on, at full volume. The replay for a card must be audible:
+      // the recording is taken from what the element plays.
+      function unmute(v) {
+        v.__irohaMuted = false;
+        if (v.muted) { v.muted = false; }
+        if (v.volume < 1) { v.volume = 1; }
+      }
 
       window.irohaPlayer = {
         play: function (rate) { const v = video(); if (!v) { return; } if (rate) { v.playbackRate = rate; } v.play().catch(function () {}); },
@@ -526,7 +533,7 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
           if (!v) { return []; }
           const back = v.currentTime, wasPaused = v.paused, rate = v.playbackRate;
           v.pause();
-          v.__irohaMuted = true; v.muted = true;
+          unmute(v);
           await seekTo(v, start);
           v.playbackRate = 1;
           await v.play().catch(function () {});
@@ -543,7 +550,6 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
           }
           v.pause();
           v.playbackRate = rate;
-          v.muted = false; v.__irohaMuted = false;
           await seekTo(v, back);
           if (!wasPaused) { v.play().catch(function () {}); }
           return frames;
@@ -559,8 +565,13 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
           const back = v.currentTime, wasPaused = v.paused, rate = v.playbackRate;
           let recorder = null, destination = null, graph = null, audioError = null;
           const chunks = [];
+          let analyser = null, peak = 0;
+          const samples = new Float32Array(1024);
           if (wantAudio) {
             try {
+              // Web Audio is "ambient" by default on iOS: the silent switch
+              // mutes it. As playback it sounds (and records) like the video.
+              try { if (navigator.audioSession) { navigator.audioSession.type = 'playback'; } } catch (e) {}
               graph = window.__irohaAudioGraph;
               if (!graph || graph.element !== v) {
                 // Routing the element through Web Audio is permanent, so it
@@ -576,6 +587,10 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
               if (graph.context.state !== 'running') { throw new Error('audio context is ' + graph.context.state); }
               destination = graph.context.createMediaStreamDestination();
               graph.source.connect(destination);
+              // To tell a recording of silence from one with sound.
+              analyser = graph.context.createAnalyser();
+              analyser.fftSize = 1024;
+              graph.source.connect(analyser);
               const type = (window.MediaRecorder && MediaRecorder.isTypeSupported('audio/mp4')) ? 'audio/mp4' : '';
               recorder = new MediaRecorder(destination.stream, type ? { mimeType: type, audioBitsPerSecond: 128000 } : undefined);
               recorder.ondataavailable = function (e) { if (e.data && e.data.size) { chunks.push(e.data); } };
@@ -585,9 +600,10 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
             }
           }
           v.pause();
-          v.__irohaMuted = false; v.muted = false;
+          unmute(v);
           v.playbackRate = 1;
           await seekTo(v, start);
+          unmute(v);
           const frames = [];
           let still = null, next = start;
           if (recorder) { recorder.start(); }
@@ -601,6 +617,12 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
               next += 1 / fps;
             }
             if (still === null && stillTime !== null && t >= stillTime) { still = draw(v, 960); }
+            // YouTube's player can mute the element again after a seek.
+            if (v.muted || v.volume < 1) { unmute(v); }
+            if (analyser) {
+              analyser.getFloatTimeDomainData(samples);
+              for (let i = 0; i < samples.length; i++) { const a = Math.abs(samples[i]); if (a > peak) { peak = a; } }
+            }
             await wait(15);
           }
           v.pause();
@@ -608,9 +630,13 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
           if (recorder) {
             await new Promise(function (resolve) { recorder.onstop = resolve; recorder.stop(); });
             try { graph.source.disconnect(destination); } catch (e) {}
+            try { if (analyser) { graph.source.disconnect(analyser); } } catch (e) {}
             const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/mp4' });
             mime = blob.type;
-            if (blob.size > 0) {
+            if (analyser && peak < 0.0005) {
+              // Silence: let the fallbacks (the player's buffer) take over.
+              audioError = 'recording was silent (peak ' + peak.toFixed(5) + ')';
+            } else if (blob.size > 0) {
               audio = await new Promise(function (resolve) {
                 const reader = new FileReader();
                 reader.onloadend = function () { resolve(reader.result); };

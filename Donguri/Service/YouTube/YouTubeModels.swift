@@ -345,6 +345,13 @@ nonisolated enum YTParse {
     static func json3Cues(_ data: Data) -> [SubtitleCue]? {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let events = json["events"] as? [[String: Any]] else { return nil }
+        // Automatic captions time every word; rebuild those as sentences.
+        let wordTimed = events.contains { event in
+            (event["segs"] as? [[String: Any]])?.contains { $0["tOffsetMs"] != nil } ?? false
+        }
+        if wordTimed, let lines = sentenceCues(events), !lines.isEmpty {
+            return lines
+        }
         var cues: [SubtitleCue] = []
         for event in events {
             guard let segments = event["segs"] as? [[String: Any]] else { continue }
@@ -359,6 +366,37 @@ nonisolated enum YTParse {
             cues.append(SubtitleCue(id: cues.count, start: start, end: start + duration, text: text))
         }
         return SubtitleParser.tidy(cues)
+    }
+
+    /// Every word of automatic json3 captions with its own time, regrouped
+    /// into sentence-sized lines (`CaptionSentences`).
+    private static func sentenceCues(_ events: [[String: Any]]) -> [SubtitleCue]? {
+        var words: [CaptionSentences.Piece] = []
+        let starts = events.compactMap { event -> Double? in
+            guard event["segs"] != nil, (event["aAppend"] as? Int) != 1 else { return nil }
+            return Double(event["tStartMs"] as? Int ?? 0) / 1000
+        }
+        var eventIndex = 0
+        for event in events {
+            guard let segments = event["segs"] as? [[String: Any]], (event["aAppend"] as? Int) != 1 else { continue }
+            let eventStart = Double(event["tStartMs"] as? Int ?? 0) / 1000
+            var eventEnd = eventStart + Double(event["dDurationMs"] as? Int ?? 2000) / 1000
+            // Rolling windows overlap; a window's words end when the next starts.
+            if eventIndex + 1 < starts.count { eventEnd = min(eventEnd, max(starts[eventIndex + 1], eventStart)) }
+            eventIndex += 1
+            let timed = segments.map { segment -> (Double, String) in
+                let offset = Double(segment["tOffsetMs"] as? Int ?? 0) / 1000
+                let text = (segment["utf8"] as? String ?? "").replacingOccurrences(of: "\u{200B}", with: "")
+                return (eventStart + offset, text)
+            }
+            for (index, word) in timed.enumerated() {
+                guard !word.1.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
+                let end = index + 1 < timed.count ? timed[index + 1].0 : eventEnd
+                words.append(CaptionSentences.Piece(start: word.0, end: max(end, word.0 + 0.05), text: word.1))
+            }
+        }
+        guard !words.isEmpty else { return nil }
+        return CaptionSentences.lines(from: words)
     }
 
     /// The older XML formats (srv3 `<p t= d=>`, and `<text start= dur=>`).

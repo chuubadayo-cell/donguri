@@ -33,6 +33,8 @@ struct VideoPlayerView: View {
     @State private var seekFlash: SeekFlash?
     /// How far the player has been pulled down (swipe down to minimize).
     @State private var pullDown: CGFloat = 0
+    /// The video's height, to tell a swipe from a drag on the scrubber.
+    @State private var videoHeight: CGFloat = 0
     /// The last tap on the video, to tell a double tap without making
     /// single taps wait for it.
     @State private var lastTap: (time: Date, forward: Bool, controlsWereVisible: Bool)?
@@ -188,10 +190,12 @@ struct VideoPlayerView: View {
         }
         .clipped()
         .animation(.easeInOut(duration: 0.2), value: controlsVisible)
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { videoHeight = $0 }
     }
 
     /// Swipe down on the video: in portrait it minimizes (closes) the
     /// player, in full screen it leaves full screen, as in the YouTube app.
+    /// Swipe left or right: the next or previous subtitle line.
     private func pullDownGesture(fullScreen: Bool) -> some Gesture {
         DragGesture(minimumDistance: 18)
             .onChanged { value in
@@ -205,6 +209,22 @@ struct VideoPlayerView: View {
             }
             .onEnded { value in
                 let down = value.translation.height
+                let across = value.translation.width
+                // Sideways: a line forward (swipe left) or back (swipe
+                // right), except on the scrubber, which drags the same way.
+                let onScrubber = controlsVisible && value.startLocation.y > videoHeight - (fullScreen ? 64 : 52)
+                if !onScrubber, abs(across) > abs(down) * 1.4,
+                   abs(across) > 60 || (abs(value.predictedEndTranslation.width) > 180 && abs(across) > 24) {
+                    if pullDown != 0 { withAnimation(.snappy) { pullDown = 0 } }
+                    let forward = across < 0
+                    if forward { model.nextCue() } else { model.previousCue() }
+                    if model.cues.isEmpty {
+                        flash(forward: forward, label: forward ? "+10s" : "-10s")
+                    } else {
+                        flash(forward: forward, label: forward ? String(localized: "次の字幕") : String(localized: "前の字幕"))
+                    }
+                    return
+                }
                 let flicked = value.predictedEndTranslation.height > 260
                 let vertical = down > abs(value.translation.width) * 1.4
                 if vertical, down > 110 || (flicked && down > 30) {
