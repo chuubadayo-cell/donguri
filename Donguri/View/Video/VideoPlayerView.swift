@@ -95,6 +95,11 @@ struct VideoPlayerView: View {
                 .presentationDetents([.medium, .large])
             }
         }
+        .overlay(alignment: .bottom) {
+            if let notice = model.cardNotice {
+                cardNoticeView(notice)
+            }
+        }
         .overlay {
             PopupStackLayer(stack: model.popups)
         }
@@ -274,6 +279,27 @@ struct VideoPlayerView: View {
                     showControls(autoHide: true)
                 }
             }
+    }
+
+    /// Why a card came out without its sentence audio, readable on the
+    /// phone. Tap to dismiss.
+    private func cardNoticeView(_ notice: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Label("文の音声を取得できませんでした", systemImage: "speaker.slash")
+                .font(.footnote.weight(.semibold))
+            Text(verbatim: notice)
+                .font(.caption2.monospaced())
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .foregroundStyle(.white)
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color.black.opacity(0.85)))
+        .padding(.horizontal, 12)
+        .padding(.bottom, 40)
+        .onTapGesture { model.dismissCardNotice() }
+        .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
     private func flash(forward: Bool, label: String) {

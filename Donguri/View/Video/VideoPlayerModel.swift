@@ -67,6 +67,23 @@ final class VideoPlayerModel {
     private(set) var isAd = false
     /// Replaying a line to record a card's audio and pictures.
     private(set) var isMakingCard = false
+    /// Why the last card has no sentence audio, shown for a while.
+    private(set) var cardNotice: String?
+    @ObservationIgnored private var cardNoticeTask: Task<Void, Never>?
+
+    func showCardNotice(_ text: String) {
+        cardNotice = text
+        cardNoticeTask?.cancel()
+        cardNoticeTask = Task {
+            try? await Task.sleep(for: .seconds(15))
+            if !Task.isCancelled { self.cardNotice = nil }
+        }
+    }
+
+    func dismissCardNotice() {
+        cardNoticeTask?.cancel()
+        cardNotice = nil
+    }
     private(set) var canSkipAd = false
 
     // Subtitles
@@ -512,7 +529,14 @@ final class VideoPlayerModel {
                     media.audioURL = mp3
                 } else {
                     print("[iroha] couldn't convert the card audio to MP3; sending \(audio.pathExtension)")
+                    media.audioNotes.append("MP3 conversion failed; sent .\(audio.pathExtension)")
                 }
+            }
+            if VideoSettings.shared.cardAudio, media.audioURL == nil {
+                // Shown on the video so the reason can be read off the phone.
+                let reason = media.audioNotes.isEmpty ? String(localized: "音声を取得できませんでした") : media.audioNotes.joined(separator: "\n")
+                print("[iroha] card without sentence audio: \(reason)")
+                self.showCardNotice(reason)
             }
             return media
         }
@@ -549,7 +573,11 @@ final class VideoPlayerModel {
             async let audio: URL? = wantsAudio ? await ClipCapture.audio(from: source, start: start, end: end) : nil
             async let image: URL? = await ClipCapture.image(from: source, kind: imageKind,
                                                             start: start, end: end, stillAt: still)
-            return CardMedia(imageURL: await image, audioURL: await audio)
+            var media = CardMedia(imageURL: await image, audioURL: await audio)
+            if wantsAudio, media.audioURL == nil {
+                media.audioNotes.append("built-in player: couldn't cut the audio from the stream (\(String(describing: source).prefix(80)))")
+            }
+            return media
         }
         mediaTasks[key] = task
         return task
@@ -563,7 +591,10 @@ final class VideoPlayerModel {
         var media = CardMedia()
         // YouTube's page playing a plain HLS stream: cut from that, no replay.
         if let stream {
-            if wantsAudio { media.audioURL = await ClipCapture.audio(from: stream, start: start, end: end) }
+            if wantsAudio {
+                media.audioURL = await ClipCapture.audio(from: stream, start: start, end: end)
+                media.audioNotes.append("HLS stream: \(media.audioURL == nil ? "failed" : "ok")")
+            }
             media.imageURL = await ClipCapture.image(from: stream, kind: imageKind, start: start, end: end, stillAt: still)
             if (!wantsAudio || media.audioURL != nil), (imageKind == .none || media.imageURL != nil) { return media }
         }
@@ -578,16 +609,30 @@ final class VideoPlayerModel {
                                          frames: imageKind == .gif && media.imageURL == nil,
                                          stillAt: media.imageURL == nil ? stillTime : nil)
 
-        if wantsAudio, media.audioURL == nil, let audio = recording.audio {
-            let raw = ClipCapture.newFile(recording.audioExtension)
-            if (try? audio.write(to: raw)) != nil {
-                // Re-encoded to a plain .m4a, which every Anki plays.
-                if let clean = await ClipCapture.exportAudio(asset: AVURLAsset(url: raw), range: nil) {
-                    try? FileManager.default.removeItem(at: raw)
-                    media.audioURL = clean
+        if wantsAudio, media.audioURL == nil {
+            if let audio = recording.audio {
+                let raw = ClipCapture.newFile(recording.audioExtension)
+                if (try? audio.write(to: raw)) != nil {
+                    // Re-encoded to a plain .m4a, which every Anki plays.
+                    var file = raw
+                    if let clean = await ClipCapture.exportAudio(asset: AVURLAsset(url: raw), range: nil) {
+                        try? FileManager.default.removeItem(at: raw)
+                        file = clean
+                    }
+                    // A recording of silence (the page's audio didn't reach
+                    // Web Audio) is no use; the fallbacks below get a go.
+                    let peak = await MP3Encoder.peak(file)
+                    if let peak, peak < 0.002 {
+                        media.audioNotes.append("recording silent (peak \(String(format: "%.4f", peak)); \(recording.note))")
+                    } else {
+                        media.audioURL = file
+                        media.audioNotes.append("recording ok (peak \(peak.map { String(format: "%.3f", $0) } ?? "unreadable"))")
+                    }
                 } else {
-                    media.audioURL = raw
+                    media.audioNotes.append("recording couldn't be saved")
                 }
+            } else {
+                media.audioNotes.append("recording: nothing (\(recording.note))")
             }
         }
         if media.imageURL == nil {
@@ -613,12 +658,17 @@ final class VideoPlayerModel {
 
         // Fallbacks, if the recording missed something.
         if wantsAudio, media.audioURL == nil {
-            if let buffered = await web.bufferedAudio(from: start, to: end) {
-                media.audioURL = await ClipCapture.cutFragmentedMP4(buffered.data, firstTime: buffered.firstTime,
+            let buffered = await web.bufferedAudio(from: start, to: end)
+            if let clip = buffered.clip {
+                media.audioURL = await ClipCapture.cutFragmentedMP4(clip.data, firstTime: clip.firstTime,
                                                                     start: start, end: end)
+                media.audioNotes.append("player's buffer: \(media.audioURL == nil ? "couldn't cut it" : "ok")")
+            } else {
+                media.audioNotes.append("player's buffer: \(buffered.error)")
             }
             if media.audioURL == nil, let hls {
                 media.audioURL = await ClipCapture.audio(from: .stream(hls), start: start, end: end)
+                media.audioNotes.append("direct HLS: \(media.audioURL == nil ? "failed" : "ok")")
             }
             if media.audioURL == nil { print("[iroha] no audio for the card (web player)") }
         }

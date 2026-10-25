@@ -39,6 +39,20 @@ nonisolated enum MP3Encoder {
         }
     }
 
+    /// The loudest sample in a file (0...1), or nil if it can't be read.
+    /// A recording of silence peaks near zero.
+    static func peak(_ url: URL) async -> Float? {
+        await Task.detached(priority: .userInitiated) {
+            guard let audio = pcm(from: url) else { return nil }
+            var loudest: Int16 = 0
+            for sample in audio.samples {
+                let level = sample == .min ? .max : abs(sample)
+                if level > loudest { loudest = level }
+            }
+            return Float(loudest) / 32767
+        }.value
+    }
+
     /// Rates MP3 (and shine) can take as they are.
     private static let mp3Rates = [44100, 48000, 32000, 22050, 24000, 16000]
 

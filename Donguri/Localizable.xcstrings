@@ -4762,6 +4762,22 @@
         }
       }
     },
+    "文の音声を取得できませんでした" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't get the sentence audio"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文の音声を取得できませんでした"
+          }
+        }
+      }
+    },
     "文字" : {
       "localizations" : {
         "en" : {
@@ -6898,6 +6914,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "非表示のスレを隠す"
+          }
+        }
+      }
+    },
+    "音声を取得できませんでした" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't get the audio"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音声を取得できませんでした"
           }
         }
       }

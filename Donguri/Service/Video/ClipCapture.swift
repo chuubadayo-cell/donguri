@@ -24,6 +24,9 @@ import VideoToolbox
 nonisolated struct CardMedia: Sendable {
     var imageURL: URL?
     var audioURL: URL?
+    /// What each way of getting the audio did, shown when a card ends up
+    /// without it.
+    var audioNotes: [String] = []
 }
 
 /// Where a video comes from, for cutting clips out of it.

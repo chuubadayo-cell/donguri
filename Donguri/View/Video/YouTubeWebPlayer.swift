@@ -189,6 +189,9 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
 
     struct Recording {
         var audio: Data?
+        /// The loudest sample the page heard while recording (-1: unknown).
+        var peak: Double = -1
+        var note = ""
         var audioExtension = "m4a"
         var frames: [Data] = []
         var still: Data?
@@ -212,6 +215,14 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
         if let error = dictionary["audioError"] as? String { print("[iroha] card audio recording: \(error)") }
         if let error = dictionary["error"] as? String { print("[iroha] card recording: \(error)") }
         recording.audio = (dictionary["audio"] as? String).flatMap(Self.decodeDataURL)
+        recording.peak = dictionary["peak"] as? Double ?? -1
+        var parts: [String] = []
+        if let error = dictionary["audioError"] as? String { parts.append(error) }
+        if let error = dictionary["error"] as? String { parts.append(error) }
+        parts.append("page peak \(String(format: "%.4f", recording.peak))")
+        parts.append("context \(dictionary["context"] as? String ?? "?")")
+        parts.append("src \(dictionary["src"] as? String ?? "?")")
+        recording.note = parts.joined(separator: ", ")
         if let mime = dictionary["mime"] as? String, mime.contains("webm") { recording.audioExtension = "webm" }
         recording.frames = (dictionary["frames"] as? [String] ?? []).compactMap(Self.decodeDataURL)
         recording.still = (dictionary["still"] as? String).flatMap(Self.decodeDataURL)
@@ -221,20 +232,22 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
 
     /// The audio YouTube has buffered for a stretch: an MP4 init segment and
     /// the fragments covering it, and where the first fragment starts.
-    func bufferedAudio(from start: Double, to end: Double) async -> (data: Data, firstTime: Double)? {
+    func bufferedAudio(from start: Double, to end: Double) async -> (clip: (data: Data, firstTime: Double)?, error: String) {
         let result = try? await webView.callAsyncJavaScript("return window.__irohaAudioClip ? window.__irohaAudioClip(start, end) : null",
                                                            arguments: ["start": start, "end": end],
                                                            in: nil, contentWorld: .page)
-        if let dictionary = result as? [String: Any], let error = dictionary["error"] as? String {
-            print("[iroha] card audio from the player's buffer: \(error)")
+        var error = ""
+        if let dictionary = result as? [String: Any], let message = dictionary["error"] as? String {
+            error = message
         } else if result == nil {
-            print("[iroha] card audio: the page has no audio hook (the player may use a worker)")
+            error = "the page has no audio hook"
         }
+        if !error.isEmpty { print("[iroha] card audio from the player's buffer: \(error)") }
         guard let dictionary = result as? [String: Any],
               let base64 = dictionary["data"] as? String,
               let data = Data(base64Encoded: base64),
-              let first = dictionary["first"] as? Double else { return nil }
-        return (data, first)
+              let first = dictionary["first"] as? Double else { return (nil, error.isEmpty ? "nothing returned" : error) }
+        return ((data, first), "")
     }
 
     private static func decodeDataURL(_ string: String) -> Data? {
@@ -350,7 +363,11 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
         const add = M.prototype.addSourceBuffer;
         M.prototype.addSourceBuffer = function (mime) {
           const buffer = add.apply(this, arguments);
-          try { if (/^audio\\/mp4/i.test(String(mime))) { buffer.__irohaAudio = true; } } catch (e) {}
+          try {
+            (window.__irohaMimes = window.__irohaMimes || []).push(String(mime).slice(0, 48));
+            if (window.__irohaMimes.length > 6) { window.__irohaMimes.shift(); }
+            if (/^audio\\/mp4/i.test(String(mime))) { buffer.__irohaAudio = true; }
+          } catch (e) {}
           return buffer;
         };
       }
@@ -407,7 +424,8 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
           const held = stores.map(function (s) {
             return s.frags.length ? s.frags[0].t.toFixed(1) + '-' + s.frags[s.frags.length - 1].t.toFixed(1) : 'empty';
           });
-          return { error: 'not buffered (' + start.toFixed(1) + '-' + end.toFixed(1) + '; have ' + (held.join(', ') || 'no audio buffers') + ')' };
+          return { error: 'not buffered (' + start.toFixed(1) + '-' + end.toFixed(1) + '; have ' + (held.join(', ') || 'no audio buffers') +
+                   '; buffers made: ' + ((window.__irohaMimes || []).join(' | ') || 'none') + ')' };
         }
         const store = best.store;
         let size = store.init.length;
@@ -633,10 +651,7 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
             try { if (analyser) { graph.source.disconnect(analyser); } } catch (e) {}
             const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/mp4' });
             mime = blob.type;
-            if (analyser && peak < 0.0005) {
-              // Silence: let the fallbacks (the player's buffer) take over.
-              audioError = 'recording was silent (peak ' + peak.toFixed(5) + ')';
-            } else if (blob.size > 0) {
+            if (blob.size > 0) {
               audio = await new Promise(function (resolve) {
                 const reader = new FileReader();
                 reader.onloadend = function () { resolve(reader.result); };
@@ -651,7 +666,9 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
           v.playbackRate = rate;
           await seekTo(v, back);
           if (!wasPaused) { v.play().catch(function () {}); }
-          return { audio: audio, mime: mime, frames: frames, still: still, audioError: audioError };
+          return { audio: audio, mime: mime, frames: frames, still: still, audioError: audioError,
+                   peak: analyser ? peak : -1, src: String(v.currentSrc || '').slice(0, 40),
+                   context: graph && graph.context ? graph.context.state : 'none' };
         }
       };
     })();
