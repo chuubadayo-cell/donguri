@@ -90,7 +90,7 @@ struct ThreadSearchService {
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
             throw URLError(.badServerResponse)
         }
-        let raw = try await Task.detached(priority: .userInitiated) {
+        let raw = await Task.detached(priority: .userInitiated) {
             let html = String(data: data, encoding: .utf8) ?? ShiftJIS.decode(data) ?? ""
             return FindResultParser.parse(html)
         }.value

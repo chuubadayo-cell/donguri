@@ -175,7 +175,7 @@ final class FavoriteWatcher {
         let center = UNUserNotificationCenter.current()
         for content in contents {
             let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
-            center.add(request, withCompletionHandler: nil)
+            try? await center.add(request)
         }
     }
 
@@ -197,17 +197,23 @@ final class FavoriteWatcher {
 }
 
 /// Shows notifications while the app is open, and opens the thread when
-/// one is tapped.
-final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
+/// one is tapped. Not main-actor isolated: UserNotifications calls these
+/// on a background queue.
+nonisolated final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate, @unchecked Sendable {
     static let shared = NotificationDelegate()
 
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
-                                            willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
-        [.banner, .list, .sound]
+    func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                willPresent notification: UNNotification,
+                                withCompletionHandler completionHandler: @escaping @Sendable (Int) -> Void) {
+        // With C++ interop on (hoshidicts needs it), the block's NS_OPTIONS
+        // parameter is imported as its raw integer rather than as
+        // UNNotificationPresentationOptions, so the witness has to match.
+        let options: UNNotificationPresentationOptions = [.banner, .list, .sound]
+        completionHandler(Int(options.rawValue))
     }
 
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
-                                            didReceive response: UNNotificationResponse) async {
+    func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                didReceive response: UNNotificationResponse) async {
         let info = response.notification.request.content.userInfo
         guard let boardURL = info["boardURL"] as? String,
               let threadId = info["threadId"] as? Int else { return }
