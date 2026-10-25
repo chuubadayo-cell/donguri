@@ -419,12 +419,39 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
         addFragment(store, ticks / store.timescale, b);
       }
 
+      // appendBuffer is hooked wherever the buffers really get it from. On
+      // iPhone only ManagedMediaSource exists and SourceBuffer may not be a
+      // global, so the buffer's own prototype chain is what counts.
+      window.__irohaAppends = 0;
+      function hookAppend(proto) {
+        if (!proto || !Object.prototype.hasOwnProperty.call(proto, 'appendBuffer')) { return; }
+        if (Object.prototype.hasOwnProperty.call(proto, '__irohaAppendHooked')) { return; }
+        proto.__irohaAppendHooked = true;
+        const append = proto.appendBuffer;
+        proto.appendBuffer = function (data) {
+          if (this.__irohaAudio) {
+            window.__irohaAppends++;
+            try { keep(storeFor(this), data); } catch (e) { window.__irohaKeepError = String(e && e.message || e); }
+          }
+          return append.apply(this, arguments);
+        };
+      }
+      function hookChain(object) {
+        let proto = Object.getPrototypeOf(object);
+        while (proto && !Object.prototype.hasOwnProperty.call(proto, 'appendBuffer')) { proto = Object.getPrototypeOf(proto); }
+        hookAppend(proto);
+      }
       function hookSources(M) {
-        if (!M || !M.prototype || M.prototype.__irohaHooked) { return; }
+        if (!M || !M.prototype || Object.prototype.hasOwnProperty.call(M.prototype, '__irohaHooked')) { return; }
         M.prototype.__irohaHooked = true;
         const add = M.prototype.addSourceBuffer;
+        if (typeof add !== 'function') { return; }
         M.prototype.addSourceBuffer = function (mime) {
           const buffer = add.apply(this, arguments);
+          // ManagedMediaSource inherits MediaSource's: wrapped twice, seen once.
+          if (!buffer || buffer.__irohaSeen) { return buffer; }
+          buffer.__irohaSeen = true;
+          try { hookChain(buffer); } catch (e) {}
           try {
             (window.__irohaMimes = window.__irohaMimes || []).push(String(mime).slice(0, 48));
             if (window.__irohaMimes.length > 6) { window.__irohaMimes.shift(); }
@@ -435,14 +462,8 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
       }
       hookSources(window.MediaSource);
       hookSources(window.ManagedMediaSource);
-      if (window.SourceBuffer && !SourceBuffer.prototype.__irohaHooked) {
-        SourceBuffer.prototype.__irohaHooked = true;
-        const append = SourceBuffer.prototype.appendBuffer;
-        SourceBuffer.prototype.appendBuffer = function (data) {
-          if (this.__irohaAudio) { try { keep(storeFor(this), data); } catch (e) {} }
-          return append.apply(this, arguments);
-        };
-      }
+      hookAppend(window.SourceBuffer && window.SourceBuffer.prototype);
+      hookAppend(window.ManagedSourceBuffer && window.ManagedSourceBuffer.prototype);
 
       function base64(bytes) {
         let out = '';
@@ -487,7 +508,9 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
             return s.frags.length ? s.frags[0].t.toFixed(1) + '-' + s.frags[s.frags.length - 1].t.toFixed(1) : 'empty';
           });
           return { error: 'not buffered (' + start.toFixed(1) + '-' + end.toFixed(1) + '; have ' + (held.join(', ') || 'no audio buffers') +
-                   '; buffers made: ' + ((window.__irohaMimes || []).join(' | ') || 'none') + ')' };
+                   '; buffers made: ' + ((window.__irohaMimes || []).join(' | ') || 'none') +
+                   '; audio appends seen: ' + (window.__irohaAppends || 0) +
+                   (window.__irohaKeepError ? '; keep error: ' + window.__irohaKeepError : '') + ')' };
         }
         const store = best.store;
         let size = store.init.length;
