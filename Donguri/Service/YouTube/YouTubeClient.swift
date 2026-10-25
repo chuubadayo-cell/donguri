@@ -445,6 +445,8 @@ final class CaptionSniffer: NSObject, WKScriptMessageHandler, WKNavigationDelega
             controller.addUserScript(WKUserScript(source: Self.hook, injectionTime: .atDocumentStart,
                                                   forMainFrameOnly: true, in: .page))
             controller.add(WeakMessageHandler(self), contentWorld: .page, name: "irohaCaptions")
+            // No ads, so the player gets straight to the video's captions.
+            YouTubeAdScripts.install(in: controller, world: .defaultClient)
             let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 640, height: 360), configuration: configuration)
             webView.customUserAgent = YouTubeClient.userAgent
             webView.navigationDelegate = self
@@ -485,6 +487,14 @@ final class CaptionSniffer: NSObject, WKScriptMessageHandler, WKNavigationDelega
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         guard let body = message.body as? [String: Any], let text = body["text"] as? String, !text.isEmpty else { return }
+        // Only this video's captions: an ad playing first fetches its own,
+        // and those used to be taken for the video's.
+        guard let address = body["url"] as? String,
+              let components = URLComponents(string: address.hasPrefix("/") ? "https://www.youtube.com" + address : address),
+              components.queryItems?.first(where: { $0.name == "v" })?.value == videoID else {
+            print("[iroha] ignored captions that weren't this video's (an ad)")
+            return
+        }
         let cues = YTParse.json3Cues(Data(text.utf8)) ?? YTParse.xmlCues(text)
         if let cues, !cues.isEmpty { finish(cues) }
     }

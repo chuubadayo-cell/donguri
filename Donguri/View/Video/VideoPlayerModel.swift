@@ -492,7 +492,22 @@ final class VideoPlayerModel {
         }
         popups.mediaProvider = { [weak self] in
             guard let self else { return nil }
-            return await self.mediaTask(for: cue, still: stillTime).value
+            var media = await self.mediaTask(for: cue, still: stillTime).value
+            // Audio made at lookup time can miss (not buffered yet); try
+            // once more now that + has been pressed.
+            if VideoSettings.shared.cardAudio, media.audioURL == nil {
+                self.forgetMedia(for: cue)
+                let again = await self.mediaTask(for: cue, still: stillTime).value
+                media.audioURL = again.audioURL
+                media.imageURL = media.imageURL ?? again.imageURL
+            }
+            return media
+        }
+    }
+
+    private func forgetMedia(for cue: SubtitleCue) {
+        for key in mediaTasks.keys where key.hasPrefix("\(cue.id)|") {
+            mediaTasks[key] = nil
         }
     }
 
@@ -506,8 +521,9 @@ final class VideoPlayerModel {
         let wantsAudio = settings.cardAudio
         if engine == .web, let web {
             let stream = clipSource
+            let hls = info?.hlsURL
             let task = Task<CardMedia, Never> {
-                await Self.webMedia(web: web, stream: stream, start: start, end: end, still: still,
+                await Self.webMedia(web: web, stream: stream, hls: hls, start: start, end: end, still: still,
                                     imageKind: imageKind, wantsAudio: wantsAudio)
             }
             mediaTasks[key] = task
@@ -527,15 +543,22 @@ final class VideoPlayerModel {
     /// Card media from YouTube's player: the audio out of what it has
     /// buffered (or its stream, if it plays plain HLS), the picture from
     /// its video element.
-    private static func webMedia(web: YouTubeWebPlayer, stream: ClipSource?, start: Double, end: Double,
+    private static func webMedia(web: YouTubeWebPlayer, stream: ClipSource?, hls: URL?, start: Double, end: Double,
                                  still: Double, imageKind: ClipImageKind, wantsAudio: Bool) async -> CardMedia {
         var media = CardMedia()
         if wantsAudio {
             if let stream {
                 media.audioURL = await ClipCapture.audio(from: stream, start: start, end: end)
-            } else if let buffered = await web.bufferedAudio(from: start, to: end) {
+            }
+            if media.audioURL == nil, let buffered = await web.bufferedAudio(from: start, to: end) {
                 media.audioURL = await ClipCapture.cutFragmentedMP4(buffered.data, firstTime: buffered.firstTime,
                                                                     start: start, end: end)
+                if media.audioURL == nil { print("[iroha] card audio: the buffered audio couldn't be cut") }
+            }
+            // Last resort: the stream YouTube offered for direct playback.
+            // It may not play, but its audio segments can often still be fetched.
+            if media.audioURL == nil, let hls {
+                media.audioURL = await ClipCapture.audio(from: .stream(hls), start: start, end: end)
             }
             if media.audioURL == nil { print("[iroha] no audio for the card (web player)") }
         }

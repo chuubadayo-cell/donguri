@@ -31,6 +31,8 @@ struct VideoPlayerView: View {
     @State private var pane: Pane = .transcript
     @State private var followTranscript = true
     @State private var seekFlash: SeekFlash?
+    /// How far the player has been pulled down (swipe down to minimize).
+    @State private var pullDown: CGFloat = 0
     /// The last tap on the video, to tell a double tap without making
     /// single taps wait for it.
     @State private var lastTap: (time: Date, forward: Bool, controlsWereVisible: Bool)?
@@ -58,6 +60,8 @@ struct VideoPlayerView: View {
                     ZStack {
                         Color.black.ignoresSafeArea()
                         videoArea(fullScreen: true)
+                            .offset(y: pullDown)
+                            .simultaneousGesture(pullDownGesture(fullScreen: true))
                     }
                     .statusBarHidden(true)
                     .persistentSystemOverlays(.hidden)
@@ -67,9 +71,12 @@ struct VideoPlayerView: View {
                             .aspectRatio(16 / 9, contentMode: .fit)
                             .frame(maxWidth: .infinity)
                             .background(Color.black)
+                            .simultaneousGesture(pullDownGesture(fullScreen: false))
                         portraitBody
                     }
                     .background(Color(.systemBackground))
+                    .offset(y: pullDown)
+                    .opacity(1 - Double(min(pullDown / 600, 0.4)))
                 }
             }
             // On its own view: a sheet and a file importer on the same
@@ -167,6 +174,40 @@ struct VideoPlayerView: View {
         }
         .clipped()
         .animation(.easeInOut(duration: 0.2), value: controlsVisible)
+    }
+
+    /// Swipe down on the video: in portrait it minimizes (closes) the
+    /// player, in full screen it leaves full screen, as in the YouTube app.
+    private func pullDownGesture(fullScreen: Bool) -> some Gesture {
+        DragGesture(minimumDistance: 18)
+            .onChanged { value in
+                let down = value.translation.height
+                // Only a mostly vertical, downward drag (not scrubbing).
+                guard down > 0, down > abs(value.translation.width) * 1.4 else {
+                    if pullDown != 0 { pullDown = 0 }
+                    return
+                }
+                pullDown = fullScreen ? min(down * 0.5, 120) : down
+            }
+            .onEnded { value in
+                let down = value.translation.height
+                let flicked = value.predictedEndTranslation.height > 260
+                let vertical = down > abs(value.translation.width) * 1.4
+                if vertical, down > 110 || (flicked && down > 30) {
+                    if fullScreen {
+                        withAnimation(.snappy) { pullDown = 0 }
+                        OrientationLock.rotate(to: .portrait)
+                    } else {
+                        withAnimation(.easeIn(duration: 0.18)) { pullDown = 900 }
+                        Task {
+                            try? await Task.sleep(for: .milliseconds(170))
+                            onClose()
+                        }
+                    }
+                } else {
+                    withAnimation(.snappy) { pullDown = 0 }
+                }
+            }
     }
 
     /// A tap answers at once (controls in or out); a second tap on the

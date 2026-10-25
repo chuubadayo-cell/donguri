@@ -193,6 +193,11 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
         let result = try? await webView.callAsyncJavaScript("return window.__irohaAudioClip ? window.__irohaAudioClip(start, end) : null",
                                                            arguments: ["start": start, "end": end],
                                                            in: nil, contentWorld: .page)
+        if let dictionary = result as? [String: Any], let error = dictionary["error"] as? String {
+            print("[iroha] card audio from the player's buffer: \(error)")
+        } else if result == nil {
+            print("[iroha] card audio: the page has no audio hook (the player may use a worker)")
+        }
         guard let dictionary = result as? [String: Any],
               let base64 = dictionary["data"] as? String,
               let data = Data(base64Encoded: base64),
@@ -214,8 +219,9 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
     (function () {
       if (window.__irohaAudioHook) { return; }
       window.__irohaAudioHook = true;
-      const store = { init: null, timescale: 0, frags: [], bytes: 0 };
-      const LIMIT = 48 * 1024 * 1024;
+      // One store per audio buffer: an ad and the video each get their own.
+      const stores = [];
+      const LIMIT = 40 * 1024 * 1024;
 
       function u32(b, p) { return ((b[p] << 24) >>> 0) + (b[p + 1] << 16) + (b[p + 2] << 8) + b[p + 3]; }
       function type(b, p) { return String.fromCharCode(b[p + 4], b[p + 5], b[p + 6], b[p + 7]); }
@@ -251,7 +257,20 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
         const v = b[tfdt[1]];
         return v === 1 ? u32(b, tfdt[1] + 4) * 4294967296 + u32(b, tfdt[1] + 8) : u32(b, tfdt[1] + 4);
       }
-      function keep(data) {
+      function storeFor(buffer) {
+        if (!buffer.__irohaStore) {
+          buffer.__irohaStore = { init: null, timescale: 0, frags: [], bytes: 0, current: null };
+          stores.push(buffer.__irohaStore);
+          while (stores.length > 4) { stores.shift(); }
+        }
+        return buffer.__irohaStore;
+      }
+      function same(a, b) {
+        if (!a || a.length !== b.length) { return false; }
+        for (let i = 0; i < a.length; i++) { if (a[i] !== b[i]) { return false; } }
+        return true;
+      }
+      function keep(store, data) {
         let b;
         if (data instanceof ArrayBuffer) { b = new Uint8Array(data.slice(0)); }
         else if (ArrayBuffer.isView(data)) { b = new Uint8Array(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)); }
@@ -259,30 +278,38 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
         if (b.length < 8) { return; }
         if (find(b, 0, b.length, ['moov'])) {
           const scale = timescale(b);
-          if (scale) {
-            if (store.init && store.init.length === b.length) { return; }
-            store.init = b; store.timescale = scale; store.frags = []; store.bytes = 0;
+          if (scale && !same(store.init, b)) {
+            // A different format (a quality change): older fragments don't
+            // belong with this init segment.
+            store.init = b; store.timescale = scale; store.frags = []; store.bytes = 0; store.current = null;
           }
           return;
         }
         if (!store.timescale) { return; }
         const ticks = decodeTime(b);
         if (ticks === null) {
-          // The rest of a fragment appended in pieces.
-          const last = store.frags[store.frags.length - 1];
-          if (last) {
-            const joined = new Uint8Array(last.data.length + b.length);
-            joined.set(last.data); joined.set(b, last.data.length);
-            store.bytes += b.length; last.data = joined;
+          // The rest of the fragment being appended in pieces; it belongs to
+          // the one appended last, which after a seek isn't the latest in time.
+          const current = store.current;
+          if (current) {
+            const joined = new Uint8Array(current.data.length + b.length);
+            joined.set(current.data); joined.set(b, current.data.length);
+            store.bytes += b.length; current.data = joined;
           }
           return;
         }
         const t = ticks / store.timescale;
         store.frags = store.frags.filter(function (f) { if (Math.abs(f.t - t) < 0.001) { store.bytes -= f.data.length; return false; } return true; });
-        store.frags.push({ t: t, data: b });
+        const fragment = { t: t, data: b };
+        store.frags.push(fragment);
         store.frags.sort(function (x, y) { return x.t - y.t; });
+        store.current = fragment;
         store.bytes += b.length;
-        while (store.bytes > LIMIT && store.frags.length > 1) { store.bytes -= store.frags.shift().data.length; }
+        while (store.bytes > LIMIT && store.frags.length > 1) {
+          const dropped = store.frags.shift();
+          store.bytes -= dropped.data.length;
+          if (dropped === store.current) { store.current = null; }
+        }
       }
 
       function hookSources(M) {
@@ -301,7 +328,7 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
         SourceBuffer.prototype.__irohaHooked = true;
         const append = SourceBuffer.prototype.appendBuffer;
         SourceBuffer.prototype.appendBuffer = function (data) {
-          if (this.__irohaAudio) { try { keep(data); } catch (e) {} }
+          if (this.__irohaAudio) { try { keep(storeFor(this), data); } catch (e) {} }
           return append.apply(this, arguments);
         };
       }
@@ -315,7 +342,7 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
         return btoa(out);
       }
 
-      window.__irohaAudioClip = function (start, end) {
+      function pick(store, start, end) {
         if (!store.init || !store.frags.length) { return null; }
         const frags = store.frags;
         let first = -1, last = -1;
@@ -323,18 +350,41 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
           const next = i + 1 < frags.length ? frags[i + 1].t : Infinity;
           if (frags[i].t < end && next > start) { if (first < 0) { first = i; } last = i; }
         }
-        if (first < 0) { return null; }
+        if (first < 0 || frags[first].t > start + 0.05) { return null; }
+        // Past the last fragment held: its length isn't known, but YouTube's
+        // are a few seconds.
+        if (last === frags.length - 1 && end > frags[last].t + 12) { return null; }
         // Every fragment in the stretch has to be there, back to back.
         for (let i = first; i < last; i++) {
           if (frags[i + 1].t - frags[i].t > 15) { return null; }
         }
+        return { store: store, first: first, last: last };
+      }
+
+      window.__irohaAudioClip = function (start, end) {
+        // The video's buffer, not an ad's: of the buffers that hold the
+        // stretch, the one reaching furthest into the video.
+        let best = null;
+        for (const store of stores) {
+          const found = pick(store, start, end);
+          if (found && (!best || store.frags[store.frags.length - 1].t > best.store.frags[best.store.frags.length - 1].t)) {
+            best = found;
+          }
+        }
+        if (!best) {
+          const held = stores.map(function (s) {
+            return s.frags.length ? s.frags[0].t.toFixed(1) + '-' + s.frags[s.frags.length - 1].t.toFixed(1) : 'empty';
+          });
+          return { error: 'not buffered (' + start.toFixed(1) + '-' + end.toFixed(1) + '; have ' + (held.join(', ') || 'no audio buffers') + ')' };
+        }
+        const store = best.store;
         let size = store.init.length;
-        for (let i = first; i <= last; i++) { size += frags[i].data.length; }
+        for (let i = best.first; i <= best.last; i++) { size += store.frags[i].data.length; }
         const out = new Uint8Array(size);
         out.set(store.init);
         let offset = store.init.length;
-        for (let i = first; i <= last; i++) { out.set(frags[i].data, offset); offset += frags[i].data.length; }
-        return { data: base64(out), first: frags[first].t };
+        for (let i = best.first; i <= best.last; i++) { out.set(store.frags[i].data, offset); offset += store.frags[i].data.length; }
+        return { data: base64(out), first: store.frags[best.first].t };
       };
     })();
     """
