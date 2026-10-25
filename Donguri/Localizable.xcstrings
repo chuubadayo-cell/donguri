@@ -543,6 +543,22 @@
         }
       }
     },
+    "YouTubeで切り替える" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Switch on YouTube"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "YouTubeで切り替える"
+          }
+        }
+      }
+    },
     "YouTubeで開く" : {
       "localizations" : {
         "en" : {

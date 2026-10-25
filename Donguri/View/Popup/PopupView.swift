@@ -21,6 +21,9 @@ struct PopupLayout {
     let isFullWidth: Bool
     var topInset: CGFloat = 0
     var bottomInset: CGFloat = 0
+    /// Sideways, the notch and rounded corners (left and right safe areas).
+    var leftInset: CGFloat = 0
+    var rightInset: CGFloat = 0
     
     private let popupPadding: CGFloat = 4
     private let screenBorderPadding: CGFloat = 6
@@ -30,7 +33,11 @@ struct PopupLayout {
     }
     
     private var spaceRight: CGFloat {
-        screenSize.width - selectionRect.maxX - popupPadding
+        screenSize.width - rightInset - selectionRect.maxX - popupPadding
+    }
+
+    private var usableWidth: CGFloat {
+        screenSize.width - leftInset - rightInset - screenBorderPadding * 2
     }
     
     private var showOnRight: Bool {
@@ -51,14 +58,14 @@ struct PopupLayout {
     
     var width: CGFloat {
         if isFullWidth {
-            return screenSize.width - screenBorderPadding * 2
+            return usableWidth
         }
         
         if isVertical {
             return min(max(spaceLeft, spaceRight) - screenBorderPadding, maxWidth)
         }
         
-        return min(screenSize.width - screenBorderPadding * 2, maxWidth)
+        return min(usableWidth, maxWidth)
     }
     
     var height: CGFloat {
@@ -74,7 +81,7 @@ struct PopupLayout {
         var y: CGFloat
         
         if isFullWidth {
-            x = width / 2 + screenBorderPadding
+            x = leftInset + width / 2 + screenBorderPadding
             y = screenSize.height - bottomInset - height / 2 - screenBorderPadding
         } else {
             if isVertical {
@@ -89,7 +96,8 @@ struct PopupLayout {
                 y = max(height / 2 + screenBorderPadding + topInset, min(y, screenSize.height - bottomInset - height / 2 - screenBorderPadding))
             } else {
                 x = selectionRect.minX + (width / 2)
-                x = max(width / 2 + screenBorderPadding, min(x, screenSize.width - width / 2 - screenBorderPadding))
+                x = max(leftInset + width / 2 + screenBorderPadding,
+                        min(x, screenSize.width - rightInset - width / 2 - screenBorderPadding))
                 
                 if showBelow {
                     y = selectionRect.maxY + popupPadding + (height / 2)
@@ -114,6 +122,10 @@ struct PopupView: View {
     let isFullWidth: Bool
     var topInset: CGFloat = 0
     var bottomInset: CGFloat = 0
+    var leftInset: CGFloat = 0
+    var rightInset: CGFloat = 0
+    /// Caps the popup's height below the user's setting (landscape video).
+    var heightLimit: CGFloat?
     let coverURL: URL?
     let documentTitle: String?
     var clearSelection: Bool
@@ -143,6 +155,9 @@ struct PopupView: View {
         isFullWidth: Bool,
         topInset: CGFloat = 0,
         bottomInset: CGFloat = 0,
+        leftInset: CGFloat = 0,
+        rightInset: CGFloat = 0,
+        heightLimit: CGFloat? = nil,
         coverURL: URL?,
         documentTitle: String?,
         clearSelection: Bool,
@@ -160,6 +175,9 @@ struct PopupView: View {
         self.isFullWidth = isFullWidth
         self.topInset = topInset
         self.bottomInset = bottomInset
+        self.leftInset = leftInset
+        self.rightInset = rightInset
+        self.heightLimit = heightLimit
         self.coverURL = coverURL
         self.documentTitle = documentTitle
         self.clearSelection = clearSelection
@@ -182,11 +200,13 @@ struct PopupView: View {
             selectionRect: selectionData.rect,
             screenSize: screenSize,
             maxWidth: CGFloat(userConfig.popupWidth),
-            maxHeight: CGFloat(userConfig.popupHeight),
+            maxHeight: min(CGFloat(userConfig.popupHeight), heightLimit ?? .greatestFiniteMagnitude),
             isVertical: isVertical,
             isFullWidth: isFullWidth,
             topInset: topInset,
-            bottomInset: bottomInset
+            bottomInset: bottomInset,
+            leftInset: leftInset,
+            rightInset: rightInset
         )
         
         guard result.width.isFinite,

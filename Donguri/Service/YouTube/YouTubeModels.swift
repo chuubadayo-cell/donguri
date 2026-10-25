@@ -524,6 +524,9 @@ nonisolated struct YouTubeAccount: Codable, Hashable, Identifiable, Sendable {
     var authUser: Int
     var pageID: String?
     var isSelected: Bool = false
+    /// YouTube's own link for switching to this account or channel. Visiting
+    /// it is how the site switches: it sets the session's active identity.
+    var signinURL: String?
 
     var id: String { "\(authUser)|\(pageID ?? "")" }
 
@@ -583,9 +586,11 @@ nonisolated struct YouTubeAccount: Codable, Hashable, Identifiable, Sendable {
                         account.pageID = id
                     }
                     if let signin = token["accountSigninToken"] as? [String: Any],
-                       let url = signin["signinUrl"] as? String,
-                       let match = url.firstMatch(of: /authuser=(\d+)/), let index = Int(match.1) {
-                        account.authUser = index
+                       let url = signin["signinUrl"] as? String {
+                        account.signinURL = url
+                        if let match = url.firstMatch(of: /authuser=(\d+)/), let index = Int(match.1) {
+                            account.authUser = index
+                        }
                     }
                 }
             }

@@ -80,7 +80,6 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
         // The account chosen in the YouTube screen.
         if let account = YouTubeAccount.current {
             items.append(URLQueryItem(name: "authuser", value: String(account.authUser)))
-            if let pageID = account.pageID { items.append(URLQueryItem(name: "pageid", value: pageID)) }
         }
         components.queryItems = items
         webView.load(URLRequest(url: components.url!))

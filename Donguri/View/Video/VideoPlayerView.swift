@@ -31,6 +31,9 @@ struct VideoPlayerView: View {
     @State private var pane: Pane = .transcript
     @State private var followTranscript = true
     @State private var seekFlash: SeekFlash?
+    /// The last tap on the video, to tell a double tap without making
+    /// single taps wait for it.
+    @State private var lastTap: (time: Date, forward: Bool, controlsWereVisible: Bool)?
 
     private enum Pane: String, CaseIterable {
         case transcript, related
@@ -166,19 +169,28 @@ struct VideoPlayerView: View {
         .animation(.easeInOut(duration: 0.2), value: controlsVisible)
     }
 
+    /// A tap answers at once (controls in or out); a second tap on the
+    /// same side within a moment is a double tap, which jumps, and puts the
+    /// controls back how they were. SwiftUI's own double-tap gesture made
+    /// every single tap wait a third of a second first.
     private func tapZone(forward: Bool) -> some View {
         Color.clear
             .contentShape(Rectangle())
-            .onTapGesture(count: 2) {
-                if settings.doubleTapSeeksLines, !model.cues.isEmpty {
-                    if forward { model.nextCue() } else { model.previousCue() }
-                    flash(forward: forward, label: forward ? String(localized: "次の字幕") : String(localized: "前の字幕"))
-                } else {
-                    model.skip(by: forward ? 10 : -10)
-                    flash(forward: forward, label: forward ? "+10s" : "-10s")
-                }
-            }
             .onTapGesture {
+                let now = Date.now
+                if let last = lastTap, last.forward == forward, now.timeIntervalSince(last.time) < 0.3 {
+                    lastTap = nil
+                    if last.controlsWereVisible { showControls(autoHide: true) } else { hideControls() }
+                    if settings.doubleTapSeeksLines, !model.cues.isEmpty {
+                        if forward { model.nextCue() } else { model.previousCue() }
+                        flash(forward: forward, label: forward ? String(localized: "次の字幕") : String(localized: "前の字幕"))
+                    } else {
+                        model.skip(by: forward ? 10 : -10)
+                        flash(forward: forward, label: forward ? "+10s" : "-10s")
+                    }
+                    return
+                }
+                lastTap = (now, forward, controlsVisible)
                 if !model.popups.isEmpty {
                     model.popups.closeAll()
                 } else if controlsVisible {

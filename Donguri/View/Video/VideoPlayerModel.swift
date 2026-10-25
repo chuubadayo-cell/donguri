@@ -247,21 +247,29 @@ final class VideoPlayerModel {
 
     private func webStateChanged(_ state: YouTubeWebPlayer.State) {
         guard engine == .web else { return }
-        isAd = state.isAd
-        canSkipAd = state.canSkipAd
+        // Written only when they change. An @Observable property notifies
+        // on every assignment, equal or not, and these reports come five
+        // times a second: assigning blindly redrew the whole player (and
+        // its transcript) that often, which is what made buttons lag.
+        update(\.isAd, state.isAd)
+        update(\.canSkipAd, state.canSkipAd)
         if Date.now > commandedPlayingUntil {
-            isPlaying = state.ready && !state.paused
+            update(\.isPlaying, state.ready && !state.paused)
         }
-        isBuffering = !state.ready || state.waiting
+        update(\.isBuffering, !state.ready || state.waiting)
         guard state.ready, !state.isAd else { return }
-        clock.time = state.time
+        if clock.time != state.time { clock.time = state.time }
         if state.duration > 0, clock.duration != state.duration { clock.duration = state.duration }
-        clock.buffered = state.buffered
+        if abs(clock.buffered - state.buffered) > 0.5 { clock.buffered = state.buffered }
         updateCue(at: state.time)
         if Date.now.timeIntervalSince(lastSaved) > 5 {
             lastSaved = .now
             savePosition(state.time)
         }
+    }
+
+    private func update<Value: Equatable>(_ keyPath: ReferenceWritableKeyPath<VideoPlayerModel, Value>, _ value: Value) {
+        if self[keyPath: keyPath] != value { self[keyPath: keyPath] = value }
     }
 
     private func prepare(_ asset: AVURLAsset) {
@@ -279,8 +287,8 @@ final class VideoPlayerModel {
             player.observe(\.timeControlStatus, options: [.new]) { [weak self] player, _ in
                 let status = player.timeControlStatus
                 Task { @MainActor in
-                    self?.isPlaying = status != .paused
-                    self?.isBuffering = status == .waitingToPlayAtSpecifiedRate
+                    self?.update(\.isPlaying, status != .paused)
+                    self?.update(\.isBuffering, status == .waitingToPlayAtSpecifiedRate)
                 }
             },
         ]

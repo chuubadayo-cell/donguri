@@ -515,6 +515,7 @@ struct YouTubeAccountsView: View {
     @State private var loading = true
     @State private var failed = false
     @State private var selectedID = YouTubeAccount.current?.id
+    @State private var switching: String?
 
     var body: some View {
         NavigationStack {
@@ -531,21 +532,43 @@ struct YouTubeAccountsView: View {
                     Section {
                         ForEach(groups[email] ?? []) { account in
                             Button {
-                                YouTubeClient.shared.select(account)
-                                selectedID = account.id
-                                Haptics.play(.success)
-                                onChange()
-                                dismiss()
+                                Task {
+                                    switching = account.id
+                                    await YouTubeClient.shared.select(account)
+                                    switching = nil
+                                    selectedID = account.id
+                                    Haptics.play(.success)
+                                    onChange()
+                                    dismiss()
+                                }
                             } label: {
                                 row(account)
                             }
                             .buttonStyle(.plain)
+                            .disabled(switching != nil)
                         }
                     } header: {
                         if !email.isEmpty { Text(verbatim: email) }
                     }
                 }
                 Section {
+                    // YouTube's own switcher, for anything the list above
+                    // can't do. Whatever is chosen there applies here too.
+                    NavigationLink {
+                        YouTubePageView(url: URL(string: "https://m.youtube.com/channel_switcher")!)
+                            .navigationTitle(Text("YouTubeで切り替える"))
+                            .navigationBarTitleDisplayMode(.inline)
+                            .onDisappear {
+                                // YouTube's switcher sets the identity in the
+                                // cookies; drop the app's own choice so it doesn't
+                                // pull the other way.
+                                YouTubeAccount.current = nil
+                                YouTubeClient.shared.reset()
+                                onChange()
+                            }
+                    } label: {
+                        Label("YouTubeで切り替える", systemImage: "arrow.left.arrow.right.circle")
+                    }
                     Button {
                         onAddAccount()
                     } label: {
@@ -588,7 +611,9 @@ struct YouTubeAccountsView: View {
                 }
             }
             Spacer()
-            if isChosen(account) {
+            if switching == account.id {
+                ProgressView()
+            } else if isChosen(account) {
                 Image(systemName: "checkmark")
                     .foregroundStyle(Color.accentColor)
             }
@@ -611,4 +636,20 @@ struct YouTubeAccountsView: View {
         }
         loading = false
     }
+}
+
+/// A YouTube page in a web view sharing the app's cookies.
+struct YouTubePageView: UIViewRepresentable {
+    let url: URL
+
+    func makeUIView(context: Context) -> WKWebView {
+        let configuration = WKWebViewConfiguration()
+        configuration.websiteDataStore = .default()
+        let webView = WKWebView(frame: .zero, configuration: configuration)
+        webView.customUserAgent = SafariUserAgent.mobile
+        webView.load(URLRequest(url: url))
+        return webView
+    }
+
+    func updateUIView(_ webView: WKWebView, context: Context) {}
 }

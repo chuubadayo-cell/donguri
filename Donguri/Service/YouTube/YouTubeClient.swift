@@ -175,7 +175,10 @@ final class YouTubeClient {
         ]
         if let visitor = config.visitorData { client["visitorData"] = visitor }
         var payload = body
-        payload["context"] = ["client": client, "user": ["lockedSafetyMode": false]]
+        var user: [String: Any] = ["lockedSafetyMode": false]
+        // A channel (brand account) acts on behalf of its page.
+        if let pageID = YouTubeAccount.current?.pageID { user["onBehalfOfUser"] = pageID }
+        payload["context"] = ["client": client, "user": user]
 
         var request = URLRequest(url: components.url!)
         request.httpMethod = "POST"
@@ -212,9 +215,22 @@ final class YouTubeClient {
         return YouTubeAccount.parse(json)
     }
 
-    func select(_ account: YouTubeAccount) {
+    /// Switches the whole session (feeds, the player, the browser) to
+    /// `account`, the way YouTube's switcher does: by visiting its sign-in
+    /// link, which sets the active identity in the cookies everything
+    /// shares. Channels on the same Google account differ only in this.
+    func select(_ account: YouTubeAccount) async {
         YouTubeAccount.current = account
         config = nil
+        guard let path = account.signinURL else { return }
+        let absolute = path.hasPrefix("http") ? path : "https://www.youtube.com" + path
+        guard var components = URLComponents(string: absolute) else { return }
+        var items = (components.queryItems ?? []).filter { $0.name != "next" }
+        items.append(URLQueryItem(name: "next", value: "https://m.youtube.com/"))
+        components.queryItems = items
+        guard let url = components.url else { return }
+        print("[iroha] switching YouTube account: \(account.name) authuser=\(account.authUser) page=\(account.pageID ?? "-")")
+        await HiddenPageLoader.load(url)
     }
 
     // MARK: Feeds
@@ -473,5 +489,66 @@ final class WeakMessageHandler: NSObject, WKScriptMessageHandler {
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         target?.userContentController(userContentController, didReceive: message)
+    }
+}
+
+/// Loads a page in a hidden web view sharing the app's cookies, waiting
+/// for its redirects to settle. For YouTube's account switch links.
+@MainActor
+final class HiddenPageLoader: NSObject, WKNavigationDelegate {
+    private var webView: WKWebView?
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var settleTask: Task<Void, Never>?
+    private static var running: Set<HiddenPageLoader> = []
+
+    static func load(_ url: URL) async {
+        let loader = HiddenPageLoader()
+        running.insert(loader)
+        defer { running.remove(loader) }
+        await loader.run(url)
+    }
+
+    private func run(_ url: URL) async {
+        await withCheckedContinuation { continuation in
+            self.continuation = continuation
+            let configuration = WKWebViewConfiguration()
+            configuration.websiteDataStore = .default()
+            let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 390, height: 600), configuration: configuration)
+            webView.customUserAgent = SafariUserAgent.mobile
+            webView.navigationDelegate = self
+            self.webView = webView
+            webView.load(URLRequest(url: url))
+            Task { [weak self] in
+                try? await Task.sleep(for: .seconds(15))
+                self?.finish()
+            }
+        }
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        // A redirect may follow; done once things have been quiet a moment.
+        settleTask?.cancel()
+        settleTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(1200))
+            guard !Task.isCancelled else { return }
+            self?.finish()
+        }
+    }
+
+    func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        settleTask?.cancel()
+    }
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: any Error) {
+        finish()
+    }
+
+    private func finish() {
+        guard let continuation else { return }
+        self.continuation = nil
+        settleTask?.cancel()
+        webView?.stopLoading()
+        webView = nil
+        continuation.resume()
     }
 }

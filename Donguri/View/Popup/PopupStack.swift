@@ -112,6 +112,11 @@ struct PopupStackLayer: View {
 
     var body: some View {
         GeometryReader { geometry in
+            // Sideways (full-screen video) the popup is a small card that
+            // stays clear of the notch, not a full-width sheet over half the
+            // picture.
+            let landscape = geometry.size.width > geometry.size.height
+            let safe = Self.windowSafeArea
             ZStack {
                 ForEach($stack.popups) { $popup in
                     let popupId = popup.id
@@ -123,9 +128,12 @@ struct PopupStackLayer: View {
                         dictionaryStyles: popup.dictionaryStyles,
                         screenSize: geometry.size,
                         isVertical: false,
-                        isFullWidth: popup.isFullWidth,
+                        isFullWidth: landscape ? false : popup.isFullWidth,
                         topInset: UIApplication.topSafeArea,
                         bottomInset: max(bottomInset ?? 0, UIApplication.bottomSafeArea),
+                        leftInset: landscape ? safe.left : 0,
+                        rightInset: landscape ? safe.right : 0,
+                        heightLimit: landscape ? max(160, (geometry.size.height - safe.top - safe.bottom) * 0.62) : nil,
                         coverURL: stack.coverURL,
                         documentTitle: stack.documentTitle,
                         clearSelection: popup.clearSelection,
@@ -146,5 +154,11 @@ struct PopupStackLayer: View {
             }
         }
         .ignoresSafeArea()
+    }
+
+    private static var windowSafeArea: UIEdgeInsets {
+        UIApplication.shared.connectedScenes
+            .compactMap { ($0 as? UIWindowScene)?.keyWindow?.safeAreaInsets }
+            .first ?? .zero
     }
 }
