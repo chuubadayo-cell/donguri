@@ -31,6 +31,10 @@ final class YouTubeClient {
         var clientVersion: String
         var visitorData: String?
         var loggedIn: Bool
+        /// The channel the session is acting as, when it isn't the Google
+        /// account's own (YouTube's ytcfg DELEGATED_SESSION_ID).
+        var delegatedSessionID: String?
+        var sessionIndex: Int?
     }
 
     private var config: Config?
@@ -75,17 +79,23 @@ final class YouTubeClient {
 
     private func loadConfig() async throws -> Config {
         if let config, Date.now.timeIntervalSince(configLoadedAt) < 3600 { return config }
-        let html = try await page(URL(string: "https://www.youtube.com/?hl=ja&gl=JP")!)
+        var home = "https://www.youtube.com/?hl=ja&gl=JP"
+        if let index = YouTubeAccount.current?.authUser, index > 0 { home += "&authuser=\(index)" }
+        let html = try await page(URL(string: home)!)
         func value(_ key: String) -> String? {
             guard let range = html.range(of: "\"\(key)\":\"") else { return nil }
             let rest = html[range.upperBound...]
             guard let end = rest.firstIndex(of: "\"") else { return nil }
             return String(rest[..<end])
         }
+        let sessionIndex = html.firstMatch(of: /"SESSION_INDEX":"?(\d+)/).flatMap { Int($0.1) }
         let loaded = Config(apiKey: value("INNERTUBE_API_KEY"),
                             clientVersion: value("INNERTUBE_CLIENT_VERSION") ?? "2.20251020.01.00",
                             visitorData: value("VISITOR_DATA"),
-                            loggedIn: html.contains("\"LOGGED_IN\":true"))
+                            loggedIn: html.contains("\"LOGGED_IN\":true"),
+                            delegatedSessionID: value("DELEGATED_SESSION_ID"),
+                            sessionIndex: sessionIndex)
+        print("[iroha] YouTube identity: index=\(sessionIndex.map(String.init) ?? "-") channel=\(loaded.delegatedSessionID ?? "own") chosen=\(YouTubeAccount.current?.name ?? "-")")
         config = loaded
         configLoadedAt = .now
         return loaded
@@ -129,12 +139,22 @@ final class YouTubeClient {
         request.setValue(header, forHTTPHeaderField: "Cookie")
         if let auth = Self.authorization(jar) {
             request.setValue(auth, forHTTPHeaderField: "Authorization")
-            let account = YouTubeAccount.current
-            request.setValue(String(account?.authUser ?? 0), forHTTPHeaderField: "X-Goog-AuthUser")
-            if let pageID = account?.pageID {
+            request.setValue(String(identity.authUser), forHTTPHeaderField: "X-Goog-AuthUser")
+            if let pageID = identity.pageID {
                 request.setValue(pageID, forHTTPHeaderField: "X-Goog-PageId")
             }
         }
+    }
+
+    /// Who requests act as: the account chosen in the app's switcher, or
+    /// else whoever YouTube's own pages say the session is (which is what
+    /// switching on YouTube's own screen changes). YouTube's site sends
+    /// this with every request; cookies alone don't pick a channel.
+    private var identity: (authUser: Int, pageID: String?) {
+        if let chosen = YouTubeAccount.current {
+            return (chosen.authUser, chosen.pageID)
+        }
+        return (config?.sessionIndex ?? 0, config?.delegatedSessionID)
     }
 
     /// The SAPISIDHASH header YouTube's site sends when signed in.
@@ -177,7 +197,7 @@ final class YouTubeClient {
         var payload = body
         var user: [String: Any] = ["lockedSafetyMode": false]
         // A channel (brand account) acts on behalf of its page.
-        if let pageID = YouTubeAccount.current?.pageID { user["onBehalfOfUser"] = pageID }
+        if let pageID = identity.pageID { user["onBehalfOfUser"] = pageID }
         payload["context"] = ["client": client, "user": user]
 
         var request = URLRequest(url: components.url!)
@@ -231,6 +251,7 @@ final class YouTubeClient {
         guard let url = components.url else { return }
         print("[iroha] switching YouTube account: \(account.name) authuser=\(account.authUser) page=\(account.pageID ?? "-")")
         await HiddenPageLoader.load(url)
+        config = nil
     }
 
     // MARK: Feeds

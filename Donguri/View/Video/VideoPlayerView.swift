@@ -347,7 +347,8 @@ struct VideoPlayerView: View {
                         onClose()
                     } label: {
                         Image(systemName: "chevron.down")
-                            .frame(width: 40, height: 40)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
                     }
                     .accessibilityLabel(Text("閉じる"))
                     if fullScreen {
@@ -361,7 +362,8 @@ struct VideoPlayerView: View {
                         showsSettings = true
                     } label: {
                         Image(systemName: "gearshape")
-                            .frame(width: 40, height: 40)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
                     }
                     .accessibilityLabel(Text("設定"))
                 }
@@ -377,6 +379,8 @@ struct VideoPlayerView: View {
                     } label: {
                         Image(systemName: "backward.end.fill")
                             .font(.title2)
+                            .frame(width: 56, height: 56)
+                            .contentShape(Rectangle())
                     }
                     .accessibilityLabel(Text("前の字幕"))
                     Button {
@@ -385,6 +389,8 @@ struct VideoPlayerView: View {
                         Image(systemName: model.isPlaying ? "pause.fill" : "play.fill")
                             .font(.system(size: fullScreen ? 44 : 36))
                             .contentTransition(.symbolEffect(.replace))
+                            .frame(width: 72, height: 72)
+                            .contentShape(Rectangle())
                     }
                     .accessibilityLabel(model.isPlaying ? Text("一時停止") : Text("再生"))
                     Button {
@@ -393,6 +399,8 @@ struct VideoPlayerView: View {
                     } label: {
                         Image(systemName: "forward.end.fill")
                             .font(.title2)
+                            .frame(width: 56, height: 56)
+                            .contentShape(Rectangle())
                     }
                     .accessibilityLabel(Text("次の字幕"))
                 }
@@ -409,6 +417,8 @@ struct VideoPlayerView: View {
                         model.replayCue()
                     } label: {
                         Image(systemName: "gobackward")
+                            .frame(width: 40, height: 40)
+                            .contentShape(Rectangle())
                     }
                     .accessibilityLabel(Text("この字幕をもう一度"))
                     .disabled(model.cues.isEmpty)
@@ -416,11 +426,14 @@ struct VideoPlayerView: View {
                         toggleFullScreen(fullScreen)
                     } label: {
                         Image(systemName: fullScreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
+                            .font(.body.weight(.semibold))
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
                     }
                     .accessibilityLabel(Text("全画面"))
                 }
-                .padding(.horizontal, fullScreen ? 28 : 10)
-                .padding(.bottom, fullScreen ? 14 : 6)
+                .padding(.horizontal, fullScreen ? 20 : 4)
+                .padding(.bottom, fullScreen ? 6 : 0)
             }
         }
         .foregroundStyle(.white)
@@ -478,7 +491,8 @@ struct VideoPlayerView: View {
             }
         } label: {
             Image(systemName: model.cues.isEmpty ? "captions.bubble" : "captions.bubble.fill")
-                .frame(width: 40, height: 40)
+                .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
         }
         .accessibilityLabel(Text("字幕"))
     }
@@ -588,7 +602,8 @@ struct VideoPlayerView: View {
                 model.previousCue()
             } label: {
                 Image(systemName: "chevron.left")
-                    .frame(width: 32, height: 44)
+                    .frame(width: 36, height: 44)
+                    .contentShape(Rectangle())
             }
             .accessibilityLabel(Text("前の字幕"))
             Group {
@@ -643,7 +658,8 @@ struct VideoPlayerView: View {
                 model.replayCue()
             } label: {
                 Image(systemName: "gobackward")
-                    .frame(width: 32, height: 44)
+                    .frame(width: 36, height: 44)
+                    .contentShape(Rectangle())
             }
             .accessibilityLabel(Text("この字幕をもう一度"))
             .disabled(model.cues.isEmpty)
@@ -651,14 +667,16 @@ struct VideoPlayerView: View {
                 model.nextCue()
             } label: {
                 Image(systemName: "chevron.right")
-                    .frame(width: 32, height: 44)
+                    .frame(width: 36, height: 44)
+                    .contentShape(Rectangle())
             }
             .accessibilityLabel(Text("次の字幕"))
             Button {
                 cycleSubtitleMode()
             } label: {
                 Image(systemName: subtitleModeIcon)
-                    .frame(width: 32, height: 44)
+                    .frame(width: 36, height: 44)
+                    .contentShape(Rectangle())
             }
             .accessibilityLabel(Text("字幕の表示（表示・ぼかし・非表示）"))
         }
