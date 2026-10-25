@@ -91,8 +91,6 @@ struct ThreadView: View {
     /// tapped in a post, and each word tapped inside a popup opens another
     /// on top of it. Each popup is its own PopupView and web view.
     @State private var popups: [PopupItem] = []
-    /// Dictionary stylesheets, gathered once rather than on every lookup.
-    @State private var stylesCache: [String: String]?
     /// Post text styling; reading it here redraws every post when the user
     /// changes fonts or colours in 外観.
     @State private var appearance = AppearanceSettings.shared
@@ -364,9 +362,15 @@ struct ThreadView: View {
             }
         } else if let errorMessage {
             ContentUnavailableView {
-                Label("エラーが発生しました", systemImage: "exclamationmark.triangle")
+                Label("読み込めませんでした", systemImage: "exclamationmark.triangle")
             } description: {
                 Text(errorMessage)
+            } actions: {
+                Button("再試行") {
+                    self.errorMessage = nil
+                    Task { await loadThread(boardURL: boardURL, threadId: thread.id) }
+                }
+                .buttonStyle(.borderedProminent)
             }
         } else {
             loadingCover(thread: thread, boardURL: boardURL)
@@ -1064,9 +1068,10 @@ struct ThreadView: View {
                                        title: resolvedTitle,
                                        posts: newPosts)
         } catch {
-            errorMessage = String(localized: "エラーが発生しました: \(String(describing: error))")
             print("ThreadView Error: \(error)")
             hideLoadingCover()
+            guard !UserFacingError.isCancellation(error) else { return }
+            errorMessage = UserFacingError.message(for: error)
         }
     }
 
@@ -1292,17 +1297,7 @@ struct ThreadView: View {
         )
         guard let first = results.first else { return nil }
 
-        let styles: [String: String]
-        if let stylesCache {
-            styles = stylesCache
-        } else {
-            var built: [String: String] = [:]
-            for style in LookupEngine.shared.getStyles() {
-                built[style.dictName] = style.styles
-            }
-            styles = built
-            stylesCache = built
-        }
+        let styles = LookupEngine.shared.stylesByDictionary()
 
         let popup = PopupItem(showPopup: false,
                               currentSelection: selection,

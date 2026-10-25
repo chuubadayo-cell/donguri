@@ -10,6 +10,9 @@ import Foundation
 /// Tracks how far the user has read into each thread, so the board list can
 /// show an unread count and reopening a thread can resume near where the
 /// user left off. Backed by `UserDefaults`, cached in memory.
+/// Observable only through `revision`, so a board list's rows catch up
+/// (new-post counts, greyed-out rows) as soon as a thread is left.
+@Observable
 final class ReadStateStore {
     static let shared = ReadStateStore()
 
@@ -21,7 +24,9 @@ final class ReadStateStore {
     private static let retention: TimeInterval = 180 * 24 * 60 * 60
     private static let maxEntries = 3000
 
-    private var cache: [String: ReadState]
+    @ObservationIgnored private var cache: [String: ReadState]
+    /// Bumped whenever a read position changes.
+    private(set) var revision = 0
 
     private init() {
         if let data = UserDefaults.standard.data(forKey: Self.defaultsKey),
@@ -80,13 +85,14 @@ final class ReadStateStore {
             lastVisited: .now,
             lastTopIndex: topIndex ?? existing?.lastTopIndex
         )
+        if existing?.lastReadCount != cache[key]?.lastReadCount { revision &+= 1 }
         schedulePersist()
     }
 
     /// Up to 3000 entries are written as one blob; leaving a thread, then
     /// switching tabs, then backgrounding can each update, so the writes are
     /// gathered into one.
-    private var pendingWrite: Task<Void, Never>?
+    @ObservationIgnored private var pendingWrite: Task<Void, Never>?
 
     private func schedulePersist() {
         pendingWrite?.cancel()

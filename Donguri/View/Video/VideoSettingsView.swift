@@ -21,7 +21,7 @@ struct VideoSettingsView: View {
                     Text("上").tag(VideoSettings.SubtitlePosition.top)
                 }
                 VStack(alignment: .leading) {
-                    Text("文字の大きさ")
+                    LabeledContent("文字の大きさ", value: "\(Int(settings.subtitleSize))pt")
                     Slider(value: $settings.subtitleSize, in: 14...32, step: 1)
                 }
                 Toggle("字幕をぼかす", isOn: $settings.blurSubtitles)
@@ -37,10 +37,11 @@ struct VideoSettingsView: View {
             Section {
                 Toggle("調べるときに一時停止", isOn: $settings.pauseOnLookup)
                 Toggle("ダブルタップで前後の字幕へ", isOn: $settings.doubleTapSeeksLines)
+                Toggle("字幕ごとに一時停止", isOn: $settings.autoPause)
             } header: {
                 Text("操作")
             } footer: {
-                Text("オフにすると、ダブルタップで10秒戻る・進むになります。")
+                Text("動画を左右にスワイプしても前後の字幕へ移れます。ダブルタップをオフにすると、10秒戻る・進むになります。「字幕ごとに一時停止」は、各字幕の終わりで止まります。")
             }
 
             Section {

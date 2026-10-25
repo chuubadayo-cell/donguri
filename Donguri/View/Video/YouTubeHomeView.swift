@@ -17,7 +17,7 @@ final class YouTubeFeedModel {
     /// Kept for the app's lifetime, so switching to ウェブ and back keeps
     /// the feed and scroll position.
     static let shared = YouTubeFeedModel()
-    enum Source: Equatable {
+    enum Source: Hashable {
         case feed(YouTubeClient.Feed)
         case search(String)
         case channel(id: String, name: String)
@@ -32,13 +32,43 @@ final class YouTubeFeedModel {
     private(set) var signedIn = false
     private(set) var checkedSignIn = false
 
+    /// Each tab's last page, so switching between ホーム, 登録チャンネル and
+    /// the rest is instant; one older than this is fetched again.
+    private struct Page {
+        var videos: [YTVideo]
+        var continuation: String?
+        var loadedAt: Date
+    }
+    @ObservationIgnored private var pages: [Source: Page] = [:]
+    private static let freshFor: TimeInterval = 5 * 60
+
+    /// After signing in or switching accounts: every tab belongs to someone
+    /// else now.
+    func reload() async {
+        pages.removeAll()
+        await load(source)
+    }
+
     func checkSignIn() async {
         signedIn = await YouTubeClient.shared.refreshSignInState()
         checkedSignIn = true
     }
 
     func load(_ source: Source) async {
+        let switching = self.source != source
         self.source = source
+        if switching {
+            if let page = pages[source] {
+                videos = page.videos
+                continuation = page.continuation
+                error = nil
+                if Date.now.timeIntervalSince(page.loadedAt) < Self.freshFor { return }
+            } else {
+                // A spinner, not the previous tab's videos, until it loads.
+                videos = []
+                continuation = nil
+            }
+        }
         loading = true
         error = nil
         defer { loading = false }
@@ -52,6 +82,7 @@ final class YouTubeFeedModel {
             guard self.source == source else { return }
             videos = page.videos
             continuation = page.continuation
+            pages[source] = Page(videos: page.videos, continuation: page.continuation, loadedAt: .now)
             if page.videos.isEmpty {
                 error = signedIn || !Self.needsAccount(source)
                     ? String(localized: "動画が見つかりませんでした")
@@ -75,6 +106,8 @@ final class YouTubeFeedModel {
         let known = Set(videos.map(\.id))
         videos += page.videos.filter { !known.contains($0.id) }
         continuation = page.continuation
+        pages[current]?.videos = videos
+        pages[current]?.continuation = continuation
     }
 
     static func needsAccount(_ source: Source) -> Bool {
@@ -100,7 +133,7 @@ struct YouTubeHomeView: View {
                     YouTubeClient.shared.reset()
                     Task {
                         await model.checkSignIn()
-                        await model.load(model.source)
+                        await model.reload()
                     }
                 }) {
                     YouTubeSignInView()
@@ -114,7 +147,7 @@ struct YouTubeHomeView: View {
                             showsSignIn = true
                         }
                     }, onChange: {
-                        Task { await model.load(model.source) }
+                        Task { await model.reload() }
                     })
                 }
             Divider()
@@ -277,6 +310,7 @@ struct YouTubeHomeView: View {
             .padding(32)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
+            ScrollViewReader { proxy in
             List {
                 ForEach(model.videos) { video in
                     Button {
@@ -306,7 +340,9 @@ struct YouTubeHomeView: View {
                         }
                     }
                     .onAppear {
-                        if video.id == model.videos.last?.id {
+                        // A few rows early, so the next page is usually
+                        // there before the end is reached.
+                        if model.videos.suffix(5).contains(where: { $0.id == video.id }) {
                             Task { await model.loadMore() }
                         }
                     }
@@ -320,6 +356,11 @@ struct YouTubeHomeView: View {
             .listStyle(.plain)
             .scrollDismissesKeyboard(.immediately)
             .refreshable { await model.load(model.source) }
+            .onChange(of: model.source) {
+                // A different tab starts at its top.
+                if let first = model.videos.first?.id { proxy.scrollTo(first, anchor: .top) }
+            }
+            }
         }
     }
 }

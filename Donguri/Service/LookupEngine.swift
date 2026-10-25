@@ -191,6 +191,7 @@ final class LookupEngine {
             await MainActor.run {
                 guard token == self.generation else { return }
                 self.bundle = newBundle
+                self.stylesCache = nil
             }
         }
     }
@@ -216,6 +217,20 @@ final class LookupEngine {
             )
         }
     }
+
+    /// Every dictionary's stylesheet by dictionary name, for popups. Kept
+    /// until the dictionaries change, so a lookup doesn't rebuild it and
+    /// every screen sees a newly imported dictionary's styles.
+    func stylesByDictionary() -> [String: String] {
+        if let stylesCache { return stylesCache }
+        var built: [String: String] = [:]
+        for style in getStyles() { built[style.dictName] = style.styles }
+        // Not cached before the dictionaries have loaded.
+        if bundle != nil { stylesCache = built }
+        return built
+    }
+
+    private var stylesCache: [String: String]?
 
     func getStyles() -> [DictionaryStyle] {
         guard let bundle else { return [] }

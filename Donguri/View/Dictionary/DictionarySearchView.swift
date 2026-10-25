@@ -266,10 +266,7 @@ struct DictionarySearchView: View {
     
     private func handleTextSelection(_ selection: SelectionData, maxResults: Int, scanLength: Int,  isVertical: Bool, isFullWidth: Bool) -> Int? {
         let lookupResults = LookupEngine.shared.lookup(selection.text, maxResults: maxResults, scanLength: scanLength)
-        var dictionaryStyles: [String: String] = [:]
-        for style in LookupEngine.shared.getStyles() {
-            dictionaryStyles[style.dictName] = style.styles
-        }
+        let dictionaryStyles = LookupEngine.shared.stylesByDictionary()
         let popup = PopupItem(
             showPopup: false,
             currentSelection: selection,

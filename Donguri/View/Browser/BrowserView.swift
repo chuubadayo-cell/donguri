@@ -105,6 +105,9 @@ struct BrowserView: View {
                         .onSubmit {
                             model.go(model.addressText)
                         }
+                        .onChange(of: addressFocused) { _, focused in
+                            model.isEditingAddress = focused
+                        }
                     if addressFocused, !model.addressText.isEmpty {
                         Button {
                             model.addressText = ""
@@ -122,7 +125,6 @@ struct BrowserView: View {
                 if addressFocused {
                     Button("キャンセル") {
                         addressFocused = false
-                        model.addressText = model.url?.absoluteString ?? ""
                     }
                 } else {
                     Button {

@@ -95,9 +95,16 @@ struct BoardView: View {
                                 prompt: "スレタイ検索")
                 } else if let errorMessage {
                     ContentUnavailableView {
-                        Label("エラーが発生しました", systemImage: "exclamationmark.triangle")
+                        Label("読み込めませんでした", systemImage: "exclamationmark.triangle")
                     } description: {
                         Text(errorMessage)
+                    } actions: {
+                        // Not in a list, so pull to refresh can't reach it.
+                        Button("再試行") {
+                            self.errorMessage = nil
+                            Task { await loadBoard(board: board) }
+                        }
+                        .buttonStyle(.borderedProminent)
                     }
                 } else {
                     ProgressView("しばらくお待ちください...")
@@ -260,8 +267,9 @@ struct BoardView: View {
             recompute(board)
             favorites.update(boardURL: board.url, from: newThreads)
         } catch {
-            errorMessage = String(localized: "エラーが発生しました: \(String(describing: error))")
             print("BoardView Error: \(error)")
+            guard !UserFacingError.isCancellation(error) else { return }
+            errorMessage = UserFacingError.message(for: error)
         }
     }
 }
@@ -278,7 +286,9 @@ struct ThreadRowView: View {
     @State private var appearance = AppearanceSettings.shared
 
     private var readState: ReadState? {
-        ReadStateStore.shared.state(for: ReadStateStore.key(boardURL: boardURL, threadId: thread.id))
+        let store = ReadStateStore.shared
+        _ = store.revision  // Redraw when a thread is read.
+        return store.state(for: ReadStateStore.key(boardURL: boardURL, threadId: thread.id))
     }
 
     private var unreadCount: Int? {

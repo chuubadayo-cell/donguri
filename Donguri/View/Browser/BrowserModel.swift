@@ -39,6 +39,22 @@ final class BrowserModel: NSObject {
     private(set) var isLoading = false
     private(set) var progress: Double = 0
     var addressText = ""
+    /// While the address bar is being typed in, page changes don't
+    /// overwrite it.
+    @ObservationIgnored var isEditingAddress = false {
+        didSet {
+            // Editing shows the full address; otherwise just the site.
+            if isEditingAddress != oldValue { addressText = isEditingAddress ? (url?.absoluteString ?? "") : displayAddress }
+        }
+    }
+
+    /// What the address bar shows when not being edited: the site, as
+    /// Safari does.
+    var displayAddress: String {
+        guard let url else { return "" }
+        guard let host = url.host(percentEncoded: false), !host.isEmpty else { return url.absoluteString }
+        return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
+    }
 
     /// Taps look words up instead of following links.
     var lookupMode = false {
@@ -156,14 +172,19 @@ final class BrowserModel: NSObject {
                     transcriptIsFull = false
                 }
                 url = newURL
-                addressText = newURL?.absoluteString ?? ""
+                if !isEditingAddress { addressText = displayAddress }
                 if let newURL { UserDefaults.standard.set(newURL.absoluteString, forKey: Self.lastURLKey) }
             }
-            title = webView.title ?? ""
-            canGoBack = webView.canGoBack
-            canGoForward = webView.canGoForward
-            isLoading = webView.isLoading
-            progress = webView.estimatedProgress
+            // Only what changed: every assignment redraws whatever reads it,
+            // and progress alone reports dozens of times a load.
+            let newTitle = webView.title ?? ""
+            if title != newTitle { title = newTitle }
+            if canGoBack != webView.canGoBack { canGoBack = webView.canGoBack }
+            if canGoForward != webView.canGoForward { canGoForward = webView.canGoForward }
+            if isLoading != webView.isLoading { isLoading = webView.isLoading }
+            // Progress in 5% steps is smooth enough for a bar.
+            let newProgress = (webView.estimatedProgress * 20).rounded() / 20
+            if progress != newProgress { progress = newProgress }
         }
     }
 

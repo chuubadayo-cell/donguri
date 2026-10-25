@@ -576,6 +576,9 @@ struct VideoPlayerView: View {
                 Toggle(isOn: $settings.blurSubtitles) {
                     Label("字幕をぼかす", systemImage: "eye.slash")
                 }
+                Toggle(isOn: $settings.autoPause) {
+                    Label("字幕ごとに一時停止", systemImage: "pause.circle")
+                }
             }
             Section("再生速度") {
                 ForEach(VideoSettings.rates, id: \.self) { rate in
@@ -808,7 +811,8 @@ struct VideoPlayerView: View {
                     }
                 }
                 if let views = model.viewCount, let count = Int(views) {
-                    Text("\(count)回視聴")
+                    // 12万回視聴, as YouTube writes it.
+                    Text("\(count.formatted(.number.notation(.compactName)))回視聴")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -859,24 +863,35 @@ struct VideoPlayerView: View {
             if model.subtitleDelay != 0 || model.item.isFile {
                 DelayRow(model: model)
             }
+            let currentID = model.cues[safe: model.lastCueIndex]?.id
             ForEach(model.cues) { cue in
                 TranscriptRow(cue: cue,
-                              isCurrent: cue.id == model.cues[safe: model.lastCueIndex]?.id,
+                              isCurrent: cue.id == currentID,
                               blurred: isBlurred(cue),
-                              onSeek: { model.play(cue) },
+                              textStyle: AppearanceSettings.shared.postStyle,
+                              onSeek: {
+                                  // Jumping to a line picks the transcript's
+                                  // following back up from there.
+                                  followTranscript = true
+                                  model.play(cue)
+                              },
                               onReveal: { reveal(cue) },
                               onSelect: { selection in lookUp(selection, in: cue) },
                               onTapOutside: { model.popups.closeAll() })
+                    // Only the rows whose line, highlight or blur changed
+                    // redraw when playback moves on a line.
+                    .equatable()
                     .id(cue.id)
             }
         }
     }
 }
 
-private struct TranscriptRow: View {
+private struct TranscriptRow: View, Equatable {
     let cue: SubtitleCue
     let isCurrent: Bool
     let blurred: Bool
+    let textStyle: PostTextStyle
     let onSeek: () -> Void
     let onReveal: () -> Void
     let onSelect: (SelectionData) -> Int?
@@ -895,7 +910,7 @@ private struct TranscriptRow: View {
             .buttonStyle(.borderless)
             PostTextView(text: cue.text,
                          scanNonJapaneseText: userConfig.scanNonJapaneseText,
-                         style: AppearanceSettings.shared.postStyle,
+                         style: textStyle,
                          onTextSelected: onSelect,
                          onTapOutside: onTapOutside,
                          onPostReply: { _ in },
@@ -911,6 +926,12 @@ private struct TranscriptRow: View {
                 }
         }
         .listRowBackground(isCurrent ? Color.accentColor.opacity(0.12) : Color.clear)
+    }
+
+    /// The closures are rebuilt on every redraw but do the same thing.
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.cue == rhs.cue && lhs.isCurrent == rhs.isCurrent && lhs.blurred == rhs.blurred
+            && lhs.textStyle.key == rhs.textStyle.key
     }
 }
 

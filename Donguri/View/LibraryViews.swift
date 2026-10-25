@@ -88,6 +88,60 @@ struct SavedTabView: View {
 /// Favorite threads, refreshed for new replies when shown.
 struct FavoriteThreadsList: View {
     @State private var favorites = FavoritesStore.shared
+    @State private var query = ""
+
+    /// Reordering only applies to the whole list, not a filtered one.
+    private var moveAction: ((IndexSet, Int) -> Void)? {
+        guard query.isEmpty else { return nil }
+        return { favorites.moveThreads(fromOffsets: $0, toOffset: $1) }
+    }
+
+    private var rows: some View {
+        ForEach(shownThreads) { favorite in
+            let link = favorite.link
+            NavigationLink(value: BrowseRoute.thread(link)) {
+                LibraryThreadRow(title: favorite.title,
+                                 boardName: favorite.boardName,
+                                 responseCount: favorite.responseCount,
+                                 unreadCount: favorites.unreadCount(for: favorite),
+                                 isArchived: favorite.isArchived)
+            }
+            .threadContextMenu(link) {
+                Button(role: .destructive) {
+                    withAnimation { favorites.remove(favorite) }
+                    Haptics.play(.light)
+                } label: {
+                    Label("お気に入りから削除", systemImage: "star.slash")
+                }
+            }
+            .swipeActions(edge: .trailing) {
+                Button(role: .destructive) {
+                    withAnimation { favorites.remove(favorite) }
+                    Haptics.play(.light)
+                } label: {
+                    Label("削除", systemImage: "star.slash")
+                }
+            }
+        }
+        // Offsets index the filtered list while searching.
+        .onDelete { offsets in
+            if query.isEmpty {
+                favorites.removeThreads(atOffsets: offsets)
+            } else {
+                let shown = shownThreads
+                for favorite in offsets.map({ shown[$0] }) { favorites.remove(favorite) }
+            }
+        }
+        .onMove(perform: moveAction)
+    }
+
+    private var shownThreads: [FavoriteThread] {
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return favorites.threads }
+        return favorites.threads.filter {
+            $0.title.localizedCaseInsensitiveContains(trimmed) || $0.boardName.localizedCaseInsensitiveContains(trimmed)
+        }
+    }
 
     var body: some View {
         Group {
@@ -97,36 +151,14 @@ struct FavoriteThreadsList: View {
                                        description: Text("スレの☆をタップするか、一覧でスレを右にスワイプすると追加できます。"))
             } else {
                 List {
-                    ForEach(favorites.threads) { favorite in
-                        let link = favorite.link
-                        NavigationLink(value: BrowseRoute.thread(link)) {
-                            LibraryThreadRow(title: favorite.title,
-                                             boardName: favorite.boardName,
-                                             responseCount: favorite.responseCount,
-                                             unreadCount: favorites.unreadCount(for: favorite),
-                                             isArchived: favorite.isArchived)
-                        }
-                        .threadContextMenu(link) {
-                            Button(role: .destructive) {
-                                withAnimation { favorites.remove(favorite) }
-                                Haptics.play(.light)
-                            } label: {
-                                Label("お気に入りから削除", systemImage: "star.slash")
-                            }
-                        }
-                        .swipeActions(edge: .trailing) {
-                            Button(role: .destructive) {
-                                withAnimation { favorites.remove(favorite) }
-                                Haptics.play(.light)
-                            } label: {
-                                Label("削除", systemImage: "star.slash")
-                            }
-                        }
+                    if shownThreads.isEmpty {
+                        ContentUnavailableView.search(text: query)
+                            .listRowSeparator(.hidden)
                     }
-                    .onDelete { favorites.removeThreads(atOffsets: $0) }
-                    .onMove { favorites.moveThreads(fromOffsets: $0, toOffset: $1) }
+                    rows
                 }
                 .listStyle(.plain)
+                .searchable(text: $query, prompt: "スレタイ・板名で絞り込み")
                 .refreshable {
                     await favorites.refreshThreadCounts()
                 }
@@ -210,6 +242,15 @@ struct HistoryView: View {
     /// a List while one of them is pushed can pop the user straight back out.
     @State private var entries: [HistoryEntry] = []
     @State private var confirmClear = false
+    @State private var query = ""
+
+    private var shownEntries: [HistoryEntry] {
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return entries }
+        return entries.filter {
+            $0.title.localizedCaseInsensitiveContains(trimmed) || $0.boardName.localizedCaseInsensitiveContains(trimmed)
+        }
+    }
 
     var body: some View {
         Group {
@@ -219,7 +260,11 @@ struct HistoryView: View {
                                        description: Text("開いたスレがここに表示されます。"))
             } else {
                 List {
-                    ForEach(entries) { entry in
+                    if shownEntries.isEmpty {
+                        ContentUnavailableView.search(text: query)
+                            .listRowSeparator(.hidden)
+                    }
+                    ForEach(shownEntries) { entry in
                         let link = entry.link
                         NavigationLink(value: BrowseRoute.thread(link)) {
                             LibraryThreadRow(title: entry.title,
@@ -230,13 +275,14 @@ struct HistoryView: View {
                         .threadContextMenu(link)
                     }
                     .onDelete { offsets in
-                        for entry in offsets.map({ entries[$0] }) {
-                            history.remove(id: entry.id)
-                        }
-                        entries.remove(atOffsets: offsets)
+                        let shown = shownEntries
+                        let removed = Set(offsets.map { shown[$0].id })
+                        for id in removed { history.remove(id: id) }
+                        entries.removeAll { removed.contains($0.id) }
                     }
                 }
                 .listStyle(.plain)
+                .searchable(text: $query, prompt: "スレタイ・板名で絞り込み")
             }
         }
         .themedScreen()

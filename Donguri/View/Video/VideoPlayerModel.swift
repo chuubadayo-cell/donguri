@@ -333,10 +333,16 @@ final class VideoPlayerModel {
         }
     }
 
-    private func updateCue(at time: Double) {
+    private func updateCue(at time: Double, seeking: Bool = false) {
         guard !cues.isEmpty else {
             if activeCue != nil { activeCue = nil }
             return
+        }
+        if seeking {
+            autoPausedCueID = nil
+        } else if let playing = activeCue, shouldAutoPause(after: playing, at: time) {
+            autoPausedCueID = playing.id
+            pause()
         }
         // The last line starting at or before `time`.
         var low = 0, high = cues.count
@@ -351,6 +357,19 @@ final class VideoPlayerModel {
         if active?.id != activeCue?.id {
             activeCue = active
         }
+    }
+
+    /// The line just played to its end, with auto-pause on (asbplayer's
+    /// auto-pause): stop there, once, so it can be looked at or replayed.
+    @ObservationIgnored private var autoPausedCueID: Int?
+
+    private func shouldAutoPause(after cue: SubtitleCue, at time: Double) -> Bool {
+        guard VideoSettings.shared.autoPause, isPlaying, !isMakingCard, !isAd,
+              cue.id != autoPausedCueID else { return false }
+        // Reports come every 0.1 s (native) or 0.2 s (YouTube's player);
+        // stopping a report early keeps the next line's first word out.
+        let margin = engine == .web ? 0.12 : 0.06
+        return time >= cue.end - margin && time < cue.end + 1
     }
 
     // MARK: Controls
@@ -395,7 +414,7 @@ final class VideoPlayerModel {
     func seek(to time: Double, play: Bool? = nil) {
         let target = max(0, clock.duration > 0 ? min(time, clock.duration - 0.1) : time)
         clock.time = target
-        updateCue(at: target)
+        updateCue(at: target, seeking: true)
         switch engine {
         case .native:
             player.seek(to: CMTime(seconds: target, preferredTimescale: 600),

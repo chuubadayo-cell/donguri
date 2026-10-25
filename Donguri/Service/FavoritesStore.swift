@@ -184,6 +184,7 @@ final class FavoritesStore {
     /// it has never been opened.
     func unreadCount(for thread: FavoriteThread) -> Int? {
         _ = readRevision
+        _ = ReadStateStore.shared.revision
         guard let state = ReadStateStore.shared.state(for: thread.id) else { return nil }
         let unread = thread.responseCount - state.lastReadCount
         return unread > 0 ? unread : nil

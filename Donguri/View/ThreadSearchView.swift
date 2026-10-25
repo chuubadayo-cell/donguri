@@ -195,7 +195,7 @@ struct ThreadSearchView: View {
                 results = found
             } catch {
                 guard submitted == trimmed else { return }
-                errorMessage = error.localizedDescription
+                errorMessage = UserFacingError.message(for: error)
                 results = []
             }
             isSearching = false

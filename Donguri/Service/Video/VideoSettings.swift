@@ -31,6 +31,8 @@ final class VideoSettings {
     /// Double-tapping the sides of the video jumps by subtitle line
     /// instead of by 10 seconds.
     var doubleTapSeeksLines: Bool { didSet { save(doubleTapSeeksLines, "doubleTapSeeksLines") } }
+    /// Pause at the end of every subtitle line (asbplayer's auto-pause).
+    var autoPause: Bool { didSet { save(autoPause, "autoPause") } }
 
     var cardImage: ClipImageKind { didSet { save(cardImage.rawValue, "cardImage") } }
     var cardAudio: Bool { didSet { save(cardAudio, "cardAudio") } }
@@ -52,6 +54,7 @@ final class VideoSettings {
         subtitleSize = d.object(forKey: p + "subtitleSize") as? Double ?? 20
         pauseOnLookup = d.object(forKey: p + "pauseOnLookup") as? Bool ?? true
         doubleTapSeeksLines = d.object(forKey: p + "doubleTapSeeksLines") as? Bool ?? true
+        autoPause = d.object(forKey: p + "autoPause") as? Bool ?? false
         cardImage = d.string(forKey: p + "cardImage").flatMap(ClipImageKind.init(rawValue:)) ?? .screenshot
         cardAudio = d.object(forKey: p + "cardAudio") as? Bool ?? true
         paddingBefore = d.object(forKey: p + "paddingBefore") as? Int ?? 0

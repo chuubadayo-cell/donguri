@@ -1,0 +1,15 @@
+{
+  "インターネットに接続されていません": "You're not connected to the internet",
+  "接続がタイムアウトしました。しばらくしてからもう一度お試しください。": "The connection timed out. Try again in a moment.",
+  "サーバーに接続できませんでした": "Couldn't connect to the server",
+  "サーバーから正しい応答がありませんでした。混雑しているか、一時的に止まっている可能性があります。": "The server didn't respond properly. It may be busy or temporarily down.",
+  "受け取ったデータを読み取れませんでした": "Couldn't read the data that came back",
+  "URLが正しくありません": "The URL isn't valid",
+  "キャンセルされました": "Cancelled",
+  "安全な接続を確立できませんでした": "Couldn't make a secure connection",
+  "スレが見つかりませんでした（削除されたか、dat落ちしています）": "Thread not found (deleted or archived)",
+  "字幕ごとに一時停止": "Pause after each subtitle",
+  "動画を左右にスワイプしても前後の字幕へ移れます。ダブルタップをオフにすると、10秒戻る・進むになります。「字幕ごとに一時停止」は、各字幕の終わりで止まります。": "Swipe left or right on the video to move between subtitles. With double tap off, double tapping skips 10 seconds. \"Pause after each subtitle\" stops at the end of every line.",
+  "%@回視聴": "%@ views",
+  "スレタイ・板名で絞り込み": "Filter by title or board"
+}

@@ -42,9 +42,15 @@ struct BBSMenuView: View {
             } else if let errorMessage {
                 Section {
                     ContentUnavailableView {
-                        Label("エラーが発生しました", systemImage: "exclamationmark.triangle")
+                        Label("読み込めませんでした", systemImage: "exclamationmark.triangle")
                     } description: {
                         Text(errorMessage)
+                    } actions: {
+                        Button("再試行") {
+                            self.errorMessage = nil
+                            Task { await loadMenu() }
+                        }
+                        .buttonStyle(.borderedProminent)
                     }
                     .themedRow()
                 }
@@ -104,8 +110,8 @@ struct BBSMenuView: View {
             menu = newMenu
         } catch {
             // With a saved menu on screen, being offline isn't worth an error.
-            if menu == nil {
-                errorMessage = String(localized: "エラーが発生しました: \(String(describing: error))")
+            if menu == nil, !UserFacingError.isCancellation(error) {
+                errorMessage = UserFacingError.message(for: error)
             }
             print("BBSMenuView Error: \(error)")
         }

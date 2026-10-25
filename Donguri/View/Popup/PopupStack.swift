@@ -22,8 +22,6 @@ final class PopupStack {
     /// the line's audio and picture.
     @ObservationIgnored var mediaProvider: (() async -> CardMedia?)?
 
-    @ObservationIgnored private var stylesCache: [String: String]?
-
     var isEmpty: Bool { popups.isEmpty }
 
     /// Opens a popup for `selection` if the dictionaries know it. Returns
@@ -37,7 +35,7 @@ final class PopupStack {
         let popup = PopupItem(showPopup: false,
                               currentSelection: selection,
                               lookupResults: results,
-                              dictionaryStyles: styles(),
+                              dictionaryStyles: LookupEngine.shared.stylesByDictionary(),
                               isVertical: false,
                               isFullWidth: isFullWidth ?? userConfig.popupFullWidth,
                               clearSelection: false)
@@ -89,16 +87,6 @@ final class PopupStack {
             popups[index - 1].clearSelection.toggle()
             closeChildren(of: popups[index - 1].id)
         }
-    }
-
-    private func styles() -> [String: String] {
-        if let stylesCache { return stylesCache }
-        var built: [String: String] = [:]
-        for style in LookupEngine.shared.getStyles() {
-            built[style.dictName] = style.styles
-        }
-        stylesCache = built
-        return built
     }
 }
 
