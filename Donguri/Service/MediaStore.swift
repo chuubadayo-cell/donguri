@@ -312,11 +312,25 @@ actor MediaStore {
         // Long GIFs are thinned rather than decoded frame for frame.
         let maxFrames = 240
         let step = max(1, Int((Double(frameCount) / Double(maxFrames)).rounded(.up)))
+        let decodedFrames = Double((frameCount + step - 1) / step)
+        // Every frame stays decoded while it plays, so the frames are sized
+        // to keep the whole animation under a budget: a long, large GIF at
+        // full size took hundreds of megabytes and seconds to open.
+        let budget = 96.0 * 1024 * 1024
+        var side: CGFloat = 1600
+        if let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+           let width = properties[kCGImagePropertyPixelWidth] as? Double,
+           let height = properties[kCGImagePropertyPixelHeight] as? Double, width > 0, height > 0 {
+            let longest = max(width, height)
+            let aspect = min(width, height) / longest
+            let allowed = (budget / (decodedFrames * 4 * aspect)).squareRoot()
+            side = CGFloat(max(240, min(longest, allowed, 1600)))
+        }
         var frames: [UIImage] = []
         var duration: Double = 0
 
         for index in stride(from: 0, to: frameCount, by: step) {
-            guard let cgImage = frame(at: index, of: source, maxPixelSize: 1600) else { continue }
+            guard let cgImage = frame(at: index, of: source, maxPixelSize: side) else { continue }
             frames.append(UIImage(cgImage: cgImage))
             duration += frameDelay(at: index, of: source) * Double(step)
         }

@@ -17,10 +17,60 @@ import UIKit
 nonisolated struct OCRLine: Sendable, Hashable {
     let text: String
     let box: CGRect
-    /// One per Character of `text`, same order.
-    let characterBoxes: [CGRect]
     /// Lines whose characters run top to bottom (縦書き).
     let isVertical: Bool
+    /// Asking Vision where each character is costs about as much as the
+    /// recognition itself on a text-heavy image, so it is done only for a
+    /// line that is actually tapped, and remembered.
+    fileprivate let characters: OCRCharacterBoxes
+
+    /// One per Character of `text`, same order.
+    var characterBoxes: [CGRect] { characters.boxes(line: box, vertical: isVertical) }
+
+    static func == (lhs: OCRLine, rhs: OCRLine) -> Bool {
+        lhs.text == rhs.text && lhs.box == rhs.box
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(text)
+        hasher.combine(box.minX)
+        hasher.combine(box.minY)
+    }
+}
+
+/// Vision's recognised text for one line, asked for character boxes on
+/// demand. Vision's objects are immutable once the request has finished;
+/// the lock guards the cache.
+nonisolated final class OCRCharacterBoxes: @unchecked Sendable {
+    private let candidate: VNRecognizedText
+    private let lock = NSLock()
+    private var cached: [CGRect]?
+
+    init(candidate: VNRecognizedText) {
+        self.candidate = candidate
+    }
+
+    func boxes(line: CGRect, vertical: Bool) -> [CGRect] {
+        lock.lock()
+        defer { lock.unlock() }
+        if let cached { return cached }
+        let text = candidate.string
+        var boxes: [CGRect] = []
+        boxes.reserveCapacity(text.count)
+        var index = text.startIndex
+        while index < text.endIndex {
+            let next = text.index(after: index)
+            if let box = try? candidate.boundingBox(for: index..<next)?.boundingBox {
+                boxes.append(TextRecognizer.flip(box))
+            } else {
+                boxes.append(.zero)
+            }
+            index = next
+        }
+        let filled = TextRecognizer.fillGaps(boxes, in: line, vertical: vertical)
+        cached = filled
+        return filled
+    }
 }
 
 /// What a tap on recognised text found.
@@ -35,13 +85,35 @@ nonisolated struct OCRHit: Sendable {
 
 nonisolated enum TextRecognizer {
     /// Recognises the text in `image`. Runs off the main thread.
-    static func recognize(_ image: UIImage) async -> [OCRLine] {
+    static func recognize(_ image: UIImage, priority: TaskPriority = .userInitiated) async -> [OCRLine] {
         guard let cgImage = image.cgImage else { return [] }
         let orientation = CGImagePropertyOrientation(image.imageOrientation)
-        return await Task.detached(priority: .userInitiated) {
+        return await Task.detached(priority: priority) {
             recognize(cgImage: cgImage, orientation: orientation)
         }.value
     }
+
+    /// Loads Vision's Japanese models ahead of the first real request,
+    /// which otherwise waits for them (most of a second).
+    static func warmUp() {
+        guard !warmedUp else { return }
+        warmedUp = true
+        Task.detached(priority: .utility) {
+            let size = CGSize(width: 64, height: 32)
+            let format = UIGraphicsImageRendererFormat()
+            format.scale = 1
+            let image = UIGraphicsImageRenderer(size: size, format: format).image { context in
+                UIColor.white.setFill()
+                context.fill(CGRect(origin: .zero, size: size))
+                ("あ" as NSString).draw(at: CGPoint(x: 20, y: 4), withAttributes: [.font: UIFont.systemFont(ofSize: 20)])
+            }
+            if let cgImage = image.cgImage {
+                _ = recognize(cgImage: cgImage, orientation: .up)
+            }
+        }
+    }
+
+    private nonisolated(unsafe) static var warmedUp = false
 
     private static func recognize(cgImage: CGImage, orientation: CGImagePropertyOrientation) -> [OCRLine] {
         let request = VNRecognizeTextRequest()
@@ -49,6 +121,8 @@ nonisolated enum TextRecognizer {
         request.recognitionLanguages = ["ja-JP", "en-US"]
         request.usesLanguageCorrection = true
         request.automaticallyDetectsLanguage = false
+        // Specks and noise smaller than this aren't text worth tapping.
+        request.minimumTextHeight = 0.008
 
         let handler = VNImageRequestHandler(cgImage: cgImage, orientation: orientation, options: [:])
         do {
@@ -63,34 +137,21 @@ nonisolated enum TextRecognizer {
             guard let candidate = observation.topCandidates(1).first else { continue }
             let text = candidate.string
             guard !text.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
-
-            var boxes: [CGRect] = []
-            boxes.reserveCapacity(text.count)
-            var index = text.startIndex
-            while index < text.endIndex {
-                let next = text.index(after: index)
-                if let box = try? candidate.boundingBox(for: index..<next)?.boundingBox {
-                    boxes.append(flip(box))
-                } else {
-                    boxes.append(.zero)
-                }
-                index = next
-            }
             let lineBox = flip(observation.boundingBox)
             let vertical = text.count > 1 && lineBox.height > lineBox.width * 1.5
-            lines.append(OCRLine(text: text, box: lineBox, characterBoxes: fillGaps(boxes, in: lineBox, vertical: vertical),
-                                 isVertical: vertical))
+            lines.append(OCRLine(text: text, box: lineBox, isVertical: vertical,
+                                 characters: OCRCharacterBoxes(candidate: candidate)))
         }
         return lines
     }
 
     /// Vision's origin is the bottom left; UIKit's is the top left.
-    private static func flip(_ box: CGRect) -> CGRect {
+    fileprivate static func flip(_ box: CGRect) -> CGRect {
         CGRect(x: box.minX, y: 1 - box.maxY, width: box.width, height: box.height)
     }
 
     /// Characters Vision couldn't box get a share of the line instead.
-    private static func fillGaps(_ boxes: [CGRect], in line: CGRect, vertical: Bool) -> [CGRect] {
+    fileprivate static func fillGaps(_ boxes: [CGRect], in line: CGRect, vertical: Bool) -> [CGRect] {
         guard boxes.contains(where: { $0 == .zero }), !boxes.isEmpty else { return boxes }
         let count = CGFloat(boxes.count)
         return boxes.enumerated().map { index, box in

@@ -76,8 +76,18 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate {
     private let ocrLayer = CAShapeLayer()
 
     var ocrLines: [OCRLine]? {
-        didSet { drawOCR() }
+        didSet {
+            drawOCR()
+            textTap.isEnabled = ocrLines != nil
+        }
     }
+
+    /// A tap on recognised text looks it up at once. The ordinary single
+    /// tap has to wait to see whether a double tap follows, which made
+    /// every lookup feel slow; this one only begins when the finger is on
+    /// text, so taps elsewhere still zoom and toggle the controls.
+    private lazy var textTap = UITapGestureRecognizer(target: self, action: #selector(handleTextTap(_:)))
+    private let textTapGate = TextTapGate()
 
     /// How far (in points) the image has to travel to close the gallery.
     private static let dismissDistance: CGFloat = 140
@@ -111,6 +121,13 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate {
         let singleTap = UITapGestureRecognizer(target: self, action: #selector(handleSingleTap(_:)))
         singleTap.require(toFail: doubleTap)
         addGestureRecognizer(singleTap)
+
+        textTapGate.shouldBegin = { [weak self] recognizer in
+            self?.textHit(at: recognizer) != nil
+        }
+        textTap.delegate = textTapGate
+        textTap.isEnabled = false
+        addGestureRecognizer(textTap)
 
         // No delegate on purpose: UIScrollView privately implements the
         // gesture delegate methods for its own pinch and pan, and defining
@@ -196,15 +213,24 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate {
 
     // MARK: Taps
 
+    private func textHit(at recognizer: UIGestureRecognizer) -> OCRHit? {
+        guard let ocrLines, imageView.bounds.width > 0 else { return nil }
+        let point = recognizer.location(in: imageView)
+        let normalized = CGPoint(x: point.x / imageView.bounds.width, y: point.y / imageView.bounds.height)
+        return TextRecognizer.hit(at: normalized, in: ocrLines)
+    }
+
+    @objc private func handleTextTap(_ recognizer: UITapGestureRecognizer) {
+        guard let hit = textHit(at: recognizer) else { return }
+        let rect = imageView.convert(denormalize(hit.characterBox, in: imageView.bounds), to: nil)
+        callbacks?.textTapped(hit, rect: rect)
+    }
+
     @objc private func handleSingleTap(_ recognizer: UITapGestureRecognizer) {
-        if let ocrLines, imageView.bounds.width > 0 {
-            let point = recognizer.location(in: imageView)
-            let normalized = CGPoint(x: point.x / imageView.bounds.width, y: point.y / imageView.bounds.height)
-            if let hit = TextRecognizer.hit(at: normalized, in: ocrLines) {
-                let rect = imageView.convert(denormalize(hit.characterBox, in: imageView.bounds), to: nil)
-                callbacks?.textTapped(hit, rect: rect)
-                return
-            }
+        if let hit = textHit(at: recognizer) {
+            let rect = imageView.convert(denormalize(hit.characterBox, in: imageView.bounds), to: nil)
+            callbacks?.textTapped(hit, rect: rect)
+            return
         }
         callbacks?.tapped()
     }
@@ -288,5 +314,14 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate {
         default:
             break
         }
+    }
+}
+
+/// Lets the text tap begin only over recognised text.
+private final class TextTapGate: NSObject, UIGestureRecognizerDelegate {
+    var shouldBegin: (UIGestureRecognizer) -> Bool = { _ in false }
+
+    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        shouldBegin(gestureRecognizer)
     }
 }

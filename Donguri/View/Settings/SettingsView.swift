@@ -26,6 +26,11 @@ struct SettingsView: View {
                     } label: {
                         Label("Anki", systemImage: "rectangle.on.rectangle.angled")
                     }
+                    NavigationLink {
+                        VideoSettingsView()
+                    } label: {
+                        Label("動画と字幕", systemImage: "captions.bubble")
+                    }
                 } header: {
                     Text("辞書とマイニング")
                 }

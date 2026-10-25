@@ -24,6 +24,13 @@ enum BrowserScripts {
       window.__iroha = true;
       window.irohaLookup = false;
 
+      // The looked-up word is marked the way Hoshi Reader and the thread
+      // view mark it. selection.js sets a CSS highlight; the page needs the
+      // rule that draws it.
+      const highlightStyle = document.createElement('style');
+      highlightStyle.textContent = '::highlight(hoshi-selection) { background-color: rgba(160, 160, 160, 0.4) !important; color: inherit; }';
+      (document.head || document.documentElement).appendChild(highlightStyle);
+
       // Like hoshiSelection.selectText, but links and images don't stop it:
       // in lookup mode every tap is a lookup.
       function select(x, y, maxLength) {
@@ -160,13 +167,19 @@ enum BrowserScripts {
         "imobile.co.jp", "ninja.co.jp", "shinobi.jp", "adroll.com", "ad.as.amanad.adtdp.com",
     ]
 
-    /// Containers that pages leave empty when their ads are blocked.
+    /// Containers that pages leave empty when their ads are blocked. Plain
+    /// class names only: substring selectors ([class*=…]) are checked
+    /// against every element on every style change, which made big pages
+    /// noticeably slower.
     private static let hiddenSelectors = [
-        ".adsbygoogle", "ins.adsbygoogle", "[id^='google_ads_']", "[id^='div-gpt-ad']",
-        "iframe[src*='doubleclick.net']", "iframe[src*='googlesyndication']",
-        "[class*='ad-container']", "[class^='ad_']", ".ad-banner", ".adBanner",
-        ".ninja-recommend-block", "[id^='taboola']", ".OUTBRAIN", ".logly-lift",
-        ".i-mobile-ad", "div[id^='im-']", ".microadCompass-ad",
+        ".adsbygoogle", ".ad-banner", ".adBanner", ".ninja-recommend-block",
+        ".OUTBRAIN", ".logly-lift", ".i-mobile-ad", ".microadCompass-ad",
+    ]
+
+    /// Big script-driven sites that don't need the element hiding.
+    private static let unhiddenDomains = [
+        "*youtube.com", "*google.com", "*google.co.jp", "*nicovideo.jp", "*pixiv.net",
+        "*wikipedia.org", "*x.com", "*twitter.com",
     ]
 
     static var contentRules: String {
@@ -182,7 +195,7 @@ enum BrowserScripts {
             ]
         }
         rules.append([
-            "trigger": ["url-filter": ".*"],
+            "trigger": ["url-filter": ".*", "unless-domain": unhiddenDomains],
             "action": ["type": "css-display-none", "selector": hiddenSelectors.joined(separator: ", ")],
         ])
         guard let data = try? JSONSerialization.data(withJSONObject: rules),

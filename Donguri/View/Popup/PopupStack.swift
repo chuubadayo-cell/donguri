@@ -18,6 +18,9 @@ final class PopupStack {
     /// video frame).
     var coverURL: URL?
     var documentTitle: String?
+    /// Made when a card is mined from these popups; for video subtitles,
+    /// the line's audio and picture.
+    @ObservationIgnored var mediaProvider: (() async -> CardMedia?)?
 
     @ObservationIgnored private var stylesCache: [String: String]?
 
@@ -132,7 +135,8 @@ struct PopupStackLayer: View {
                         },
                         onSwipeDismiss: {
                             stack.swipeDismiss(popupId)
-                        }
+                        },
+                        mediaProvider: stack.mediaProvider
                     )
                     .zIndex(Double(100 + (stack.popups.firstIndex(where: { $0.id == popupId }) ?? 0)))
                 }

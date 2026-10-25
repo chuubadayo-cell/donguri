@@ -49,7 +49,14 @@ struct ThreadView: View {
 
     // Read-position tracking: how far the user has scrolled, and where to
     // resume to once a fresh load's rows exist.
-    @State private var maxSeenIndex: Int = 0
+    /// Observable on its own so that only the position pill redraws when it
+    /// changes; as plain @State it redrew every row several times a second
+    /// while scrolling down.
+    @State private var readProgress = ReadProgress()
+    private var maxSeenIndex: Int {
+        get { readProgress.maxSeen }
+        nonmutating set { readProgress.maxSeen = newValue }
+    }
     /// The live read position. Rows report in as they appear, many per
     /// second while scrolling; writing each one to @State redrew the whole
     /// thread every time. `maxSeenIndex` is published from this at most a
@@ -499,6 +506,9 @@ struct ThreadView: View {
                  threadTitle: index == 0 ? resolvedTitle : nil,
                  // In tree mode the replies are right there underneath.
                  showsReplyButton: !showsTree)
+        // Rows whose data hasn't changed skip their body when the thread
+        // redraws (a refresh, a highlight, the popup opening).
+        .equatable()
     }
 
     /// The "read up to here" line goes above the first new post.
@@ -627,11 +637,6 @@ struct ThreadView: View {
     @ViewBuilder
     private func positionIndicator(proxy: ScrollViewProxy, boardURL: String, threadId: Int) -> some View {
         let lastIndex = visibleIndices.last ?? 0
-        // In tree order the indices aren't sorted, so there's no "below".
-        let below = showsTree ? 0 : Self.count(in: visibleIndices, above: maxSeenIndex)
-        let unseenNew = showsTree ? 0 : (newPostsStart.map { start in
-            Self.count(in: visibleIndices, above: max(start - 1, maxSeenIndex))
-        } ?? 0)
 
         if posts.count > 15 || autoRefresh {
             Menu {
@@ -662,33 +667,18 @@ struct ThreadView: View {
                     Label("自動更新（\(behavior.autoRefreshInterval)秒）", systemImage: "dot.radiowaves.left.and.right")
                 }
             } label: {
-                HStack(spacing: 6) {
-                    if autoRefresh {
-                        RefreshCountdown(start: refreshCycleStart,
-                                         interval: TimeInterval(behavior.autoRefreshInterval))
-                    }
-                    if unseenNew > 0 {
-                        Text(verbatim: "\(unseenNew)")
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 1)
-                            .background(Capsule().fill(Color.red))
-                    }
-                    if below > 0 {
-                        Text(verbatim: "\(below)")
-                            .foregroundStyle(.secondary)
-                    }
-                    Image(systemName: below > 0 ? "arrow.down" : "checkmark")
-                        .foregroundStyle(.secondary)
-                }
-                .font(.footnote.weight(.semibold).monospacedDigit())
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(.regularMaterial, in: Capsule())
-                .overlay(Capsule().stroke(Color.primary.opacity(0.08), lineWidth: 1))
-                .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
+                PositionPillLabel(progress: readProgress,
+                                  visibleIndices: visibleIndices,
+                                  newPostsStart: newPostsStart,
+                                  showsTree: showsTree,
+                                  autoRefresh: autoRefresh,
+                                  refreshCycleStart: refreshCycleStart,
+                                  refreshInterval: TimeInterval(behavior.autoRefreshInterval))
             } primaryAction: {
                 Haptics.play(.light)
+                let unseenNew = showsTree ? 0 : (newPostsStart.map { start in
+                    Self.count(in: visibleIndices, above: max(start - 1, maxSeenIndex))
+                } ?? 0)
                 if unseenNew > 0, let newPostsStart, newPostsStart > maxSeenIndex {
                     scroll(proxy, to: newPostsStart)
                 } else {
@@ -701,7 +691,7 @@ struct ThreadView: View {
     }
 
     /// How many of the sorted `indices` are greater than `value`.
-    private static func count(in indices: [Int], above value: Int) -> Int {
+    fileprivate static func count(in indices: [Int], above value: Int) -> Int {
         var low = 0, high = indices.count
         while low < high {
             let mid = (low + high) / 2
@@ -1740,8 +1730,9 @@ struct PostView: View {
         }
         // The system translator, as Messages and Safari present it. It wants the
         // visible text, not PostService's `[>>N](donguri://res/N)` markdown.
-        .translationPresentation(isPresented: $showTranslation,
-                                 text: post.text.cachedPlainPostText)
+        // Attached only once asked for: a translation modifier on every row
+        // was measurable while scrolling.
+        .modifier(TranslationOnDemand(isPresented: $showTranslation, text: post.text))
         .fullScreenCover(item: $localGalleryItem) { item in
             let items = resolvedMedia
             GalleryView(items: items, initialIndex: items.firstIndex(of: item) ?? 0) {
@@ -2090,4 +2081,87 @@ private final class SeenTracker {
     var visible = Set<Int>()
     /// The end of the thread has been reached this visit (for the haptic).
     var reachedEnd = false
+}
+
+extension PostView: Equatable {
+    /// The data a row draws. The callbacks are left out: they only reach
+    /// back into ThreadView, whose state they read when called.
+    static func == (lhs: PostView, rhs: PostView) -> Bool {
+        lhs.index == rhs.index
+            && lhs.post == rhs.post
+            && lhs.idCount == rhs.idCount
+            && lhs.tripCount == rhs.tripCount
+            && lhs.isIDHighlighted == rhs.isIDHighlighted
+            && lhs.isTripHighlighted == rhs.isTripHighlighted
+            && lhs.media == rhs.media
+            && lhs.textStyle?.key == rhs.textStyle?.key
+            && lhs.hidesName == rhs.hidesName
+            && lhs.threadTitle == rhs.threadTitle
+            && lhs.showsReplyButton == rhs.showsReplyButton
+            && (lhs.onReport == nil) == (rhs.onReport == nil)
+    }
+}
+
+private struct TranslationOnDemand: ViewModifier {
+    @Binding var isPresented: Bool
+    let text: String
+
+    func body(content: Content) -> some View {
+        if isPresented {
+            content.translationPresentation(isPresented: $isPresented, text: text.cachedPlainPostText)
+        } else {
+            content
+        }
+    }
+}
+
+/// How far the reader has got. See `ThreadView.readProgress`.
+@Observable
+private final class ReadProgress {
+    var maxSeen = 0
+}
+
+/// The position pill's counts. A view of its own so that the read position
+/// changing redraws only this.
+private struct PositionPillLabel: View {
+    let progress: ReadProgress
+    let visibleIndices: [Int]
+    let newPostsStart: Int?
+    let showsTree: Bool
+    let autoRefresh: Bool
+    let refreshCycleStart: Date
+    let refreshInterval: TimeInterval
+
+    var body: some View {
+        let maxSeen = progress.maxSeen
+        // In tree order the indices aren't sorted, so there's no "below".
+        let below = showsTree ? 0 : ThreadView.count(in: visibleIndices, above: maxSeen)
+        let unseenNew = showsTree ? 0 : (newPostsStart.map { start in
+            ThreadView.count(in: visibleIndices, above: max(start - 1, maxSeen))
+        } ?? 0)
+        HStack(spacing: 6) {
+            if autoRefresh {
+                RefreshCountdown(start: refreshCycleStart, interval: refreshInterval)
+            }
+            if unseenNew > 0 {
+                Text(verbatim: "\(unseenNew)")
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 1)
+                    .background(Capsule().fill(Color.red))
+            }
+            if below > 0 {
+                Text(verbatim: "\(below)")
+                    .foregroundStyle(.secondary)
+            }
+            Image(systemName: below > 0 ? "arrow.down" : "checkmark")
+                .foregroundStyle(.secondary)
+        }
+        .font(.footnote.weight(.semibold).monospacedDigit())
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(.regularMaterial, in: Capsule())
+        .overlay(Capsule().stroke(Color.primary.opacity(0.08), lineWidth: 1))
+        .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
+    }
 }

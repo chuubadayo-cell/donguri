@@ -120,6 +120,9 @@ struct PopupView: View {
     var onTextSelected: ((SelectionData) -> Int?)?
     var onTapOutside: (() -> Void)?
     var onSwipeDismiss: (() -> Void)?
+    /// Media made when a card is mined (a subtitle line's clip), which
+    /// takes the place of `coverURL`.
+    var mediaProvider: (() async -> CardMedia?)?
     
     @State private var content: String = ""
     @State private var lookupEntries: [[String: Any]] = []
@@ -145,7 +148,8 @@ struct PopupView: View {
         clearSelection: Bool,
         onTextSelected: ((SelectionData) -> Int?)? = nil,
         onTapOutside: (() -> Void)? = nil,
-        onSwipeDismiss: (() -> Void)? = nil
+        onSwipeDismiss: (() -> Void)? = nil,
+        mediaProvider: (() async -> CardMedia?)? = nil
     ) {
         _isVisible = isVisible
         self.selectionData = selectionData
@@ -162,6 +166,7 @@ struct PopupView: View {
         self.onTextSelected = onTextSelected
         self.onTapOutside = onTapOutside
         self.onSwipeDismiss = onSwipeDismiss
+        self.mediaProvider = mediaProvider
         
         let cache = Self.buildContent(lookupResults: lookupResults, userConfig: userConfig)
         _content = State(initialValue: cache.content)
@@ -310,12 +315,19 @@ struct PopupView: View {
     }
     
     private func mineEntry(content: [String: String], sentence: String) async -> Bool {
-        await AnkiManager.shared.addNote(
+        var cover = coverURL
+        var sentenceAudio: URL?
+        if let mediaProvider, let media = await mediaProvider() {
+            cover = media.imageURL ?? cover
+            sentenceAudio = media.audioURL
+        }
+        return await AnkiManager.shared.addNote(
             content: content,
             context: MiningContext(
                 sentence: sentence,
                 documentTitle: documentTitle,
-                coverURL: coverURL
+                coverURL: cover,
+                sentenceAudioURL: sentenceAudio
             )
         )
     }

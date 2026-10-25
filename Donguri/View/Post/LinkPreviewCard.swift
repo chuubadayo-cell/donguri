@@ -309,11 +309,9 @@ struct LinkPreviewCard: View {
         case .failed:
             ExternalLinks.open(url)
         case .loaded(let preview):
-            if preview.kind == .youtube, behavior.openLinksInApp {
-                // In the browser, its subtitles can be mined.
-                ExternalLinks.open(url)
-            } else if preview.kind == .youtube, let id = preview.videoID {
-                playerVideoID = PlayerItem(id: id, url: url, title: preview.title)
+            if preview.kind == .youtube, let id = preview.videoID {
+                // The app's player, where its subtitles can be mined.
+                AppNavigator.shared.playVideo(.youtube(id: id, title: preview.title))
             } else {
                 ExternalLinks.open(url)
             }

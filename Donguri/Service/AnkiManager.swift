@@ -72,6 +72,7 @@ class AnkiManager {
 
     private init() {
         load()
+        mapSentenceAudioIfMissing()
         loadWords()
         if ankiConnectConfig?.url != nil {
             Task { await pingAnkiConnect() }
@@ -206,6 +207,18 @@ class AnkiManager {
             URLQueryItem(name: "type", value: noteType)
         ]
 
+        // Pictures and sentence audio go over as links AnkiMobile downloads
+        // into its media folder (see AnkiMediaServer).
+        var mediaLinks: [Handlebars: String] = [:]
+        if fieldMappings.values.contains(where: { $0.contains(Handlebars.bookCover.rawValue) }),
+           let cover = context.coverURL, let link = await AnkiMediaServer.shared.link(for: cover) {
+            mediaLinks[.bookCover] = link
+        }
+        if fieldMappings.values.contains(where: { $0.contains(Handlebars.sentenceAudio.rawValue) }),
+           let audio = context.sentenceAudioURL, let link = await AnkiMediaServer.shared.link(for: audio) {
+            mediaLinks[.sentenceAudio] = link
+        }
+
         var dictionaryMedia: [String: String] = [:]
         if embedMedia {
             if let json = content["dictionaryMedia"] {
@@ -220,7 +233,8 @@ class AnkiManager {
 
         for (field, fieldContent) in fieldMappings {
             var value = fieldContent.replacing(Self.handlebarRegex) { match in
-                return handlebarToValue(handlebar: String(match.0), context: context, content: content, singleGlossaries: singleGlossaries)
+                return handlebarToValue(handlebar: String(match.0), context: context, content: content,
+                                        singleGlossaries: singleGlossaries, mediaLinks: mediaLinks)
             }
             if !value.isEmpty {
                 if embedMedia {
@@ -247,6 +261,7 @@ class AnkiManager {
         urlComponents?.queryItems = queryItems
 
         if let url = urlComponents?.url {
+            if !mediaLinks.isEmpty { AnkiMediaServer.shared.keepAliveForHandoff() }
             await UIApplication.shared.open(url)
         }
 
@@ -267,10 +282,13 @@ class AnkiManager {
         var audioFields: [String] = []
         var sasayakiAudioFields: [String] = []
         var pictureFields: [String] = []
+        var sentenceAudioFields: [String] = []
 
         for (field, fieldContent) in fieldMappings {
             if fieldContent == Handlebars.audio.rawValue {
                 audioFields.append(field)
+            } else if fieldContent == Handlebars.sentenceAudio.rawValue {
+                sentenceAudioFields.append(field)
             } else if fieldContent == Handlebars.sasayakiAudio.rawValue {
                 sasayakiAudioFields.append(field)
             } else if fieldContent == Handlebars.bookCover.rawValue {
@@ -322,6 +340,14 @@ class AnkiManager {
                 "data": audioData.base64EncodedString(),
                 "filename": "donguri_sasayaki_\(audioData.sha1).m4a",
                 "fields": sasayakiAudioFields
+            ])
+        }
+        if !sentenceAudioFields.isEmpty, let clip = context.sentenceAudioURL,
+           let clipData = try? Data(contentsOf: clip) {
+            audio.append([
+                "data": clipData.base64EncodedString(),
+                "filename": "iroha_sentence_\(clipData.sha1).\(clip.pathExtension.isEmpty ? "m4a" : clip.pathExtension)",
+                "fields": sentenceAudioFields
             ])
         }
         if !audio.isEmpty {
@@ -470,7 +496,8 @@ class AnkiManager {
         }
     }
 
-    private func handlebarToValue(handlebar: String, context: MiningContext, content: [String: String], singleGlossaries: [String: String]) -> String {
+    private func handlebarToValue(handlebar: String, context: MiningContext, content: [String: String],
+                                  singleGlossaries: [String: String], mediaLinks: [Handlebars: String] = [:]) -> String {
         if handlebar.hasPrefix(Handlebars.singleGlossaryPrefix) {
             let dictName = String(handlebar.dropFirst(Handlebars.singleGlossaryPrefix.count).dropLast())
             if dictName.hasSuffix("-brief") {
@@ -533,10 +560,15 @@ class AnkiManager {
                 return content["popupSelectionText"] ?? ""
             case .bookCover:
                 // The image a word was read from (OCR) or the video frame
-                // its subtitle was on. AnkiMobile takes it inline.
+                // its subtitle was on: a link AnkiMobile downloads, or the
+                // picture inline if the link server couldn't start.
+                if let link = mediaLinks[.bookCover] { return link }
                 guard let coverURL = context.coverURL,
                       let data = try? Data(contentsOf: coverURL) else { return "" }
-                return "<img src=\"data:image/jpeg;base64,\(data.base64EncodedString())\">"
+                let mime = coverURL.pathExtension.lowercased() == "gif" ? "image/gif" : "image/jpeg"
+                return "<img src=\"data:\(mime);base64,\(data.base64EncodedString())\">"
+            case .sentenceAudio:
+                return mediaLinks[.sentenceAudio] ?? ""
             case .audio:
                 return content["audio"] ?? ""
             case .sasayakiAudio:
@@ -545,6 +577,17 @@ class AnkiManager {
             }
         }
         return ""
+    }
+
+    /// Note types with a sentence-audio field get it filled from subtitle
+    /// clips without the user having to map it.
+    private func mapSentenceAudioIfMissing() {
+        guard !fieldMappings.values.contains(where: { $0.contains(Handlebars.sentenceAudio.rawValue) }),
+              let noteType = availableNoteTypes.first(where: { $0.name == selectedNoteType }),
+              let field = noteType.fields.first(where: { ["sentenceaudio", "sentence audio", "sentence_audio"].contains($0.lowercased()) }),
+              (fieldMappings[field] ?? "").isEmpty else { return }
+        fieldMappings[field] = Handlebars.sentenceAudio.rawValue
+        save()
     }
 
     private func load() {

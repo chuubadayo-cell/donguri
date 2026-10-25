@@ -54,6 +54,11 @@ struct ContentView: View {
         .overlay {
             NavigatorToast()
         }
+        .fullScreenCover(item: $navigator.videoRequest) { item in
+            VideoPlayerView(item: item) {
+                navigator.videoRequest = nil
+            }
+        }
         // Text recognition on a photo, screenshot or web page.
         .fullScreenCover(item: $navigator.scanRequest) { request in
             GalleryView(items: [request.item],

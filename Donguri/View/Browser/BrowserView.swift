@@ -18,8 +18,29 @@ struct BrowserView: View {
     @FocusState private var addressFocused: Bool
     @State private var showsTranscript = false
     @State private var scanning = false
+    @AppStorage(BrowserMode.defaultsKey) private var mode = BrowserMode.youtube.rawValue
 
     var body: some View {
+        VStack(spacing: 0) {
+            Picker("", selection: $mode) {
+                Text(verbatim: "YouTube").tag(BrowserMode.youtube.rawValue)
+                Text("ウェブ").tag(BrowserMode.web.rawValue)
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, 12)
+            .padding(.top, 6)
+            .padding(.bottom, mode == BrowserMode.web.rawValue ? 0 : 2)
+
+            if mode == BrowserMode.youtube.rawValue {
+                YouTubeHomeView()
+            } else {
+                web
+            }
+        }
+        .themedScreen()
+    }
+
+    private var web: some View {
         VStack(spacing: 0) {
             addressBar
 
@@ -29,7 +50,11 @@ struct BrowserView: View {
                 if model.showsStartPage {
                     BrowserStartPage { url in
                         addressFocused = false
-                        model.load(url)
+                        if url.host?.contains("youtube.com") == true {
+                            mode = BrowserMode.youtube.rawValue
+                        } else {
+                            model.load(url)
+                        }
                     }
                 }
             }
@@ -50,7 +75,6 @@ struct BrowserView: View {
             model.userConfig = userConfig
             model.startIfNeeded()
         }
-        .themedScreen()
     }
 
     // MARK: Address bar
@@ -158,6 +182,13 @@ struct BrowserView: View {
             .accessibilityLabel(Text("画面の文字を読み取る"))
             Spacer()
             if model.isWatchPage {
+                Button {
+                    model.playCurrentVideoInApp()
+                } label: {
+                    Image(systemName: "play.rectangle.on.rectangle")
+                }
+                .accessibilityLabel(Text("アプリのプレーヤーで再生"))
+                Spacer()
                 Button {
                     showsTranscript = true
                 } label: {

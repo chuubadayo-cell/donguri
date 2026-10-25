@@ -39,7 +39,9 @@ struct GalleryView: View {
     @State private var showChrome = true
     @State private var showGrid = false
     @State private var isZoomed = false
-    @State private var dismissProgress: CGFloat = 0
+    /// How far a swipe-to-close has gone. Observed only by the backdrop:
+    /// as plain state, every frame of the swipe redrew the whole gallery.
+    @State private var dismiss = DismissProgress()
     @State private var appeared = false
     @State private var job = MediaJob()
     @State private var toast: String?
@@ -95,9 +97,7 @@ struct GalleryView: View {
 
     var body: some View {
         ZStack {
-            Color.black
-                .opacity((1 - dismissProgress * 0.85) * backdrop)
-                .ignoresSafeArea()
+            GalleryBackdrop(dismiss: dismiss, backdrop: backdrop)
 
             pager
                 .opacity(pagerHidden ? 0 : 1)
@@ -125,6 +125,7 @@ struct GalleryView: View {
         .preferredColorScheme(.dark)
         .onAppear {
             if startWithOCR { ocrEnabled = true }
+            if ocrEnabled { TextRecognizer.warmUp() }
             if !zoomIn() {
                 withAnimation(.easeOut(duration: 0.2)) { appeared = true }
             }
@@ -152,7 +153,7 @@ struct GalleryView: View {
                                 },
                                 onTap: toggleChrome,
                                 onZoomChange: { isZoomed = $0 },
-                                onDismissProgress: { dismissProgress = $0 },
+                                onDismissProgress: { [dismiss] in dismiss.value = $0 },
                                 onDismiss: { frame in close(from: frame) })
                         .containerRelativeFrame([.horizontal, .vertical])
                         .id(item.id)
@@ -213,7 +214,12 @@ struct GalleryView: View {
             Button {
                 ocrEnabled.toggle()
                 Haptics.play(.selection)
-                if !ocrEnabled { popups.closeAll() }
+                if ocrEnabled {
+                    TextRecognizer.warmUp()
+                    preloadNeighbours()
+                } else {
+                    popups.closeAll()
+                }
             } label: {
                 Image(systemName: "text.viewfinder")
                     .font(.headline)
@@ -630,9 +636,15 @@ struct GalleryView: View {
             .map { items[$0] }
             .filter { $0.kind == .image }
         guard !neighbours.isEmpty else { return }
+        let readText = ocrEnabled
         Task {
             for item in neighbours {
-                _ = await MediaStore.shared.image(for: item.url, maxPixelSize: nil)
+                let image = await MediaStore.shared.image(for: item.url, maxPixelSize: nil)
+                // With text recognition on, the next pages are read ahead
+                // too, so their boxes are there the moment they're swiped to.
+                if readText, let image {
+                    _ = await OCRCache.recognize(image, id: item.id, priority: .utility)
+                }
             }
         }
     }
@@ -732,9 +744,8 @@ private struct GalleryPage: View {
             return
         }
         onRecognizing(true)
-        let lines = await TextRecognizer.recognize(image)
+        let lines = await OCRCache.recognize(image, id: item.id)
         onRecognizing(false)
-        OCRCache.store(lines, for: item.id)
         ocrLines = lines
     }
 
@@ -834,7 +845,22 @@ enum OCRCache {
     private static var cache: [String: [OCRLine]] = [:]
     private static var order: [String] = []
 
+    private static var running: [String: Task<[OCRLine], Never>] = [:]
+
     static func lines(for id: String) -> [OCRLine]? { cache[id] }
+
+    /// The image's text, read once: a page being read ahead and the same
+    /// page swiped to share one recognition.
+    static func recognize(_ image: UIImage, id: String, priority: TaskPriority = .userInitiated) async -> [OCRLine] {
+        if let cached = cache[id] { return cached }
+        if let task = running[id] { return await task.value }
+        let task = Task { await TextRecognizer.recognize(image, priority: priority) }
+        running[id] = task
+        let lines = await task.value
+        running[id] = nil
+        store(lines, for: id)
+        return lines
+    }
 
     static func store(_ lines: [OCRLine], for id: String) {
         cache[id] = lines
@@ -854,5 +880,21 @@ enum GalleryCardImages {
         let url = CardImage.write(image)
         urls[id] = url
         return url
+    }
+}
+
+@Observable
+private final class DismissProgress {
+    var value: CGFloat = 0
+}
+
+private struct GalleryBackdrop: View {
+    let dismiss: DismissProgress
+    let backdrop: Double
+
+    var body: some View {
+        Color.black
+            .opacity((1 - dismiss.value * 0.85) * backdrop)
+            .ignoresSafeArea()
     }
 }

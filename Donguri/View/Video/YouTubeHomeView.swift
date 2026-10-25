@@ -1,0 +1,425 @@
+//
+//  YouTubeHomeView.swift
+//  Donguri
+//
+//  YouTube, natively: the home feed, subscriptions, history and 後で見る of
+//  the signed-in account, search, and channels. Videos open in いろは's
+//  player, where their subtitles can be mined. Videos on the phone (Files)
+//  open there too.
+//
+
+import SwiftUI
+import WebKit
+import UniformTypeIdentifiers
+
+@Observable
+final class YouTubeFeedModel {
+    /// Kept for the app's lifetime, so switching to ウェブ and back keeps
+    /// the feed and scroll position.
+    static let shared = YouTubeFeedModel()
+    enum Source: Equatable {
+        case feed(YouTubeClient.Feed)
+        case search(String)
+        case channel(id: String, name: String)
+    }
+
+    var source: Source = .feed(.home)
+    private(set) var videos: [YTVideo] = []
+    private(set) var continuation: String?
+    private(set) var loading = false
+    private(set) var loadingMore = false
+    private(set) var error: String?
+    private(set) var signedIn = false
+    private(set) var checkedSignIn = false
+
+    func checkSignIn() async {
+        signedIn = await YouTubeClient.shared.refreshSignInState()
+        checkedSignIn = true
+    }
+
+    func load(_ source: Source) async {
+        self.source = source
+        loading = true
+        error = nil
+        defer { loading = false }
+        do {
+            let page: YTFeedPage
+            switch source {
+            case .feed(let feed): page = try await YouTubeClient.shared.feed(feed)
+            case .search(let query): page = try await YouTubeClient.shared.search(query)
+            case .channel(let id, _): page = try await YouTubeClient.shared.channel(id)
+            }
+            guard self.source == source else { return }
+            videos = page.videos
+            continuation = page.continuation
+            if page.videos.isEmpty {
+                error = signedIn || !Self.needsAccount(source)
+                    ? String(localized: "動画が見つかりませんでした")
+                    : String(localized: "ログインすると表示されます")
+            }
+        } catch {
+            guard self.source == source else { return }
+            videos = []
+            self.error = String(localized: "読み込めませんでした")
+        }
+    }
+
+    func loadMore() async {
+        guard let token = continuation, !loadingMore else { return }
+        loadingMore = true
+        defer { loadingMore = false }
+        let isSearch: Bool
+        if case .search = source { isSearch = true } else { isSearch = false }
+        let current = source
+        guard let page = try? await YouTubeClient.shared.more(token, isSearch: isSearch), source == current else { return }
+        let known = Set(videos.map(\.id))
+        videos += page.videos.filter { !known.contains($0.id) }
+        continuation = page.continuation
+    }
+
+    static func needsAccount(_ source: Source) -> Bool {
+        if case .feed(let feed) = source { return feed != .home }
+        return false
+    }
+}
+
+struct YouTubeHomeView: View {
+    @State private var model = YouTubeFeedModel.shared
+    @State private var navigator = AppNavigator.shared
+    @State private var query = ""
+    @State private var showsSignIn = false
+    @State private var importingVideo = false
+    @FocusState private var searchFocused: Bool
+
+    var body: some View {
+        VStack(spacing: 0) {
+            searchBar
+            chips
+            Divider()
+            content
+        }
+        .task {
+            if let channel = navigator.youTubeChannel {
+                navigator.youTubeChannel = nil
+                if !model.checkedSignIn { await model.checkSignIn() }
+                await model.load(.channel(id: channel.id, name: channel.name))
+            } else if !model.checkedSignIn {
+                await model.checkSignIn()
+                await model.load(model.source)
+            }
+        }
+        .onChange(of: navigator.youTubeChannel) { _, channel in
+            guard let channel else { return }
+            navigator.youTubeChannel = nil
+            Task { await model.load(.channel(id: channel.id, name: channel.name)) }
+        }
+        .sheet(isPresented: $showsSignIn, onDismiss: {
+            YouTubeClient.shared.reset()
+            Task {
+                await model.checkSignIn()
+                await model.load(model.source)
+            }
+        }) {
+            YouTubeSignInView()
+        }
+        .fileImporter(isPresented: $importingVideo, allowedContentTypes: [.movie, .video, .mpeg4Movie, .quickTimeMovie],
+                      allowsMultipleSelection: false) { result in
+            if case .success(let urls) = result, let url = urls.first {
+                AppNavigator.shared.playVideo(.file(url))
+            }
+        }
+    }
+
+    private var searchBar: some View {
+        HStack(spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                TextField("YouTubeを検索", text: $query)
+                    .submitLabel(.search)
+                    .focused($searchFocused)
+                    .onSubmit {
+                        let trimmed = query.trimmingCharacters(in: .whitespaces)
+                        guard !trimmed.isEmpty else { return }
+                        if let url = URL(string: trimmed), let id = YouTubeClient.videoID(in: url) {
+                            AppNavigator.shared.playVideo(.youtube(id: id, title: nil))
+                            return
+                        }
+                        Task { await model.load(.search(trimmed)) }
+                    }
+                if !query.isEmpty {
+                    Button {
+                        query = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+            Menu {
+                Button {
+                    importingVideo = true
+                } label: {
+                    Label("ファイルの動画を開く", systemImage: "folder")
+                }
+                Button {
+                    showsSignIn = true
+                } label: {
+                    if model.signedIn {
+                        Label("アカウント", systemImage: "person.crop.circle")
+                    } else {
+                        Label("ログイン", systemImage: "person.crop.circle.badge.plus")
+                    }
+                }
+            } label: {
+                Image(systemName: model.signedIn ? "person.crop.circle.fill" : "person.crop.circle")
+                    .font(.title2)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+    }
+
+    private var chips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                chip(String(localized: "ホーム"), source: .feed(.home))
+                chip(String(localized: "登録チャンネル"), source: .feed(.subscriptions))
+                chip(String(localized: "履歴"), source: .feed(.history))
+                chip(String(localized: "後で見る"), source: .feed(.watchLater))
+                if case .search(let text) = model.source {
+                    chipLabel(text, systemImage: "magnifyingglass", selected: true)
+                }
+                if case .channel(_, let name) = model.source {
+                    chipLabel(name, systemImage: "person.crop.square", selected: true)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.bottom, 8)
+        }
+    }
+
+    private func chip(_ title: String, source: YouTubeFeedModel.Source) -> some View {
+        Button {
+            searchFocused = false
+            Task { await model.load(source) }
+        } label: {
+            chipLabel(title, systemImage: nil, selected: model.source == source)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func chipLabel(_ title: String, systemImage: String?, selected: Bool) -> some View {
+        HStack(spacing: 4) {
+            if let systemImage { Image(systemName: systemImage) }
+            Text(verbatim: title).lineLimit(1)
+        }
+        .font(.subheadline.weight(.semibold))
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .foregroundStyle(selected ? Color(.systemBackground) : Color.primary)
+        .background(Capsule().fill(selected ? Color.primary : Color.secondary.opacity(0.15)))
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if model.loading, model.videos.isEmpty {
+            ProgressView()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if model.videos.isEmpty {
+            VStack(spacing: 14) {
+                Image(systemName: "play.rectangle")
+                    .font(.largeTitle)
+                    .foregroundStyle(.secondary)
+                if let error = model.error {
+                    Text(error)
+                        .foregroundStyle(.secondary)
+                }
+                if !model.signedIn {
+                    Text("YouTubeにログインすると、ホームや登録チャンネル、履歴がここに並びます。検索はログインしなくても使えます。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                    Button("ログイン") { showsSignIn = true }
+                        .buttonStyle(.borderedProminent)
+                } else {
+                    Button("再読み込み") { Task { await model.load(model.source) } }
+                        .buttonStyle(.bordered)
+                }
+            }
+            .padding(32)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            List {
+                ForEach(model.videos) { video in
+                    Button {
+                        searchFocused = false
+                        AppNavigator.shared.playVideo(.youtube(id: video.id, title: video.title))
+                    } label: {
+                        YouTubeVideoRow(video: video, compact: false)
+                    }
+                    .buttonStyle(.plain)
+                    .listRowSeparator(.hidden)
+                    .listRowInsets(EdgeInsets(top: 6, leading: 12, bottom: 10, trailing: 12))
+                    .contextMenu {
+                        if let channelID = video.channelID, let name = video.channel {
+                            Button {
+                                Task { await model.load(.channel(id: channelID, name: name)) }
+                            } label: {
+                                Label("チャンネルを見る", systemImage: "person.crop.square")
+                            }
+                        }
+                        ShareLink(item: video.watchURL) {
+                            Label("共有", systemImage: "square.and.arrow.up")
+                        }
+                        Button {
+                            AppNavigator.shared.openInBrowser(video.watchURL, allowNativePlayer: false)
+                        } label: {
+                            Label("ブラウザで開く", systemImage: "safari")
+                        }
+                    }
+                    .onAppear {
+                        if video.id == model.videos.last?.id {
+                            Task { await model.loadMore() }
+                        }
+                    }
+                }
+                if model.loadingMore {
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                        .listRowSeparator(.hidden)
+                }
+            }
+            .listStyle(.plain)
+            .scrollDismissesKeyboard(.immediately)
+            .refreshable { await model.load(model.source) }
+        }
+    }
+}
+
+/// A video in a feed: big thumbnail (or a small one beside the text).
+struct YouTubeVideoRow: View {
+    let video: YTVideo
+    var compact: Bool
+
+    var body: some View {
+        if compact {
+            HStack(alignment: .top, spacing: 10) {
+                thumbnail
+                    .frame(width: 150)
+                details
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 8) {
+                thumbnail
+                details
+            }
+        }
+    }
+
+    private var thumbnail: some View {
+        Color.secondary.opacity(0.15)
+            .aspectRatio(16 / 9, contentMode: .fit)
+            .overlay {
+                if let url = video.thumbnail {
+                    VideoThumbnail(url: url)
+                }
+            }
+            .overlay(alignment: .bottomTrailing) {
+                if let duration = video.duration {
+                    Text(verbatim: duration)
+                        .font(.caption2.weight(.semibold).monospacedDigit())
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(RoundedRectangle(cornerRadius: 4).fill(.black.opacity(0.75)))
+                        .padding(6)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: compact ? 8 : 12, style: .continuous))
+    }
+
+    private var details: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(verbatim: video.title)
+                .font(compact ? .subheadline.weight(.semibold) : .body.weight(.semibold))
+                .lineLimit(2)
+                .foregroundStyle(.primary)
+            let byline = [video.channel, video.meta].compactMap { $0 }.joined(separator: " · ")
+            if !byline.isEmpty {
+                Text(verbatim: byline)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// A thumbnail through the app's image cache, decoded at a size that
+/// stays sharp across the screen.
+private struct VideoThumbnail: View {
+    let url: URL
+    @State private var image: UIImage?
+
+    init(url: URL) {
+        self.url = url
+        _image = State(initialValue: MediaStore.shared.memoryImage(for: url, maxPixelSize: 720))
+    }
+
+    var body: some View {
+        ZStack {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            }
+        }
+        .task(id: url) {
+            guard image == nil else { return }
+            image = await MediaStore.shared.image(for: url, maxPixelSize: 720)
+        }
+    }
+}
+
+/// Google's sign-in page, in a web view sharing the browser's cookies,
+/// so signing in here signs in everywhere in the app.
+struct YouTubeSignInView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            SignInWebView(url: URL(string: "https://accounts.google.com/ServiceLogin?service=youtube&continue=https%3A%2F%2Fm.youtube.com%2F")!)
+                .ignoresSafeArea(edges: .bottom)
+                .navigationTitle(Text("YouTubeにログイン"))
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("完了") { dismiss() }
+                    }
+                }
+        }
+    }
+}
+
+private struct SignInWebView: UIViewRepresentable {
+    let url: URL
+
+    func makeUIView(context: Context) -> WKWebView {
+        let configuration = WKWebViewConfiguration()
+        configuration.websiteDataStore = .default()
+        let webView = WKWebView(frame: .zero, configuration: configuration)
+        // Google refuses sign-in from browsers it doesn't recognise.
+        webView.customUserAgent = BrowserModel.shared.webView.customUserAgent
+        webView.load(URLRequest(url: url))
+        return webView
+    }
+
+    func updateUIView(_ webView: WKWebView, context: Context) {}
+}

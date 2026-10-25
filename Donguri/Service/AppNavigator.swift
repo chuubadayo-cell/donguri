@@ -99,6 +99,10 @@ final class AppNavigator {
     private(set) var toast: String?
     /// The image scanner, presented over everything (see ContentView).
     var scanRequest: ScanRequest?
+    /// The video player, presented over everything.
+    var videoRequest: VideoItem?
+    /// A channel for the YouTube screen to show.
+    var youTubeChannel: YouTubeChannelRequest?
 
     private init() {
         let defaults = UserDefaults.standard
@@ -226,10 +230,29 @@ final class AppNavigator {
         persist()
     }
 
-    /// Opens a web page in the ブラウザ tab.
-    func openInBrowser(_ url: URL) {
+    /// Opens a web page in the ブラウザ tab. YouTube videos open in the
+    /// app's own player instead, unless `allowNativePlayer` is false.
+    func openInBrowser(_ url: URL, allowNativePlayer: Bool = true) {
+        if allowNativePlayer, let id = YouTubeClient.videoID(in: url) {
+            playVideo(.youtube(id: id, title: nil))
+            return
+        }
+        if !allowNativePlayer { BrowserModel.shared.allowWebPlayback(for: url) }
+        UserDefaults.standard.set(BrowserMode.web.rawValue, forKey: BrowserMode.defaultsKey)
         BrowserModel.shared.load(url)
         rootTab = .browser
+    }
+
+    func playVideo(_ item: VideoItem) {
+        videoRequest = item
+    }
+
+    /// The YouTube screen, showing a channel's videos.
+    func showYouTubeChannel(id: String, name: String) {
+        videoRequest = nil
+        UserDefaults.standard.set(BrowserMode.youtube.rawValue, forKey: BrowserMode.defaultsKey)
+        rootTab = .browser
+        youTubeChannel = YouTubeChannelRequest(id: id, name: name)
     }
 
     /// From a notification or anywhere outside the 板 tab: show the thread
@@ -401,4 +424,15 @@ enum ExternalLinks {
             UIApplication.shared.open(url)
         }
     }
+}
+
+struct YouTubeChannelRequest: Equatable {
+    let id: String
+    let name: String
+}
+
+/// What the ブラウザ tab shows: YouTube or ordinary web pages.
+enum BrowserMode: String {
+    case youtube, web
+    static let defaultsKey = "iroha.browser.mode"
 }

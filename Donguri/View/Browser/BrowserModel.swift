@@ -27,7 +27,7 @@ final class BrowserModel: NSObject {
     static let shared = BrowserModel()
 
     private static let lastURLKey = "donguri.browser.lastURL"
-    private static let blockerID = "iroha-blocker-v1"
+    private static let blockerID = "iroha-blocker-v2"
 
     let webView: WKWebView
 
@@ -118,6 +118,26 @@ final class BrowserModel: NSObject {
     }
 
     @ObservationIgnored private var bridge: BrowserBridge?
+    /// Videos the user asked to watch on YouTube's site after all.
+    @ObservationIgnored private var webPlaybackAllowed: Set<String> = []
+
+    func allowWebPlayback(for url: URL) {
+        if let id = YouTubeClient.videoID(in: url) { webPlaybackAllowed.insert(id) }
+    }
+
+    /// A YouTube video page opened from a link goes to the app's player,
+    /// which can mine its subtitles.
+    fileprivate func shouldPlayNatively(_ url: URL) -> String? {
+        guard let id = YouTubeClient.videoID(in: url), !webPlaybackAllowed.contains(id) else { return nil }
+        return id
+    }
+
+    /// The video on the current page, in the app's player.
+    func playCurrentVideoInApp() {
+        guard let url, let id = YouTubeClient.videoID(in: url) else { return }
+        pauseVideo()
+        AppNavigator.shared.playVideo(.youtube(id: id, title: title.isEmpty ? nil : title))
+    }
 
     nonisolated private func sync() {
         MainActor.assumeIsolated {
@@ -150,6 +170,8 @@ final class BrowserModel: NSObject {
         applyBlocker { [weak self] in
             guard let self, self.webView.url == nil,
                   let last = UserDefaults.standard.string(forKey: Self.lastURLKey).flatMap(URL.init(string:)) else { return }
+            // Restoring a video page shouldn't spring the player open.
+            self.allowWebPlayback(for: last)
             self.webView.load(URLRequest(url: last))
         }
     }
@@ -204,19 +226,34 @@ final class BrowserModel: NSObject {
             completion?()
             return
         }
-        WKContentRuleListStore.default().compileContentRuleList(
-            forIdentifier: Self.blockerID,
-            encodedContentRuleList: BrowserScripts.contentRules
-        ) { [weak self] list, error in
+        // Compiled once and kept by WebKit; later launches just load it.
+        WKContentRuleListStore.default().lookUpContentRuleList(forIdentifier: Self.blockerID) { [weak self] list, _ in
             MainActor.assumeIsolated {
-                if let error { print("Ad blocker rules failed to compile: \(error)") }
                 if let self, let list {
-                    self.blocker = list
-                    self.webView.configuration.userContentController.add(list)
+                    self.install(list, then: completion)
+                    return
                 }
-                completion?()
+                WKContentRuleListStore.default().compileContentRuleList(
+                    forIdentifier: Self.blockerID,
+                    encodedContentRuleList: BrowserScripts.contentRules
+                ) { [weak self] list, error in
+                    MainActor.assumeIsolated {
+                        if let error { print("Ad blocker rules failed to compile: \(error)") }
+                        if let self, let list {
+                            self.install(list, then: completion)
+                        } else {
+                            completion?()
+                        }
+                    }
+                }
             }
         }
+    }
+
+    private func install(_ list: WKContentRuleList, then completion: (() -> Void)?) {
+        blocker = list
+        webView.configuration.userContentController.add(list)
+        completion?()
     }
 
     func setBlocking(_ on: Bool) {
@@ -395,6 +432,13 @@ private final class BrowserBridge: NSObject, WKScriptMessageHandler, WKNavigatio
         if !["http", "https", "about", "data", "blob", "file"].contains(scheme) {
             UIApplication.shared.open(url)
             decisionHandler(.cancel)
+            return
+        }
+        if navigationAction.targetFrame?.isMainFrame != false,
+           navigationAction.navigationType != .backForward, navigationAction.navigationType != .reload,
+           let model, let id = model.shouldPlayNatively(url) {
+            decisionHandler(.cancel)
+            AppNavigator.shared.playVideo(.youtube(id: id, title: nil))
             return
         }
         decisionHandler(.allow)

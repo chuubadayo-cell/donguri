@@ -59,8 +59,11 @@ struct AnkiConnectConfig: Codable {
 struct MiningContext {
     let sentence: String
     let documentTitle: String?
+    /// The picture for the card: an OCR'd image, or a video screenshot or GIF.
     let coverURL: URL?
     var sasayakiAudioData: Data? = nil
+    /// The audio of the subtitle line a word was mined from.
+    var sentenceAudioURL: URL? = nil
 }
 
 struct DictionaryMedia: Decodable {
@@ -94,6 +97,7 @@ enum Handlebars: String, CaseIterable {
     case pitchCategories = "{pitch-accent-categories}"
     case documentTitle = "{document-title}"
     case bookCover = "{book-cover}"
+    case sentenceAudio = "{sentence-audio}"
     case sasayakiAudio = "{sasayaki-audio}"
 
     static let singleGlossaryPrefix = "{single-glossary-"
@@ -113,6 +117,7 @@ struct AnkiFieldTemplate {
             "MainDefinition": Handlebars.glossaryFirst.rawValue,
             "Sentence": Handlebars.sentence.rawValue,
             "Picture": Handlebars.bookCover.rawValue,
+            "SentenceAudio": Handlebars.sentenceAudio.rawValue,
             "Glossary": Handlebars.glossary.rawValue,
             "PitchPosition": Handlebars.pitchPositions.rawValue,
             "PitchCategories": Handlebars.pitchCategories.rawValue,
@@ -129,6 +134,7 @@ struct AnkiFieldTemplate {
             "MainDefinition": Handlebars.glossaryFirst.rawValue,
             "Sentence": Handlebars.sentence.rawValue,
             "Picture": Handlebars.bookCover.rawValue,
+            "SentenceAudio": Handlebars.sentenceAudio.rawValue,
             "Glossary": Handlebars.glossary.rawValue,
             "PitchPosition": Handlebars.pitchPositions.rawValue,
             "PitchCategories": Handlebars.pitchCategories.rawValue,
@@ -144,6 +150,7 @@ struct AnkiFieldTemplate {
             "definition": Handlebars.glossaryFirst.rawValue,
             "wordAudio": Handlebars.audio.rawValue,
             "picture": Handlebars.bookCover.rawValue,
+            "sentenceAudio": Handlebars.sentenceAudio.rawValue,
             "glossary": Handlebars.glossary.rawValue,
             "pitchPositions": Handlebars.pitchPositions.rawValue,
             "pitchCategories": Handlebars.pitchCategories.rawValue,
