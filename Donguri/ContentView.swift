@@ -54,11 +54,20 @@ struct ContentView: View {
         .overlay {
             NavigatorToast()
         }
-        .fullScreenCover(item: $navigator.videoRequest) { item in
-            VideoPlayerView(item: item) {
-                navigator.videoRequest = nil
+        // The video player sits over the tabs rather than being presented,
+        // so it can shrink to the miniplayer and keep playing.
+        .overlay {
+            if let item = navigator.videoRequest {
+                VideoPlayerView(item: item,
+                                minimized: navigator.videoMinimized,
+                                onMinimize: { navigator.minimizeVideo() },
+                                onExpand: { navigator.expandVideo() },
+                                onClose: { navigator.closeVideo() })
+                    .id(item.id)
+                    .transition(.move(edge: .bottom))
             }
         }
+        .animation(.snappy(duration: 0.3), value: navigator.videoRequest?.id)
         // Text recognition on a photo, screenshot or web page.
         .fullScreenCover(item: $navigator.scanRequest) { request in
             GalleryView(items: [request.item],

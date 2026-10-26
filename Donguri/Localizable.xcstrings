@@ -4314,6 +4314,22 @@
         }
       }
     },
+    "動画" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Video"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "動画"
+          }
+        }
+      }
+    },
     "動画が見つかりませんでした" : {
       "localizations" : {
         "en" : {
@@ -5897,6 +5913,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "最小"
+          }
+        }
+      }
+    },
+    "最小化" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Minimize"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最小化"
           }
         }
       }

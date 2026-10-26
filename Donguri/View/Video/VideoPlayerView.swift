@@ -19,6 +19,10 @@ import WebKit
 import UniformTypeIdentifiers
 
 struct VideoPlayerView: View {
+    /// Shrunk to the miniplayer above the tab bar.
+    let minimized: Bool
+    let onMinimize: () -> Void
+    let onExpand: () -> Void
     let onClose: () -> Void
     @State private var model: VideoPlayerModel
     @State private var settings = VideoSettings.shared
@@ -49,12 +53,58 @@ struct VideoPlayerView: View {
         let label: String
     }
 
-    init(item: VideoItem, onClose: @escaping () -> Void) {
+    /// Space the miniplayer leaves for the tab bar.
+    @State private var tabBarHeight: CGFloat = TabBarMetrics.heightAboveSafeArea()
+
+    init(item: VideoItem, minimized: Bool = false, onMinimize: @escaping () -> Void = {},
+         onExpand: @escaping () -> Void = {}, onClose: @escaping () -> Void) {
         _model = State(initialValue: VideoPlayerModel(item: item))
+        self.minimized = minimized
+        self.onMinimize = onMinimize
+        self.onExpand = onExpand
         self.onClose = onClose
     }
 
+    /// Full or mini, the same view (and model) throughout, so the video
+    /// never stops between the two.
     var body: some View {
+        ZStack {
+            if minimized {
+                miniPlayer
+            } else {
+                fullPlayer
+            }
+        }
+        .task {
+            await model.start()
+            scheduleHide()
+        }
+        .onDisappear {
+            model.stop()
+            OrientationLock.returnToPortrait()
+        }
+        .onChange(of: model.isPlaying) { _, playing in
+            if playing { scheduleHide() } else { showControls(autoHide: false) }
+        }
+        .onChange(of: minimized) { _, isMinimized in
+            if isMinimized {
+                model.popups.closeAll()
+                pullDown = 0
+                OrientationLock.returnToPortrait()
+            } else {
+                showControls(autoHide: true)
+            }
+        }
+    }
+
+    /// Shrinks to the miniplayer, leaving full screen first.
+    private func minimize() {
+        model.popups.closeAll()
+        OrientationLock.returnToPortrait()
+        onMinimize()
+    }
+
+    private var fullPlayer: some View {
         GeometryReader { geometry in
             let landscape = geometry.size.width > geometry.size.height
             Group {
@@ -116,14 +166,6 @@ struct VideoPlayerView: View {
         .overlay {
             PopupStackLayer(stack: model.popups)
         }
-        .task {
-            await model.start()
-            scheduleHide()
-        }
-        .onDisappear {
-            model.stop()
-            OrientationLock.returnToPortrait()
-        }
         .fileImporter(isPresented: $importingSubtitles,
                       allowedContentTypes: SubtitleFileTypes.all,
                       allowsMultipleSelection: false) { result in
@@ -131,8 +173,95 @@ struct VideoPlayerView: View {
                 model.importSubtitles(from: url)
             }
         }
-        .onChange(of: model.isPlaying) { _, playing in
-            if playing { scheduleHide() } else { showControls(autoHide: false) }
+        // Covers the tabs underneath, status bar and home indicator too.
+        .background(Color(.systemBackground).ignoresSafeArea())
+    }
+
+    // MARK: Miniplayer
+
+    /// The video small above the tab bar, as in the YouTube app: tap or
+    /// swipe up to open it again, swipe down or ✕ to close.
+    private var miniPlayer: some View {
+        VStack(spacing: 0) {
+            Spacer(minLength: 0)
+            miniBar
+                .padding(.horizontal, 8)
+                .padding(.bottom, tabBarHeight + 6)
+        }
+        .onAppear { tabBarHeight = TabBarMetrics.heightAboveSafeArea() }
+    }
+
+    private var miniBar: some View {
+        HStack(spacing: 10) {
+            videoSurface
+                .frame(width: 112, height: 63)
+                .background(Color.black)
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .allowsHitTesting(false)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(verbatim: model.title.isEmpty ? String(localized: "動画") : model.title)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                // The line being said, or the channel.
+                Text(verbatim: model.activeCue?.text.replacingOccurrences(of: "\n", with: " ") ?? model.channel)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Button {
+                model.togglePlay()
+            } label: {
+                Image(systemName: model.isPlaying ? "pause.fill" : "play.fill")
+                    .font(.title3)
+                    .contentTransition(.symbolEffect(.replace))
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityLabel(model.isPlaying ? Text("一時停止") : Text("再生"))
+            Button {
+                onClose()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.body.weight(.semibold))
+                    .frame(width: 40, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityLabel(Text("閉じる"))
+        }
+        .buttonStyle(.plain)
+        .padding(6)
+        .background {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(.regularMaterial)
+                .shadow(color: .black.opacity(0.18), radius: 10, y: 3)
+        }
+        .overlay(alignment: .bottom) {
+            MiniProgress(clock: model.clock)
+                .padding(.horizontal, 10)
+        }
+        .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .onTapGesture { onExpand() }
+        .gesture(
+            DragGesture(minimumDistance: 12)
+                .onEnded { value in
+                    if value.translation.height < -20 {
+                        onExpand()
+                    } else if value.translation.height > 40 {
+                        onClose()
+                    }
+                }
+        )
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+
+    /// YouTube's player or AVPlayer, wherever it's shown.
+    @ViewBuilder
+    private var videoSurface: some View {
+        if model.engine == .web, let web = model.web {
+            WebPlayerSurface(webView: web.webView)
+        } else {
+            PlayerSurface(player: model.player)
         }
     }
 
@@ -140,11 +269,7 @@ struct VideoPlayerView: View {
 
     private func videoArea(fullScreen: Bool) -> some View {
         ZStack {
-            if model.engine == .web, let web = model.web {
-                WebPlayerSurface(webView: web.webView)
-            } else {
-                PlayerSurface(player: model.player)
-            }
+            videoSurface
 
             // Taps: one shows or hides the controls; two on either side
             // jump a line (or ten seconds) back or forward.
@@ -250,10 +375,11 @@ struct VideoPlayerView: View {
                         withAnimation(.snappy) { pullDown = 0 }
                         OrientationLock.rotate(to: .portrait)
                     } else {
-                        withAnimation(.easeIn(duration: 0.18)) { pullDown = 900 }
+                        withAnimation(.easeIn(duration: 0.16)) { pullDown = 420 }
                         Task {
-                            try? await Task.sleep(for: .milliseconds(170))
-                            onClose()
+                            try? await Task.sleep(for: .milliseconds(150))
+                            minimize()
+                            pullDown = 0
                         }
                     }
                 } else {
@@ -458,13 +584,13 @@ struct VideoPlayerView: View {
             VStack(spacing: 0) {
                 HStack(spacing: 4) {
                     Button {
-                        onClose()
+                        minimize()
                     } label: {
                         Image(systemName: "chevron.down")
                             .frame(width: 44, height: 44)
                             .contentShape(Rectangle())
                     }
-                    .accessibilityLabel(Text("閉じる"))
+                    .accessibilityLabel(Text("最小化"))
                     if fullScreen {
                         Text(verbatim: model.title)
                             .font(.subheadline.weight(.semibold))
@@ -837,7 +963,7 @@ struct VideoPlayerView: View {
         HStack(spacing: 10) {
             Button {
                 guard let channelID = model.channelID else { return }
-                onClose()
+                minimize()
                 AppNavigator.shared.showYouTubeChannel(id: channelID, name: model.channel)
             } label: {
                 VStack(alignment: .leading, spacing: 1) {
@@ -1039,11 +1165,82 @@ private struct DelayRow: View {
 // MARK: - Pieces
 
 /// YouTube's own player, styled down to its video.
+/// One web view moves between the full player and the miniplayer, so
+/// it's hosted in a container that takes it over when shown.
 private struct WebPlayerSurface: UIViewRepresentable {
     let webView: WKWebView
 
-    func makeUIView(context: Context) -> WKWebView { webView }
-    func updateUIView(_ uiView: WKWebView, context: Context) {}
+    func makeUIView(context: Context) -> WebHost { WebHost(webView: webView) }
+    func updateUIView(_ host: WebHost, context: Context) { host.claim() }
+
+    final class WebHost: UIView {
+        let webView: WKWebView
+
+        init(webView: WKWebView) {
+            self.webView = webView
+            super.init(frame: .zero)
+            backgroundColor = .black
+            clipsToBounds = true
+            claim()
+        }
+
+        @available(*, unavailable)
+        required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+        func claim() {
+            guard webView.superview !== self else { return }
+            webView.removeFromSuperview()
+            webView.frame = bounds
+            webView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            addSubview(webView)
+        }
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            if window != nil { claim() }
+        }
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            if webView.superview === self { webView.frame = bounds }
+        }
+    }
+}
+
+/// The playback position as a thin line along the miniplayer.
+private struct MiniProgress: View {
+    let clock: PlaybackClock
+
+    var body: some View {
+        GeometryReader { geometry in
+            let progress = clock.duration > 0 ? min(max(clock.time / clock.duration, 0), 1) : 0
+            Capsule()
+                .fill(Color.red)
+                .frame(width: geometry.size.width * progress, height: 2)
+        }
+        .frame(height: 2)
+        .allowsHitTesting(false)
+    }
+}
+
+/// How far the tab bar reaches above the home indicator, so the
+/// miniplayer can sit just above it.
+enum TabBarMetrics {
+    static func heightAboveSafeArea() -> CGFloat {
+        guard let window = UIApplication.shared.connectedScenes
+            .compactMap({ ($0 as? UIWindowScene)?.keyWindow }).first,
+              let tabBar = find(in: window), !tabBar.isHidden else { return 49 }
+        let frame = tabBar.convert(tabBar.bounds, to: window)
+        return max(0, window.bounds.height - frame.minY - window.safeAreaInsets.bottom)
+    }
+
+    private static func find(in view: UIView) -> UITabBar? {
+        if let tabBar = view as? UITabBar { return tabBar }
+        for subview in view.subviews {
+            if let found = find(in: subview) { return found }
+        }
+        return nil
+    }
 }
 
 private struct PlayerSurface: UIViewRepresentable {

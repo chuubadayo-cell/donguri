@@ -99,8 +99,11 @@ final class AppNavigator {
     private(set) var toast: String?
     /// The image scanner, presented over everything (see ContentView).
     var scanRequest: ScanRequest?
-    /// The video player, presented over everything.
+    /// The video player, over everything (see ContentView).
     var videoRequest: VideoItem?
+    /// The player shrunk to the miniplayer above the tab bar; the video
+    /// keeps playing.
+    var videoMinimized = false
     /// A channel for the YouTube screen to show.
     var youTubeChannel: YouTubeChannelRequest?
 
@@ -244,12 +247,28 @@ final class AppNavigator {
     }
 
     func playVideo(_ item: VideoItem) {
+        videoMinimized = false
         videoRequest = item
+    }
+
+    func minimizeVideo() {
+        guard videoRequest != nil else { return }
+        videoMinimized = true
+    }
+
+    func expandVideo() {
+        videoMinimized = false
+    }
+
+    func closeVideo() {
+        videoRequest = nil
+        videoMinimized = false
     }
 
     /// The YouTube screen, showing a channel's videos.
     func showYouTubeChannel(id: String, name: String) {
-        videoRequest = nil
+        // The video carries on in the miniplayer.
+        minimizeVideo()
         UserDefaults.standard.set(BrowserMode.youtube.rawValue, forKey: BrowserMode.defaultsKey)
         rootTab = .browser
         youTubeChannel = YouTubeChannelRequest(id: id, name: name)
