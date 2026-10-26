@@ -272,7 +272,9 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
       window.__irohaAudioHook = true;
       // One store per audio buffer: an ad and the video each get their own.
       const stores = [];
-      const LIMIT = 40 * 1024 * 1024;
+      // About a quarter of an hour of YouTube's audio per buffer: a card
+      // is made from a line just heard, and this lives in the page's memory.
+      const LIMIT = 16 * 1024 * 1024;
 
       function u32(b, p) { return ((b[p] << 24) >>> 0) + (b[p + 1] << 16) + (b[p + 2] << 8) + b[p + 3]; }
       function type(b, p) { return String.fromCharCode(b[p + 4], b[p + 5], b[p + 6], b[p + 7]); }
@@ -312,7 +314,7 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
         if (!buffer.__irohaStore) {
           buffer.__irohaStore = { kind: buffer.__irohaAudio, init: null, timescale: 0, frags: [], bytes: 0, current: null };
           stores.push(buffer.__irohaStore);
-          while (stores.length > 4) { stores.shift(); }
+          while (stores.length > 3) { stores.shift(); }
         }
         return buffer.__irohaStore;
       }
@@ -327,10 +329,20 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
         return null;
       }
       function addFragment(store, t, b) {
-        store.frags = store.frags.filter(function (f) { if (Math.abs(f.t - t) < 0.001) { store.bytes -= f.data.length; return false; } return true; });
+        // Kept in time order by inserting in place: appends come several a
+        // second, and filtering and sorting thousands of fragments for each
+        // one added up.
+        const frags = store.frags;
+        let low = 0, high = frags.length;
+        while (low < high) { const mid = (low + high) >> 1; if (frags[mid].t < t - 0.001) { low = mid + 1; } else { high = mid; } }
         const fragment = { t: t, data: b };
-        store.frags.push(fragment);
-        store.frags.sort(function (x, y) { return x.t - y.t; });
+        if (low < frags.length && Math.abs(frags[low].t - t) < 0.001) {
+          // The same fragment again (after a seek back): replace it.
+          store.bytes -= frags[low].data.length;
+          frags[low] = fragment;
+        } else {
+          frags.splice(low, 0, fragment);
+        }
         store.current = fragment;
         store.bytes += b.length;
         while (store.bytes > LIMIT && store.frags.length > 1) {
@@ -576,7 +588,15 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
       function player() {
         return document.querySelector('#movie_player') || document.querySelector('.html5-video-player');
       }
+      // A report that says nothing new (paused, an ad's countdown aside) is
+      // skipped, with one every two seconds anyway so the app never misses
+      // a change.
+      let lastReport = '', lastReportAt = 0;
       function post(message) {
+        const report = JSON.stringify(message);
+        const now = Date.now();
+        if (report === lastReport && now - lastReportAt < 2000) { return; }
+        lastReport = report; lastReportAt = now;
         try { webkit.messageHandlers.irohaVideo.postMessage(message); } catch (e) {}
       }
       function skipButton() {

@@ -1062,6 +1062,7 @@ struct VideoPlayerView: View {
                        textStyle: AppearanceSettings.shared.postStyle,
                        onSelect: { selection in lookUpText(selection) },
                        onTapOutside: { model.popups.closeAll() })
+            .equatable()
             .onAppear {
                 if comment.id == model.comments.last?.id {
                     Task { await model.loadMoreComments() }
@@ -1073,6 +1074,7 @@ struct VideoPlayerView: View {
                                textStyle: AppearanceSettings.shared.postStyle,
                                onSelect: { selection in lookUpText(selection) },
                                onTapOutside: { model.popups.closeAll() })
+                        .equatable()
                         .padding(.leading, 40)
                         .listRowSeparator(.hidden)
                 }

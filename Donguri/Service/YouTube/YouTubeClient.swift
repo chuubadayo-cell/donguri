@@ -425,12 +425,8 @@ final class YouTubeClient {
         if track == nil || track == Self.defaultTrack(in: info.captionTracks),
            let params = info.transcriptParams,
            let data = try? await innertube("get_transcript", body: ["params": params]),
-           let json = try? JSONSerialization.jsonObject(with: data),
-           let cues = YTParse.transcriptCues(json) {
-            // Automatic captions there come in arbitrary chunks; regroup
-            // them into sentences.
-            let automatic = (track ?? Self.defaultTrack(in: info.captionTracks))?.isAutomatic ?? false
-            return automatic ? CaptionSentences.regroup(cues) : cues
+           let cues = await Self.parseTranscript(data, automatic: (track ?? Self.defaultTrack(in: info.captionTracks))?.isAutomatic ?? false) {
+            return cues
         }
         // YouTube's own player, which can get past its token check.
         guard let track else { return nil }
@@ -448,9 +444,27 @@ final class YouTubeClient {
         request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
         await addCookies(to: &request)
         guard let (data, _) = try? await session.data(for: request), !data.isEmpty else { return nil }
+        return await Self.parseTimedText(data, automatic: track.isAutomatic)
+    }
+
+    // Off the main thread: an hour of automatic captions is tens of
+    // thousands of words to rebuild into sentences, which stalled the
+    // player as it opened.
+
+    @concurrent
+    nonisolated static func parseTimedText(_ data: Data, automatic: Bool) async -> [SubtitleCue]? {
         if let cues = YTParse.json3Cues(data) { return cues }
         let xml = YTParse.xmlCues(String(decoding: data, as: UTF8.self))
-        return track.isAutomatic ? xml.map(CaptionSentences.regroup) : xml
+        return automatic ? xml.map(CaptionSentences.regroup) : xml
+    }
+
+    /// The transcript panel; automatic captions there come in arbitrary
+    /// chunks, regrouped into sentences.
+    @concurrent
+    private nonisolated static func parseTranscript(_ data: Data, automatic: Bool) async -> [SubtitleCue]? {
+        guard let json = try? JSONSerialization.jsonObject(with: data),
+              let cues = YTParse.transcriptCues(json) else { return nil }
+        return automatic ? CaptionSentences.regroup(cues) : cues
     }
 
     /// Japanese written by a person, else Japanese automatic captions,
@@ -587,8 +601,10 @@ final class CaptionSniffer: NSObject, WKScriptMessageHandler, WKNavigationDelega
             print("[iroha] ignored captions that weren't this video's (an ad)")
             return
         }
-        let cues = YTParse.json3Cues(Data(text.utf8)) ?? YTParse.xmlCues(text)
-        if let cues, !cues.isEmpty { finish(cues) }
+        Task {
+            let cues = await YouTubeClient.parseTimedText(Data(text.utf8), automatic: automatic)
+            if let cues, !cues.isEmpty { finish(cues) }
+        }
     }
 
     private func finish(_ cues: [SubtitleCue]?) {

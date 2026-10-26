@@ -69,14 +69,30 @@ enum XScripts {
       function cellOf(article) {
         return article.closest('[data-testid="cellInnerDiv"]') || article;
       }
+      // Each post is judged once, again only if its text changes (X reuses
+      // elements as the timeline scrolls). X's page changes constantly, and
+      // judging every post on every change kept scrolling busy.
+      const verdicts = new WeakMap();
+      function judged(article) {
+        const text = article.querySelector('[data-testid="tweetText"]');
+        const signature = (text ? text.textContent.length + ':' + text.textContent.slice(0, 32) : '-') +
+          '|' + (article.textContent || '').length;
+        const known = verdicts.get(article);
+        if (known && known.signature === signature) { return known.keep; }
+        const verdict = keep(article);
+        verdicts.set(article, { signature: signature, keep: verdict });
+        return verdict;
+      }
       function run() {
         addStyle();
         const on = !!window.__irohaJapaneseOnly;
+        // Filter off and nothing left hidden: nothing to do.
+        if (!on && !document.querySelector('[data-iroha-hidden]')) { return; }
         // The post a page is about (opened by tapping it) always shows.
         const focused = location.pathname.indexOf('/status/') >= 0;
         document.querySelectorAll('article[data-testid="tweet"]').forEach(function (article, index) {
           const cell = cellOf(article);
-          const hide = on && !(focused && index === 0) && !keep(article);
+          const hide = on && !(focused && index === 0) && !judged(article);
           if (hide) {
             if (cell.style.display !== 'none') { cell.style.display = 'none'; cell.dataset.irohaHidden = '1'; }
           } else if (cell.dataset.irohaHidden) {
@@ -90,7 +106,7 @@ enum XScripts {
         if (queued) { return; }
         queued = true;
         requestAnimationFrame(function () { queued = false; run(); });
-      }).observe(document.documentElement, { childList: true, subtree: true, characterData: true });
+      }).observe(document.documentElement, { childList: true, subtree: true });
 
       // Searches only in Japanese.
       setInterval(function () {

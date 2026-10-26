@@ -400,7 +400,9 @@ struct YouTubeVideoRow: View {
             .aspectRatio(16 / 9, contentMode: .fit)
             .overlay {
                 if let url = video.thumbnail {
-                    VideoThumbnail(url: url)
+                    // Decoded for the size shown: the narrow rows beside a
+                    // video need far fewer pixels than the feed's.
+                    VideoThumbnail(url: url, maxPixelSize: compact ? 360 : 720)
                 }
             }
             .overlay(alignment: .bottomTrailing) {
@@ -439,11 +441,13 @@ struct YouTubeVideoRow: View {
 /// stays sharp across the screen.
 private struct VideoThumbnail: View {
     let url: URL
+    let maxPixelSize: CGFloat
     @State private var image: UIImage?
 
-    init(url: URL) {
+    init(url: URL, maxPixelSize: CGFloat = 720) {
         self.url = url
-        _image = State(initialValue: MediaStore.shared.memoryImage(for: url, maxPixelSize: 720))
+        self.maxPixelSize = maxPixelSize
+        _image = State(initialValue: MediaStore.shared.memoryImage(for: url, maxPixelSize: maxPixelSize))
     }
 
     var body: some View {
@@ -456,7 +460,7 @@ private struct VideoThumbnail: View {
         }
         .task(id: url) {
             guard image == nil else { return }
-            image = await MediaStore.shared.image(for: url, maxPixelSize: 720)
+            image = await MediaStore.shared.image(for: url, maxPixelSize: maxPixelSize)
         }
     }
 }
