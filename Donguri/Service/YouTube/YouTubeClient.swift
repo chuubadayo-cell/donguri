@@ -312,7 +312,40 @@ final class YouTubeClient {
             next.subscribed = subscribed
         }
         next.subscriberText = YTParse.text(YTParse.firstValue(forKey: "subscriberCountText", in: json))
+        // The comments section's first page, from the item section that
+        // holds it or, failing that, the comments panel.
+        var sections: [Any] = []
+        YTParse.allValues(forKey: "itemSectionRenderer", in: json, into: &sections)
+        for case let section as [String: Any] in sections
+        where (section["sectionIdentifier"] as? String)?.contains("comment") == true {
+            if let contents = section["contents"], let token = YTParse.firstValue(forKey: "token", in: contents) as? String {
+                next.commentsToken = token
+                break
+            }
+        }
+        var panels: [Any] = []
+        YTParse.allValues(forKey: "engagementPanelSectionListRenderer", in: json, into: &panels)
+        for case let panel as [String: Any] in panels
+        where (panel["panelIdentifier"] as? String)?.contains("comment") == true {
+            if next.commentsToken == nil, let content = panel["content"] {
+                next.commentsToken = YTParse.firstValue(forKey: "token", in: content) as? String
+            }
+            if let header = panel["header"] {
+                next.commentCount = YTParse.text(YTParse.firstValue(forKey: "contextualInfo", in: header))
+            }
+        }
         return next
+    }
+
+    /// A page of comments (or of a comment's replies).
+    func comments(_ token: String) async throws -> YTCommentPage {
+        let data = try await innertube("next", body: ["continuation": token])
+        return try await Self.parseComments(data)
+    }
+
+    @concurrent
+    private nonisolated static func parseComments(_ data: Data) async throws -> YTCommentPage {
+        YTParse.comments(try JSONSerialization.jsonObject(with: data))
     }
 
     // MARK: Actions (signed in)

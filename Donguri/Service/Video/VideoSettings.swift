@@ -33,6 +33,9 @@ final class VideoSettings {
     var doubleTapSeeksLines: Bool { didSet { save(doubleTapSeeksLines, "doubleTapSeeksLines") } }
     /// Pause at the end of every subtitle line (asbplayer's auto-pause).
     var autoPause: Bool { didSet { save(autoPause, "autoPause") } }
+    /// Keep playing (the sound) when the app leaves the screen or the
+    /// phone locks.
+    var backgroundPlayback: Bool { didSet { save(backgroundPlayback, "backgroundPlayback") } }
 
     var cardImage: ClipImageKind { didSet { save(cardImage.rawValue, "cardImage") } }
     var cardAudio: Bool { didSet { save(cardAudio, "cardAudio") } }
@@ -55,6 +58,7 @@ final class VideoSettings {
         pauseOnLookup = d.object(forKey: p + "pauseOnLookup") as? Bool ?? true
         doubleTapSeeksLines = d.object(forKey: p + "doubleTapSeeksLines") as? Bool ?? true
         autoPause = d.object(forKey: p + "autoPause") as? Bool ?? false
+        backgroundPlayback = d.object(forKey: p + "backgroundPlayback") as? Bool ?? true
         cardImage = d.string(forKey: p + "cardImage").flatMap(ClipImageKind.init(rawValue:)) ?? .screenshot
         cardAudio = d.object(forKey: p + "cardAudio") as? Bool ?? true
         paddingBefore = d.object(forKey: p + "paddingBefore") as? Int ?? 0

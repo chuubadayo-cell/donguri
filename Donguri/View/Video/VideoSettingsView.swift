@@ -38,6 +38,7 @@ struct VideoSettingsView: View {
                 Toggle("調べるときに一時停止", isOn: $settings.pauseOnLookup)
                 Toggle("ダブルタップで前後の字幕へ", isOn: $settings.doubleTapSeeksLines)
                 Toggle("字幕ごとに一時停止", isOn: $settings.autoPause)
+                Toggle("バックグラウンド再生", isOn: $settings.backgroundPlayback)
             } header: {
                 Text("操作")
             } footer: {

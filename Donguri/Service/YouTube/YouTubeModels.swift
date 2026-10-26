@@ -37,6 +37,27 @@ nonisolated struct YTWatchNext: Sendable {
     var likeCount: Int?
     var subscribed: Bool?
     var subscriberText: String?
+    /// Where the comments start, and how many there are ("1,234").
+    var commentsToken: String?
+    var commentCount: String?
+}
+
+/// A comment or a reply.
+nonisolated struct YTComment: Identifiable, Hashable, Sendable {
+    let id: String
+    var author: String
+    var authorPhoto: URL?
+    var text: String
+    var published: String?
+    var likes: String?
+    var replyCount: Int = 0
+    /// Loads this comment's replies.
+    var repliesToken: String?
+}
+
+nonisolated struct YTCommentPage: Sendable {
+    var comments: [YTComment] = []
+    var continuation: String?
 }
 
 nonisolated struct YTCaptionTrack: Hashable, Sendable, Identifiable {
@@ -347,6 +368,86 @@ nonisolated enum YTParse {
             viewCount: details["viewCount"] as? String,
             description: details["shortDescription"] as? String
         )
+    }
+
+    // MARK: Comments
+
+    /// Comments from a `next` continuation, in either of YouTube's shapes:
+    /// `commentViewModel`s whose details sit in the response's entity
+    /// store (`commentEntityPayload`), or the older `commentRenderer`s.
+    static func comments(_ json: Any) -> YTCommentPage {
+        var page = YTCommentPage()
+        var entities: [String: [String: Any]] = [:]
+        var payloads: [Any] = []
+        allValues(forKey: "commentEntityPayload", in: json, into: &payloads)
+        for case let payload as [String: Any] in payloads {
+            if let key = payload["key"] as? String { entities[key] = payload }
+        }
+        var lists: [Any] = []
+        allValues(forKey: "continuationItems", in: json, into: &lists)
+        var seen = Set<String>()
+        for case let items as [[String: Any]] in lists {
+            for item in items {
+                if let thread = item["commentThreadRenderer"] as? [String: Any] {
+                    guard var comment = threadComment(thread, entities: entities) else { continue }
+                    if let replies = thread["replies"] {
+                        comment.repliesToken = firstValue(forKey: "token", in: replies) as? String
+                    }
+                    if seen.insert(comment.id).inserted { page.comments.append(comment) }
+                } else if let model = item["commentViewModel"] as? [String: Any],
+                          let comment = viewModelComment(model, entities: entities) {
+                    if seen.insert(comment.id).inserted { page.comments.append(comment) }
+                } else if let renderer = item["commentRenderer"] as? [String: Any],
+                          let comment = rendererComment(renderer) {
+                    if seen.insert(comment.id).inserted { page.comments.append(comment) }
+                } else if let more = item["continuationItemRenderer"] {
+                    page.continuation = firstValue(forKey: "token", in: more) as? String
+                }
+            }
+        }
+        return page
+    }
+
+    private static func threadComment(_ thread: [String: Any], entities: [String: [String: Any]]) -> YTComment? {
+        if let wrapper = thread["commentViewModel"] as? [String: Any] {
+            let model = wrapper["commentViewModel"] as? [String: Any] ?? wrapper
+            return viewModelComment(model, entities: entities)
+        }
+        if let renderer = firstValue(forKey: "commentRenderer", in: thread) as? [String: Any] {
+            return rendererComment(renderer)
+        }
+        return nil
+    }
+
+    private static func viewModelComment(_ model: [String: Any], entities: [String: [String: Any]]) -> YTComment? {
+        guard let key = model["commentKey"] as? String, let payload = entities[key] else { return nil }
+        let properties = payload["properties"] as? [String: Any] ?? [:]
+        let author = payload["author"] as? [String: Any] ?? [:]
+        let toolbar = payload["toolbar"] as? [String: Any] ?? [:]
+        let text = (properties["content"] as? [String: Any])?["content"] as? String ?? ""
+        guard !text.isEmpty else { return nil }
+        let likes = (toolbar["likeCountNotliked"] as? String)?.trimmingCharacters(in: .whitespaces)
+        let replies = (toolbar["replyCount"] as? String).flatMap { Int($0.filter(\.isNumber)) } ?? 0
+        return YTComment(id: properties["commentId"] as? String ?? (model["commentId"] as? String ?? key),
+                         author: author["displayName"] as? String ?? "",
+                         authorPhoto: url(author["avatarThumbnailUrl"] as? String),
+                         text: text,
+                         published: properties["publishedTime"] as? String,
+                         likes: (likes?.isEmpty ?? true) || likes == "0" ? nil : likes,
+                         replyCount: replies)
+    }
+
+    private static func rendererComment(_ renderer: [String: Any]) -> YTComment? {
+        guard let text = self.text(renderer["contentText"]), !text.isEmpty else { return nil }
+        let thumbnails = (renderer["authorThumbnail"] as? [String: Any])?["thumbnails"] as? [[String: Any]]
+        let likes = self.text(renderer["voteCount"])
+        return YTComment(id: renderer["commentId"] as? String ?? UUID().uuidString,
+                         author: self.text(renderer["authorText"]) ?? "",
+                         authorPhoto: url(thumbnails?.last?["url"] as? String),
+                         text: text,
+                         published: self.text(renderer["publishedTimeText"]),
+                         likes: (likes?.isEmpty ?? true) ? nil : likes,
+                         replyCount: renderer["replyCount"] as? Int ?? 0)
     }
 
     // MARK: Subtitles

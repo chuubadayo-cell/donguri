@@ -1269,6 +1269,22 @@
         }
       }
     },
+    "さらに返信を表示" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "More replies"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "さらに返信を表示"
+          }
+        }
+      }
+    },
     "しない" : {
       "localizations" : {
         "en" : {
@@ -2168,6 +2184,70 @@
         }
       }
     },
+    "コメント" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comments"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "コメント"
+          }
+        }
+      }
+    },
+    "コメント %@件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ comments"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "コメント %@件"
+          }
+        }
+      }
+    },
+    "コメントはありません（オフになっている動画もあります）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No comments (some videos have them turned off)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "コメントはありません（オフになっている動画もあります）"
+          }
+        }
+      }
+    },
+    "コメントを読み込めませんでした" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't load comments"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "コメントを読み込めませんでした"
+          }
+        }
+      }
+    },
     "コンパクト" : {
       "localizations" : {
         "en" : {
@@ -3028,6 +3108,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "バックグラウンドで開く"
+          }
+        }
+      }
+    },
+    "バックグラウンド再生" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Play in background"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "バックグラウンド再生"
           }
         }
       }
@@ -5725,6 +5821,22 @@
         }
       }
     },
+    "日本語の投稿だけ表示" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Japanese posts only"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "日本語の投稿だけ表示"
+          }
+        }
+      }
+    },
     "日本語の文字がないフォントでは、かなと漢字は標準のフォントで表示されます。" : {
       "localizations" : {
         "en" : {
@@ -7491,6 +7603,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "返信%lld件以上"
+          }
+        }
+      }
+    },
+    "返信を隠す" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide replies"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "返信を隠す"
           }
         }
       }

@@ -240,6 +240,16 @@ final class AppNavigator {
             playVideo(.youtube(id: id, title: nil))
             return
         }
+        // Posts on X open in the X tab, where the account is signed in.
+        if let host = url.host?.lowercased(),
+           ["x.com", "twitter.com", "mobile.twitter.com", "www.x.com", "mobile.x.com", "www.twitter.com"].contains(host) {
+            var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+            components?.host = "x.com"
+            UserDefaults.standard.set(BrowserMode.x.rawValue, forKey: BrowserMode.defaultsKey)
+            BrowserModel.x.load(components?.url ?? url)
+            rootTab = .browser
+            return
+        }
         if !allowNativePlayer { BrowserModel.shared.allowWebPlayback(for: url) }
         UserDefaults.standard.set(BrowserMode.web.rawValue, forKey: BrowserMode.defaultsKey)
         BrowserModel.shared.load(url)
@@ -452,6 +462,6 @@ struct YouTubeChannelRequest: Equatable {
 
 /// What the ブラウザ tab shows: YouTube or ordinary web pages.
 enum BrowserMode: String {
-    case youtube, web
+    case youtube, x, web
     static let defaultsKey = "iroha.browser.mode"
 }

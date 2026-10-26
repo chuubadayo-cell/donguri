@@ -44,7 +44,7 @@ struct VideoPlayerView: View {
     @State private var lastTap: (time: Date, forward: Bool, controlsWereVisible: Bool)?
 
     private enum Pane: String, CaseIterable {
-        case transcript, related
+        case transcript, comments, related
     }
 
     private struct SeekFlash: Equatable {
@@ -85,7 +85,12 @@ struct VideoPlayerView: View {
         }
         .onChange(of: model.isPlaying) { _, playing in
             if playing { scheduleHide() } else { showControls(autoHide: false) }
+            model.refreshNowPlaying()
         }
+        // The lock screen follows the video and the engine playing it.
+        .onChange(of: model.phase) { model.refreshNowPlaying() }
+        .onChange(of: model.engine) { model.refreshNowPlaying() }
+        .onChange(of: model.title) { model.refreshNowPlaying() }
         .onChange(of: minimized) { _, isMinimized in
             if isMinimized {
                 model.popups.closeAll()
@@ -782,6 +787,7 @@ struct VideoPlayerView: View {
                         Picker("", selection: $pane) {
                             Text("字幕").tag(Pane.transcript)
                             if model.videoID != nil {
+                                Text("コメント").tag(Pane.comments)
                                 Text("次の動画").tag(Pane.related)
                             }
                         }
@@ -791,6 +797,8 @@ struct VideoPlayerView: View {
                     switch pane {
                     case .transcript:
                         transcriptRows
+                    case .comments:
+                        commentRows
                     case .related:
                         ForEach(model.related) { video in
                             Button {
@@ -1040,6 +1048,104 @@ struct VideoPlayerView: View {
         .animation(.snappy, value: active)
     }
 
+    // MARK: Comments
+
+    @ViewBuilder
+    private var commentRows: some View {
+        if let count = model.commentCount, !model.comments.isEmpty {
+            Text("コメント \(count)件")
+                .font(.subheadline.weight(.semibold))
+                .listRowSeparator(.hidden)
+        }
+        ForEach(model.comments) { comment in
+            CommentRow(comment: comment,
+                       textStyle: AppearanceSettings.shared.postStyle,
+                       onSelect: { selection in lookUpText(selection) },
+                       onTapOutside: { model.popups.closeAll() })
+            .onAppear {
+                if comment.id == model.comments.last?.id {
+                    Task { await model.loadMoreComments() }
+                }
+            }
+            if let replies = model.replies[comment.id] {
+                ForEach(replies) { reply in
+                    CommentRow(comment: reply,
+                               textStyle: AppearanceSettings.shared.postStyle,
+                               onSelect: { selection in lookUpText(selection) },
+                               onTapOutside: { model.popups.closeAll() })
+                        .padding(.leading, 40)
+                        .listRowSeparator(.hidden)
+                }
+            }
+            if comment.replyCount > 0 || model.replies[comment.id] != nil {
+                repliesButton(comment)
+                    .listRowSeparator(.hidden)
+            }
+        }
+        if model.commentsLoading {
+            ProgressView()
+                .frame(maxWidth: .infinity)
+                .listRowSeparator(.hidden)
+        } else if model.commentsFailed {
+            VStack(spacing: 8) {
+                Text("コメントを読み込めませんでした")
+                    .foregroundStyle(.secondary)
+                Button("再試行") { Task { await model.retryComments() } }
+                    .buttonStyle(.bordered)
+            }
+            .frame(maxWidth: .infinity)
+            .listRowSeparator(.hidden)
+        } else if model.commentsLoaded, model.comments.isEmpty {
+            Text("コメントはありません（オフになっている動画もあります）")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .listRowSeparator(.hidden)
+        }
+        // Loads when the tab is first shown.
+        Color.clear
+            .frame(height: 1)
+            .listRowSeparator(.hidden)
+            .task { await model.loadComments() }
+    }
+
+    private func repliesButton(_ comment: YTComment) -> some View {
+        let shown = model.replies[comment.id]
+        let loading = model.repliesLoading.contains(comment.id)
+        return HStack(spacing: 10) {
+            if shown == nil {
+                Button {
+                    Task { await model.loadReplies(for: comment) }
+                } label: {
+                    Label("返信 \(comment.replyCount)件", systemImage: "chevron.down")
+                }
+            } else {
+                if model.hasMoreReplies(comment) {
+                    Button {
+                        Task { await model.loadReplies(for: comment) }
+                    } label: {
+                        Label("さらに返信を表示", systemImage: "arrow.turn.down.right")
+                    }
+                }
+                Button {
+                    model.hideReplies(for: comment)
+                } label: {
+                    Label("返信を隠す", systemImage: "chevron.up")
+                }
+            }
+            if loading { ProgressView().controlSize(.small) }
+        }
+        .font(.footnote.weight(.semibold))
+        .foregroundStyle(Color.accentColor)
+        .buttonStyle(.borderless)
+        .padding(.leading, 40)
+    }
+
+    /// A word in a comment: looked up like any text, without a clip.
+    private func lookUpText(_ selection: SelectionData) -> Int? {
+        model.prepareTextLookup()
+        return model.popups.replace(with: selection, userConfig: userConfig)
+    }
+
     @ViewBuilder
     private var transcriptRows: some View {
         if model.cues.isEmpty {
@@ -1139,6 +1245,62 @@ private struct TranscriptRow: View, Equatable {
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.cue == rhs.cue && lhs.isCurrent == rhs.isCurrent && lhs.blurred == rhs.blurred
             && lhs.textStyle.key == rhs.textStyle.key
+    }
+}
+
+/// A comment: the author's picture and name, when, the text (tap a word
+/// to look it up), and its likes.
+private struct CommentRow: View, Equatable {
+    let comment: YTComment
+    let textStyle: PostTextStyle
+    let onSelect: (SelectionData) -> Int?
+    let onTapOutside: () -> Void
+    @Environment(UserConfig.self) private var userConfig
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Group {
+                if let photo = comment.authorPhoto {
+                    RemoteThumbnail(url: photo)
+                } else {
+                    Image(systemName: "person.crop.circle.fill")
+                        .resizable()
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(width: 30, height: 30)
+            .clipShape(Circle())
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text(verbatim: comment.author)
+                        .font(.caption.weight(.semibold))
+                        .lineLimit(1)
+                    if let published = comment.published {
+                        Text(verbatim: published)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+                PostTextView(text: comment.text,
+                             scanNonJapaneseText: userConfig.scanNonJapaneseText,
+                             style: textStyle,
+                             onTextSelected: onSelect,
+                             onTapOutside: onTapOutside,
+                             onPostReply: { _ in },
+                             onThreadRoute: { _ in })
+                if let likes = comment.likes {
+                    Label(likes, systemImage: "hand.thumbsup")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.comment == rhs.comment && lhs.textStyle.key == rhs.textStyle.key
     }
 }
 
@@ -1255,12 +1417,47 @@ private struct PlayerSurface: UIViewRepresentable {
     }
 
     func updateUIView(_ view: PlayerLayerView, context: Context) {
-        if view.playerLayer.player !== player { view.playerLayer.player = player }
+        // Not while parked in the background (see PlayerLayerView).
+        if view.playerLayer.player !== player, UIApplication.shared.applicationState != .background {
+            view.playerLayer.player = player
+        }
     }
 
     final class PlayerLayerView: UIView {
         override class var layerClass: AnyClass { AVPlayerLayer.self }
         var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
+        private var parked: AVPlayer?
+        private var observers: [NSObjectProtocol] = []
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            // A player still showing its picture is paused by iOS when the
+            // app leaves the screen; let go of it there to keep the sound.
+            let center = NotificationCenter.default
+            observers = [
+                center.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { [weak self] _ in
+                    MainActor.assumeIsolated {
+                        guard let self, VideoSettings.shared.backgroundPlayback else { return }
+                        self.parked = self.playerLayer.player
+                        self.playerLayer.player = nil
+                    }
+                },
+                center.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main) { [weak self] _ in
+                    MainActor.assumeIsolated {
+                        guard let self, let parked = self.parked else { return }
+                        self.playerLayer.player = parked
+                        self.parked = nil
+                    }
+                },
+            ]
+        }
+
+        @available(*, unavailable)
+        required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+        isolated deinit {
+            for observer in observers { NotificationCenter.default.removeObserver(observer) }
+        }
     }
 }
 

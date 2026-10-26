@@ -24,9 +24,14 @@ struct CaptionLine: Identifiable, Hashable {
 
 @Observable
 final class BrowserModel: NSObject {
-    static let shared = BrowserModel()
+    static let shared = BrowserModel(site: .web)
+    /// X (Twitter), in its own web view with the same tools.
+    static let x = BrowserModel(site: .x)
 
-    private static let lastURLKey = "donguri.browser.lastURL"
+    enum Site { case web, x }
+    let site: Site
+
+    private var lastURLKey: String { site == .x ? "iroha.x.lastURL" : "donguri.browser.lastURL" }
     private static let blockerID = "iroha-blocker-v2"
 
     let webView: WKWebView
@@ -84,7 +89,8 @@ final class BrowserModel: NSObject {
     @ObservationIgnored private var blocker: WKContentRuleList?
     @ObservationIgnored private var started = false
 
-    override init() {
+    init(site: Site) {
+        self.site = site
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .default()
         configuration.allowsInlineMediaPlayback = true
@@ -108,6 +114,12 @@ final class BrowserModel: NSObject {
         // blocker's reach; these deal with them on the page.
         if BehaviorSettings.shared.contentBlocking {
             YouTubeAdScripts.install(in: controller, world: BrowserScripts.world)
+        }
+        if site == .x {
+            controller.addUserScript(WKUserScript(source: XScripts.source,
+                                                  injectionTime: .atDocumentStart,
+                                                  forMainFrameOnly: true,
+                                                  in: BrowserScripts.world))
         }
 
         webView = WKWebView(frame: .zero, configuration: configuration)
@@ -173,7 +185,7 @@ final class BrowserModel: NSObject {
                 }
                 url = newURL
                 if !isEditingAddress { addressText = displayAddress }
-                if let newURL { UserDefaults.standard.set(newURL.absoluteString, forKey: Self.lastURLKey) }
+                if let newURL { UserDefaults.standard.set(newURL.absoluteString, forKey: lastURLKey) }
             }
             // Only what changed: every assignment redraws whatever reads it,
             // and progress alone reports dozens of times a load.
@@ -195,8 +207,12 @@ final class BrowserModel: NSObject {
         guard !started else { return }
         started = true
         applyBlocker { [weak self] in
-            guard let self, self.webView.url == nil,
-                  let last = UserDefaults.standard.string(forKey: Self.lastURLKey).flatMap(URL.init(string:)) else { return }
+            guard let self, self.webView.url == nil else { return }
+            guard let last = UserDefaults.standard.string(forKey: self.lastURLKey).flatMap(URL.init(string:)) else {
+                // X opens on its timeline; the browser on its start page.
+                if self.site == .x { self.webView.load(URLRequest(url: XScripts.homeURL)) }
+                return
+            }
             // Restoring a video page shouldn't spring the player open.
             self.allowWebPlayback(for: last)
             self.webView.load(URLRequest(url: last))
@@ -224,10 +240,14 @@ final class BrowserModel: NSObject {
     }
 
     func goHome() {
+        if site == .x {
+            load(XScripts.homeURL)
+            return
+        }
         webView.stopLoading()
         // An empty page shows the start page over it.
         webView.loadHTMLString("", baseURL: nil)
-        UserDefaults.standard.removeObject(forKey: Self.lastURLKey)
+        UserDefaults.standard.removeObject(forKey: lastURLKey)
         url = nil
         addressText = ""
         title = ""
@@ -235,6 +255,19 @@ final class BrowserModel: NSObject {
 
     var showsStartPage: Bool {
         url == nil || url?.absoluteString == "about:blank"
+    }
+
+    /// X: only Japanese posts (and searches), or everything.
+    func setJapaneseOnly(_ on: Bool) {
+        XScripts.japaneseOnly = on
+        webView.evaluateJavaScript(XScripts.toggleScript(on), in: nil, in: BrowserScripts.world, completionHandler: nil)
+        // The new setting applies to new pages too.
+        let controller = webView.configuration.userContentController
+        let scripts = controller.userScripts.filter { !$0.source.contains("__irohaJapaneseOnly") }
+        controller.removeAllUserScripts()
+        scripts.forEach(controller.addUserScript)
+        controller.addUserScript(WKUserScript(source: XScripts.source, injectionTime: .atDocumentStart,
+                                              forMainFrameOnly: true, in: BrowserScripts.world))
     }
 
     // MARK: Ad blocker

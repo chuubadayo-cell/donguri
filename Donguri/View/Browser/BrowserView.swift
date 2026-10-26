@@ -12,8 +12,41 @@ import SwiftUI
 import WebKit
 
 struct BrowserView: View {
-    @State private var model = BrowserModel.shared
+    @AppStorage(BrowserMode.defaultsKey) private var mode = BrowserMode.youtube.rawValue
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Picker("", selection: $mode) {
+                Text(verbatim: "YouTube").tag(BrowserMode.youtube.rawValue)
+                Text(verbatim: "X").tag(BrowserMode.x.rawValue)
+                Text("ウェブ").tag(BrowserMode.web.rawValue)
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, 12)
+            .padding(.top, 6)
+            .padding(.bottom, mode == BrowserMode.youtube.rawValue ? 2 : 0)
+
+            switch BrowserMode(rawValue: mode) ?? .youtube {
+            case .youtube:
+                YouTubeHomeView()
+            case .x:
+                WebPane(model: BrowserModel.x)
+                    .id("x")
+            case .web:
+                WebPane(model: BrowserModel.shared)
+                    .id("web")
+            }
+        }
+        .themedScreen()
+    }
+}
+
+/// A web view with the browser's tools: the address bar, dictionary mode,
+/// reading text in the page, bookmarks. The ウェブ tab and X each have one.
+private struct WebPane: View {
+    @Bindable var model: BrowserModel
     @State private var behavior = BehaviorSettings.shared
+    @State private var japaneseOnly = XScripts.japaneseOnly
     @Environment(UserConfig.self) private var userConfig
     @FocusState private var addressFocused: Bool
     @State private var showsTranscript = false
@@ -26,26 +59,6 @@ struct BrowserView: View {
     @State private var bottomChrome: CGFloat = 0
 
     var body: some View {
-        VStack(spacing: 0) {
-            Picker("", selection: $mode) {
-                Text(verbatim: "YouTube").tag(BrowserMode.youtube.rawValue)
-                Text("ウェブ").tag(BrowserMode.web.rawValue)
-            }
-            .pickerStyle(.segmented)
-            .padding(.horizontal, 12)
-            .padding(.top, 6)
-            .padding(.bottom, mode == BrowserMode.web.rawValue ? 0 : 2)
-
-            if mode == BrowserMode.youtube.rawValue {
-                YouTubeHomeView()
-            } else {
-                web
-            }
-        }
-        .themedScreen()
-    }
-
-    private var web: some View {
         VStack(spacing: 0) {
             addressBar
 
@@ -60,7 +73,12 @@ struct BrowserView: View {
                     }
                     .opacity(model.showsStartPage ? 0 : 1)
                 if model.showsStartPage {
-                    BrowserStartPage(open: open)
+                    if model.site == .x {
+                        // X's timeline is on its way.
+                        ProgressView()
+                    } else {
+                        BrowserStartPage(open: open)
+                    }
                 }
             }
 
@@ -268,6 +286,12 @@ struct BrowserView: View {
                     Label("字幕バーを表示", systemImage: "captions.bubble")
                 }
             }
+            if model.site == .x {
+                Toggle(isOn: Binding(get: { japaneseOnly },
+                                     set: { japaneseOnly = $0; model.setJapaneseOnly($0) })) {
+                    Label("日本語の投稿だけ表示", systemImage: "character.ja")
+                }
+            }
             Toggle(isOn: Binding(get: { behavior.contentBlocking },
                                  set: { model.setBlocking($0) })) {
                 Label("広告をブロック", systemImage: "hand.raised")
@@ -281,7 +305,11 @@ struct BrowserView: View {
             Button {
                 model.goHome()
             } label: {
-                Label("スタートページ", systemImage: "house")
+                if model.site == .x {
+                    Label("ホーム", systemImage: "house")
+                } else {
+                    Label("スタートページ", systemImage: "house")
+                }
             }
         } label: {
             Image(systemName: "ellipsis.circle")

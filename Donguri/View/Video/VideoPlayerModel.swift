@@ -68,6 +68,19 @@ final class VideoPlayerModel {
     private(set) var subscribed = false
     private(set) var subscriberText: String?
     private(set) var inWatchLater = false
+
+    // Comments (YouTube only), loaded when their tab is first opened.
+    private(set) var comments: [YTComment] = []
+    private(set) var commentCount: String?
+    private(set) var commentsLoading = false
+    private(set) var commentsFailed = false
+    private(set) var commentsLoaded = false
+    /// Replies shown under a comment, by its id.
+    private(set) var replies: [String: [YTComment]] = [:]
+    private(set) var repliesLoading: Set<String> = []
+    @ObservationIgnored private var commentsToken: String?
+    @ObservationIgnored private var commentsContinuation: String?
+    private var replyContinuations: [String: String] = [:]
     /// A short message over the player (an action that needs signing in,
     /// or one YouTube refused).
     private(set) var toast: String?
@@ -90,6 +103,74 @@ final class VideoPlayerModel {
             try? await Task.sleep(for: .seconds(2.5))
             if !Task.isCancelled { self.toast = nil }
         }
+    }
+
+    // MARK: Comments
+
+    var hasMoreComments: Bool { commentsContinuation != nil }
+
+    /// The first page, the first time the comments are shown.
+    func loadComments() async {
+        guard !commentsLoaded, !commentsLoading else { return }
+        // The watch page may still be on its way.
+        for _ in 0..<20 where commentsToken == nil && videoID != nil {
+            try? await Task.sleep(for: .milliseconds(250))
+        }
+        guard let token = commentsToken else {
+            commentsLoaded = true
+            return
+        }
+        commentsLoading = true
+        commentsFailed = false
+        defer { commentsLoading = false }
+        do {
+            let page = try await YouTubeClient.shared.comments(token)
+            comments = page.comments
+            commentsContinuation = page.continuation
+            commentsLoaded = true
+        } catch {
+            commentsFailed = true
+        }
+    }
+
+    func loadMoreComments() async {
+        guard let token = commentsContinuation, !commentsLoading else { return }
+        commentsLoading = true
+        defer { commentsLoading = false }
+        guard let page = try? await YouTubeClient.shared.comments(token) else { return }
+        let known = Set(comments.map(\.id))
+        comments += page.comments.filter { !known.contains($0.id) }
+        commentsContinuation = page.continuation
+    }
+
+    func retryComments() async {
+        commentsLoaded = false
+        await loadComments()
+    }
+
+    func hasMoreReplies(_ comment: YTComment) -> Bool { replyContinuations[comment.id] != nil }
+
+    /// A word tapped in a comment: no clip, no picture, just the word.
+    func prepareTextLookup() {
+        popups.documentTitle = title.isEmpty ? nil : title
+        popups.coverURL = nil
+        popups.mediaProvider = nil
+    }
+
+    /// A comment's replies, or the next page of them.
+    func loadReplies(for comment: YTComment) async {
+        guard !repliesLoading.contains(comment.id),
+              let token = replyContinuations[comment.id] ?? (replies[comment.id] == nil ? comment.repliesToken : nil) else { return }
+        repliesLoading.insert(comment.id)
+        defer { repliesLoading.remove(comment.id) }
+        guard let page = try? await YouTubeClient.shared.comments(token) else { return }
+        replies[comment.id, default: []] += page.comments
+        replyContinuations[comment.id] = page.continuation
+    }
+
+    func hideReplies(for comment: YTComment) {
+        replies[comment.id] = nil
+        replyContinuations[comment.id] = nil
     }
 
     // MARK: YouTube actions
@@ -276,6 +357,8 @@ final class VideoPlayerModel {
                 likeCount = next.likeCount
                 subscribed = next.subscribed ?? false
                 subscriberText = next.subscriberText
+                commentsToken = next.commentsToken
+                commentCount = next.commentCount
             }
             if let hls = info?.hlsURL, info?.playable == true, !Self.nativeRecentlyFailed {
                 startNative(hls)
@@ -520,6 +603,7 @@ final class VideoPlayerModel {
         let target = max(0, clock.duration > 0 ? min(time, clock.duration - 0.1) : time)
         clock.time = target
         updateCue(at: target, seeking: true)
+        defer { refreshNowPlaying() }
         switch engine {
         case .native:
             player.seek(to: CMTime(seconds: target, preferredTimescale: 600),
@@ -813,5 +897,68 @@ final class VideoPlayerModel {
         popups.closeAll()
         scopedFile?.stopAccessingSecurityScopedResource()
         scopedFile = nil
+        for observer in lifecycleObservers { NotificationCenter.default.removeObserver(observer) }
+        lifecycleObservers.removeAll()
+        NowPlaying.deactivate()
+    }
+
+    // MARK: Background and the lock screen
+
+    @ObservationIgnored private var lifecycleObservers: [NSObjectProtocol] = []
+    @ObservationIgnored private var playingWhenBackgrounded = false
+    @ObservationIgnored private var nowPlayingEngine: Engine?
+
+    private func observeLifecycle() {
+        guard lifecycleObservers.isEmpty else { return }
+        let center = NotificationCenter.default
+        lifecycleObservers = [
+            center.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.enteredBackground() }
+            },
+            center.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.playingWhenBackgrounded = false }
+            },
+        ]
+    }
+
+    /// The video plays on with the app in the background (the native
+    /// player's picture is let go of by `PlayerSurface`). YouTube's page
+    /// is told it's still visible; if WebKit pauses the video anyway, it's
+    /// started again.
+    private func enteredBackground() {
+        playingWhenBackgrounded = isPlaying && VideoSettings.shared.backgroundPlayback
+        guard playingWhenBackgrounded, engine == .web else { return }
+        for delay in [0.25, 0.8, 2.0] {
+            Task {
+                try? await Task.sleep(for: .seconds(delay))
+                guard self.playingWhenBackgrounded, !self.userPaused, self.engine == .web else { return }
+                self.web?.play(rate: VideoSettings.shared.playbackRate)
+            }
+        }
+    }
+
+    /// The lock screen's buttons and details, for whichever engine plays.
+    func refreshNowPlaying() {
+        guard phase == .ready else { return }
+        if nowPlayingEngine != engine {
+            nowPlayingEngine = engine
+            observeLifecycle()
+            NowPlaying.activate(NowPlaying.Actions(
+                play: { [weak self] in Task { @MainActor in self?.resume() } },
+                pause: { [weak self] in Task { @MainActor in self?.pause() } },
+                toggle: { [weak self] in Task { @MainActor in self?.togglePlay() } },
+                nextLine: { [weak self] in Task { @MainActor in self?.nextCue() } },
+                previousLine: { [weak self] in Task { @MainActor in self?.previousCue() } },
+                seek: { [weak self] time in Task { @MainActor in self?.seek(to: time) } }
+            ), transport: engine == .native)
+        }
+        // YouTube's page publishes its own details through WebKit.
+        guard engine == .native else { return }
+        NowPlaying.update(title: title.isEmpty ? String(localized: "動画") : title,
+                          channel: channel,
+                          duration: clock.duration,
+                          elapsed: clock.time,
+                          rate: isPlaying ? VideoSettings.shared.playbackRate : 0,
+                          thumbnail: videoID.flatMap { URL(string: "https://i.ytimg.com/vi/\($0)/hqdefault.jpg") })
     }
 }

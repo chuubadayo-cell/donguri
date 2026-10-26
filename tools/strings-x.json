@@ -1,0 +1,12 @@
+{
+  "コメント": "Comments",
+  "コメント %@件": "%@ comments",
+  "コメントを読み込めませんでした": "Couldn't load comments",
+  "コメントはありません（オフになっている動画もあります）": "No comments (some videos have them turned off)",
+  "返信 %lld件": "%lld replies",
+  "さらに返信を表示": "More replies",
+  "返信を隠す": "Hide replies",
+  "バックグラウンド再生": "Play in background",
+  "日本語の投稿だけ表示": "Japanese posts only",
+  "ホーム": "Home"
+}

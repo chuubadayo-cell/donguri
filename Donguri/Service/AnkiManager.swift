@@ -73,6 +73,7 @@ class AnkiManager {
     private init() {
         load()
         mapSentenceAudioIfMissing()
+        mapBookCoverIfMissing()
         loadWords()
         if ankiConnectConfig?.url != nil {
             Task { await pingAnkiConnect() }
@@ -483,6 +484,12 @@ class AnkiManager {
     }
 
     func autofillFieldMappings() {
+        // Whatever the template, a sentence-audio or picture field gets the
+        // clip and the OCR'd image or video frame.
+        defer {
+            mapSentenceAudioIfMissing()
+            mapBookCoverIfMissing()
+        }
         guard let noteTypeName = selectedNoteType,
               let template = AnkiFieldTemplate.templates.first(where: { $0.noteType == noteTypeName }),
               let noteType = availableNoteTypes.first(where: { $0.name == noteTypeName }),
@@ -587,6 +594,18 @@ class AnkiManager {
               let field = noteType.fields.first(where: { ["sentenceaudio", "sentence audio", "sentence_audio"].contains($0.lowercased()) }),
               (fieldMappings[field] ?? "").isEmpty else { return }
         fieldMappings[field] = Handlebars.sentenceAudio.rawValue
+        save()
+    }
+
+    /// The same for the picture: an OCR'd image or a video frame goes in
+    /// {book-cover}, so a note type with a picture field gets it mapped.
+    private func mapBookCoverIfMissing() {
+        guard !fieldMappings.values.contains(where: { $0.contains(Handlebars.bookCover.rawValue) }),
+              let noteType = availableNoteTypes.first(where: { $0.name == selectedNoteType }) else { return }
+        let names = ["picture", "image", "screenshot", "photo", "bookcover", "book cover", "book-cover", "画像", "写真", "スクリーンショット"]
+        guard let field = noteType.fields.first(where: { names.contains($0.lowercased()) }),
+              (fieldMappings[field] ?? "").isEmpty else { return }
+        fieldMappings[field] = Handlebars.bookCover.rawValue
         save()
     }
 

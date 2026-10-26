@@ -55,6 +55,8 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
         // YouTube's player builds its media source.
         controller.addUserScript(WKUserScript(source: Self.audioHook, injectionTime: .atDocumentStart,
                                               forMainFrameOnly: true, in: .page))
+        controller.addUserScript(WKUserScript(source: Self.alwaysVisible, injectionTime: .atDocumentStart,
+                                              forMainFrameOnly: true, in: .page))
         controller.addUserScript(WKUserScript(source: Self.controllerScript, injectionTime: .atDocumentStart,
                                               forMainFrameOnly: true, in: Self.world))
         if BehaviorSettings.shared.contentBlocking {
@@ -238,6 +240,28 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
     }
 
     // MARK: Scripts
+
+    /// YouTube pauses when its page is hidden (background play is a paid
+    /// feature). The page is told it never is, so the video plays on when
+    /// the app leaves the screen.
+    static let alwaysVisible = """
+    (function () {
+      if (window.__irohaVisible) { return; }
+      window.__irohaVisible = true;
+      try {
+        Object.defineProperty(Document.prototype, 'hidden', { get: function () { return false; }, configurable: true });
+        Object.defineProperty(Document.prototype, 'visibilityState', { get: function () { return 'visible'; }, configurable: true });
+        Object.defineProperty(Document.prototype, 'webkitHidden', { get: function () { return false; }, configurable: true });
+        Object.defineProperty(Document.prototype, 'webkitVisibilityState', { get: function () { return 'visible'; }, configurable: true });
+        Document.prototype.hasFocus = function () { return true; };
+      } catch (e) {}
+      const swallow = function (event) { event.stopImmediatePropagation(); };
+      ['visibilitychange', 'webkitvisibilitychange', 'pagehide', 'freeze', 'blur'].forEach(function (type) {
+        window.addEventListener(type, swallow, true);
+        document.addEventListener(type, swallow, true);
+      });
+    })();
+    """
 
     /// Keeps a copy of everything YouTube's player appends to its audio
     /// buffer (MP4 audio: one init segment, then fragments, each timed by
