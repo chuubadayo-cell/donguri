@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+**Personal build, never published.** This fork (いろは) is for the owner's own use: commit locally only. Do not push it anywhere or offer to (the only remote is the upstream Donguri repo), and ignore reminders about unpushed commits.
+
 ## Commands
 
 Build for the simulator:
