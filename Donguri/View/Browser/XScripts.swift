@@ -3,7 +3,9 @@
 //  Donguri
 //
 //  X (Twitter) for immersion: posts that aren't Japanese are hidden as
-//  they appear, ads too, and searches are kept to Japanese (lang:ja).
+//  they appear, and so are posts with no text (only pictures or video),
+//  posts X translated by itself, and ads. Searches are kept to Japanese
+//  (lang:ja).
 //
 
 import Foundation
@@ -39,10 +41,18 @@ enum XScripts {
         const kana = (letters.match(/[\\u3040-\\u30ff\\u31f0-\\u31ff\\uff66-\\uff9f]/g) || []).length;
         return kana > 0 && japanese / letters.length >= 0.3;
       }
+      // X's labels on a post it translated by itself ("Translated from …",
+      // "原文を表示"). A translation reads as Japanese but isn't.
+      const translated = /自動翻訳|から翻訳|翻訳されました|原文を表示|原文を見る|Translated from|Auto-?translated|Show original/i;
       function keep(article) {
         if (article.querySelector('[data-testid="placementTracking"]')) { return false; }
         const texts = article.querySelectorAll('[data-testid="tweetText"]');
-        if (!texts.length) { return true; }
+        // Only pictures or a video: nothing to read.
+        if (!texts.length) { return false; }
+        // The labels around the post, not the post's own words.
+        let around = article.textContent || '';
+        texts.forEach(function (text) { around = around.replace(text.textContent || '', ''); });
+        if (translated.test(around)) { return false; }
         const main = texts[0];
         return main.getAttribute('lang') === 'ja' || isJapanese(main.textContent);
       }
