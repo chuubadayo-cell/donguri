@@ -784,6 +784,26 @@ struct VideoPlayerView: View {
                     Section {
                         header
                             .listRowSeparator(.hidden)
+                    }
+                    // The picker is this section's header, which a plain
+                    // list keeps pinned to the top while its rows scroll.
+                    Section {
+                        switch pane {
+                        case .transcript:
+                            transcriptRows
+                        case .comments:
+                            commentRows
+                        case .related:
+                            ForEach(model.related) { video in
+                                Button {
+                                    AppNavigator.shared.playVideo(.youtube(id: video.id, title: video.title))
+                                } label: {
+                                    YouTubeVideoRow(video: video, compact: true)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    } header: {
                         Picker("", selection: $pane) {
                             Text("字幕").tag(Pane.transcript)
                             if model.videoID != nil {
@@ -792,22 +812,12 @@ struct VideoPlayerView: View {
                             }
                         }
                         .pickerStyle(.segmented)
-                        .listRowSeparator(.hidden)
-                    }
-                    switch pane {
-                    case .transcript:
-                        transcriptRows
-                    case .comments:
-                        commentRows
-                    case .related:
-                        ForEach(model.related) { video in
-                            Button {
-                                AppNavigator.shared.playVideo(.youtube(id: video.id, title: video.title))
-                            } label: {
-                                YouTubeVideoRow(video: video, compact: true)
-                            }
-                            .buttonStyle(.plain)
-                        }
+                        .textCase(nil)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 6)
+                        .frame(maxWidth: .infinity)
+                        .background(.bar)
+                        .listRowInsets(EdgeInsets())
                     }
                 }
                 .listStyle(.plain)

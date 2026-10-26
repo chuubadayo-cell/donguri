@@ -14,6 +14,7 @@ struct AnkiView: View {
     @State private var dictionaryManager = DictionaryManager.shared
     @State private var isImporting = false
     @State private var confirmFetch = false
+    @AppStorage(PostSnapshot.enabledKey) private var postScreenshot = true
     
     private var availableHandlebars: [String] {
         let hidden: Set<Handlebars> = [
@@ -109,6 +110,14 @@ struct AnkiView: View {
                         Text("Compact Glossaries", tableName: "Dictionaries")
                     }
                     .onChange(of: ankiManager.compactGlossaries) { _, _ in ankiManager.save() }
+
+                    VStack {
+                        Toggle("投稿のスクリーンショットをカードに", isOn: $postScreenshot)
+                        Text("5ちゃんねるの投稿、YouTubeのコメント、Xの投稿やページから追加したカードの画像フィールドに、その投稿の画像を入れます。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                     
                     if !ankiManager.useAnkiConnect {
                         VStack {

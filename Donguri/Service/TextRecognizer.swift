@@ -218,7 +218,7 @@ extension CGImagePropertyOrientation {
 
 /// A small JPEG of an image, for attaching to Anki cards.
 enum CardImage {
-    static func write(_ image: UIImage, maxSide: CGFloat = 720) -> URL? {
+    nonisolated static func write(_ image: UIImage, maxSide: CGFloat = 720) -> URL? {
         let size = image.size
         let scale = min(1, maxSide / max(size.width, size.height, 1))
         let target = CGSize(width: (size.width * scale).rounded(), height: (size.height * scale).rounded())

@@ -150,11 +150,12 @@ final class VideoPlayerModel {
 
     func hasMoreReplies(_ comment: YTComment) -> Bool { replyContinuations[comment.id] != nil }
 
-    /// A word tapped in a comment: no clip, no picture, just the word.
+    /// A word tapped in a comment: no clip, but a picture of the comment
+    /// (`PostSnapshot`, when that setting is on).
     func prepareTextLookup() {
         popups.documentTitle = title.isEmpty ? nil : title
         popups.coverURL = nil
-        popups.mediaProvider = nil
+        popups.mediaProvider = PostSnapshot.provider()
     }
 
     /// A comment's replies, or the next page of them.

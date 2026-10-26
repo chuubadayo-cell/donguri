@@ -60,6 +60,19 @@ enum BrowserScripts {
         } catch (e) {}
       }
 
+      // The post or paragraph a word is in, for the card's picture: X's
+      // post (its article), else the nearest post-like block.
+      function blockRect(node) {
+        const element = node.nodeType === 1 ? node : node.parentElement;
+        if (!element) { return null; }
+        const block = element.closest('article') ||
+          element.closest('.post, .comment, li, p, blockquote, dd, td, pre, h1, h2, h3, h4') ||
+          element.parentElement || element;
+        const r = block.getBoundingClientRect();
+        const pad = 6;
+        return { x: r.left - pad, y: r.top - pad, width: r.width + pad * 2, height: r.height + pad * 2 };
+      }
+
       // Like hoshiSelection.selectText, but links and images don't stop it:
       // in lookup mode every tap is a lookup.
       function select(x, y, maxLength) {
@@ -99,7 +112,7 @@ enum BrowserScripts {
         const sentence = sel.getSentence(hit.node, hit.offset);
         // The app answers with how many characters the dictionary matched,
         // and the highlight goes on as soon as it does.
-        const reply = webkit.messageHandlers.textSelected.postMessage({ text: text, sentence: sentence, rect: sel.getSelectionRect(x, y) });
+        const reply = webkit.messageHandlers.textSelected.postMessage({ text: text, sentence: sentence, rect: sel.getSelectionRect(x, y), block: blockRect(hit.node) });
         if (reply && reply.then) {
           reply.then(function (count) {
             if (count > 0 && sel.selection === current) { highlight(sel, count); }

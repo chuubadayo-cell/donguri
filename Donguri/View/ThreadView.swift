@@ -1270,7 +1270,10 @@ struct ThreadView: View {
                             popups[index - 1].clearSelection.toggle()
                             closeChildPopups(parent: index - 1)
                         }
-                    }
+                    },
+                    // A picture of the post the word came from, taken when
+                    // + is pressed.
+                    mediaProvider: { await PostSnapshot.currentMedia() }
                 )
                 .zIndex(Double(100 + (popups.firstIndex(where: { $0.id == popupId }) ?? 0)))
             }

@@ -185,6 +185,7 @@ struct PostTextView: UIViewRepresentable {
             let selection = SelectionData(text: scanned, sentence: sentence, rect: windowRect)
 
             clearHighlight()
+            PostSnapshot.noteTap(in: textView, wordRect: hit.rect)
             guard let matched = parent.onTextSelected(selection), matched > 0 else { return }
             highlight(from: hit.index, characters: matched, in: textView)
         }

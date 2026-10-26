@@ -355,13 +355,22 @@ final class BrowserModel: NSObject {
     }
 
     /// Returns how many characters matched, for the page to highlight.
-    fileprivate func textSelected(text: String, sentence: String, rect: CGRect) -> Int {
+    fileprivate func textSelected(text: String, sentence: String, rect: CGRect, block: CGRect?) -> Int {
         guard let userConfig else { return 0 }
         let inset = webView.scrollView.adjustedContentInset
-        let local = CGRect(x: rect.minX + inset.left, y: rect.minY + inset.top, width: rect.width, height: rect.height)
+        let local = rect.offsetBy(dx: inset.left, dy: inset.top)
         let windowRect = webView.convert(local, to: nil)
         popups.coverURL = nil
-        popups.mediaProvider = nil
+        // A picture of the post or paragraph, taken when + is pressed.
+        // Not for YouTube's site, whose words come from captions.
+        if let block, !isYouTube {
+            popups.mediaProvider = PostSnapshot.webProvider(webView: webView,
+                                                            block: block.offsetBy(dx: inset.left, dy: inset.top),
+                                                            focus: local,
+                                                            offset: webView.scrollView.contentOffset)
+        } else {
+            popups.mediaProvider = nil
+        }
         popups.documentTitle = title.isEmpty ? nil : title
         let selection = SelectionData(text: text, sentence: sentence, rect: windowRect)
         if let matched = popups.replace(with: selection, userConfig: userConfig) {
@@ -487,7 +496,14 @@ private final class BrowserBridge: NSObject, WKScriptMessageHandler, WKScriptMes
             replyHandler(0, nil)
             return
         }
-        let matched = model.textSelected(text: text, sentence: sentence, rect: CGRect(x: x, y: y, width: width, height: height))
+        var block: CGRect?
+        if let b = body["block"] as? [String: Any],
+           let bx = b["x"] as? Double, let by = b["y"] as? Double,
+           let bw = b["width"] as? Double, let bh = b["height"] as? Double {
+            block = CGRect(x: bx, y: by, width: bw, height: bh)
+        }
+        let matched = model.textSelected(text: text, sentence: sentence,
+                                         rect: CGRect(x: x, y: y, width: width, height: height), block: block)
         replyHandler(matched, nil)
     }
 
