@@ -257,6 +257,31 @@ final class BrowserModel: NSObject {
         url == nil || url?.absoluteString == "about:blank"
     }
 
+    /// X's timeline: through its own (hidden) home link when the page is
+    /// up, which is instant; otherwise by loading it.
+    func xHome() {
+        let script = "var link = document.querySelector('a[data-testid=\"AppTabBar_Home_Link\"]'); if (link) { link.click(); window.scrollTo(0, 0); true } else { false }"
+        webView.evaluateJavaScript(script, in: nil, in: BrowserScripts.world) { [weak self] result in
+            MainActor.assumeIsolated {
+                if case .success(let value) = result, value as? Bool == true { return }
+                self?.load(XScripts.homeURL)
+            }
+        }
+    }
+
+    /// Searches X for the latest posts (Japanese only when the filter is
+    /// on, which adds lang:ja).
+    func xSearch(_ query: String) {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        var text = trimmed
+        if XScripts.japaneseOnly, !trimmed.lowercased().contains("lang:") { text += " lang:ja" }
+        var components = URLComponents(string: "https://x.com/search")
+        components?.queryItems = [URLQueryItem(name: "q", value: text), URLQueryItem(name: "src", value: "typed_query"),
+                                  URLQueryItem(name: "f", value: "live")]
+        if let url = components?.url { load(url) }
+    }
+
     /// X: only Japanese posts (and searches), or everything.
     func setJapaneseOnly(_ on: Bool) {
         XScripts.japaneseOnly = on

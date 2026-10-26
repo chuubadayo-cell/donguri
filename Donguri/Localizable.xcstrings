@@ -655,6 +655,22 @@
         }
       }
     },
+    "Xで検索" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search X"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Xで検索"
+          }
+        }
+      }
+    },
     "YouTube" : {},
     "YouTubeでは字幕(CC)をオンにすると、字幕をタップして調べたり、Ankiに追加したりできます。" : {
       "localizations" : {
@@ -2132,6 +2148,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "キャンセルされました"
+          }
+        }
+      }
+    },
+    "キーワード" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keywords"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "キーワード"
           }
         }
       }
@@ -5821,6 +5853,22 @@
         }
       }
     },
+    "日本語の投稿だけを探します" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Only Japanese posts are searched"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "日本語の投稿だけを探します"
+          }
+        }
+      }
+    },
     "日本語の投稿だけ表示" : {
       "localizations" : {
         "en" : {
@@ -6250,6 +6298,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "板一覧"
+          }
+        }
+      }
+    },
+    "検索" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "検索"
           }
         }
       }

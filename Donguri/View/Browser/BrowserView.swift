@@ -47,6 +47,8 @@ private struct WebPane: View {
     @Bindable var model: BrowserModel
     @State private var behavior = BehaviorSettings.shared
     @State private var japaneseOnly = XScripts.japaneseOnly
+    @State private var searchingX = false
+    @State private var xQuery = ""
     @Environment(UserConfig.self) private var userConfig
     @FocusState private var addressFocused: Bool
     @State private var showsTranscript = false
@@ -60,7 +62,12 @@ private struct WebPane: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            addressBar
+            // X is kept plain: no address bar, just the load progress.
+            if model.site == .x {
+                progressLine
+            } else {
+                addressBar
+            }
 
             ZStack {
                 BrowserWebView(webView: model.webView)
@@ -199,6 +206,48 @@ private struct WebPane: View {
 
     // MARK: Toolbar
 
+    private var progressLine: some View {
+        GeometryReader { geometry in
+            Rectangle()
+                .fill(Color.accentColor)
+                .frame(width: geometry.size.width * model.progress)
+                .opacity(model.isLoading ? 1 : 0)
+                .animation(.easeOut(duration: 0.2), value: model.progress)
+        }
+        .frame(height: 2)
+    }
+
+    /// X's own bottom bar is hidden; its home and search are here instead.
+    private var xButtons: some View {
+        Group {
+            Button {
+                model.xHome()
+                Haptics.play(.selection)
+            } label: {
+                Image(systemName: "house")
+            }
+            .accessibilityLabel(Text("ホーム"))
+            Spacer()
+            Button {
+                xQuery = ""
+                searchingX = true
+            } label: {
+                Image(systemName: "magnifyingglass")
+            }
+            .accessibilityLabel(Text("検索"))
+            .alert("Xで検索", isPresented: $searchingX) {
+                TextField("キーワード", text: $xQuery)
+                Button("キャンセル", role: .cancel) {}
+                Button("検索") { model.xSearch(xQuery) }
+            } message: {
+                if japaneseOnly {
+                    Text("日本語の投稿だけを探します")
+                }
+            }
+            Spacer()
+        }
+    }
+
     private var toolbar: some View {
         HStack {
             Button {
@@ -208,13 +257,17 @@ private struct WebPane: View {
             }
             .disabled(!model.canGoBack)
             Spacer()
-            Button {
-                model.webView.goForward()
-            } label: {
-                Image(systemName: "chevron.forward")
+            if model.site == .x {
+                xButtons
+            } else {
+                Button {
+                    model.webView.goForward()
+                } label: {
+                    Image(systemName: "chevron.forward")
+                }
+                .disabled(!model.canGoForward)
+                Spacer()
             }
-            .disabled(!model.canGoForward)
-            Spacer()
             // Dictionary mode: taps look words up instead of following links.
             Button {
                 model.lookupMode.toggle()

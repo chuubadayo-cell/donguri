@@ -32,6 +32,16 @@ enum XScripts {
     private static let filter = """
     (function () {
       if (window.__irohaFilter) { return; }
+      // X's own bottom bar: the app's toolbar has its home and search.
+      function addStyle() {
+        if (document.getElementById('iroha-x-style')) { return; }
+        const style = document.createElement('style');
+        style.id = 'iroha-x-style';
+        style.textContent = '[data-testid="BottomBar"] { display: none !important; }';
+        (document.head || document.documentElement).appendChild(style);
+      }
+      addStyle();
+      document.addEventListener('DOMContentLoaded', addStyle);
       // Japanese: some kana (which Chinese never has) and mostly Japanese
       // script. A post of only emoji, numbers or links isn't judged.
       function isJapanese(text) {
@@ -60,6 +70,7 @@ enum XScripts {
         return article.closest('[data-testid="cellInnerDiv"]') || article;
       }
       function run() {
+        addStyle();
         const on = !!window.__irohaJapaneseOnly;
         // The post a page is about (opened by tapping it) always shows.
         const focused = location.pathname.indexOf('/status/') >= 0;
