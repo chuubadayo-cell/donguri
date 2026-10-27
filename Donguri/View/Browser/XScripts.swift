@@ -37,7 +37,16 @@ enum XScripts {
         if (document.getElementById('iroha-x-style')) { return; }
         const style = document.createElement('style');
         style.id = 'iroha-x-style';
-        style.textContent = '[data-testid="BottomBar"] { display: none !important; }';
+        // The home timeline keeps only its first two tabs (おすすめ and
+        // フォロー中), not pinned lists or communities; no compose button.
+        style.textContent = [
+          '[data-testid="BottomBar"]',
+          'html.iroha-home [data-testid="primaryColumn"] [data-testid="ScrollSnap-List"] > div:nth-child(n+3)',
+          'html.iroha-home [data-testid="primaryColumn"] [data-testid="ScrollSnap-nextButtonWrapper"]',
+          'a[href="/compose/post"]', 'a[href="/compose/tweet"]',
+          '[data-testid="FloatingActionButtonBase"]', '[data-testid="FloatingActionButtons_Tweet_Button"]',
+          '[data-testid="SideNav_NewTweet_Button"]'
+        ].join(',\n') + ' { display: none !important; }';
         (document.head || document.documentElement).appendChild(style);
       }
       addStyle();
@@ -66,6 +75,17 @@ enum XScripts {
         const main = texts[0];
         return main.getAttribute('lang') === 'ja' || isJapanese(main.textContent);
       }
+      // X's offers to translate a post or a bio into the UI's language.
+      const translateLabel = /^(Translate post|Translate bio|Translate|Show translation|Rate this translation|ポストを翻訳|自己紹介を翻訳|翻訳を表示|翻訳する)$/i;
+      function hideTranslateButtons(root) {
+        // Each button is looked at once.
+        root.querySelectorAll('button:not([data-iroha-t]), [role="button"]:not([data-iroha-t])').forEach(function (button) {
+          const label = (button.textContent || '').trim();
+          const hide = label.length <= 30 && translateLabel.test(label);
+          button.dataset.irohaT = hide ? '1' : '0';
+          if (hide) { button.style.display = 'none'; }
+        });
+      }
       function cellOf(article) {
         return article.closest('[data-testid="cellInnerDiv"]') || article;
       }
@@ -85,6 +105,12 @@ enum XScripts {
       }
       function run() {
         addStyle();
+        const home = location.pathname === '/home';
+        if (document.documentElement.classList.contains('iroha-home') !== home) {
+          document.documentElement.classList.toggle('iroha-home', home);
+        }
+        const column = document.querySelector('[data-testid="primaryColumn"]');
+        if (column) { hideTranslateButtons(column); }
         const on = !!window.__irohaJapaneseOnly;
         // Filter off and nothing left hidden: nothing to do.
         if (!on && !document.querySelector('[data-iroha-hidden]')) { return; }

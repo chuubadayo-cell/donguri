@@ -87,6 +87,7 @@ class AnkiManager {
         ]
 
         if let url = urlComponents?.url {
+            PictureInPicture.shared.suppressForHandoff()
             UIApplication.shared.open(url)
         }
     }
@@ -263,6 +264,8 @@ class AnkiManager {
 
         if let url = urlComponents?.url {
             if !mediaLinks.isEmpty { AnkiMediaServer.shared.keepAliveForHandoff() }
+            // Leaving for AnkiMobile and straight back: no floating video.
+            PictureInPicture.shared.suppressForHandoff()
             await UIApplication.shared.open(url)
         }
 

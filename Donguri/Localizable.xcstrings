@@ -18,6 +18,22 @@
         }
       }
     },
+    "%@回" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ views"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@回"
+          }
+        }
+      }
+    },
     "%@回再生" : {
       "localizations" : {
         "en" : {
@@ -1172,6 +1188,22 @@
         }
       }
     },
+    "ここから再生" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Play from Here"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ここから再生"
+          }
+        }
+      }
+    },
     "ここまで読んだ" : {
       "localizations" : {
         "en" : {
@@ -2212,6 +2244,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "グリッド表示"
+          }
+        }
+      }
+    },
+    "コピー" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "コピー"
           }
         }
       }
@@ -4202,6 +4250,22 @@
         }
       }
     },
+    "全画面からアプリを離れたらピクチャ・イン・ピクチャ" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Picture in Picture When Leaving Full Screen"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全画面からアプリを離れたらピクチャ・イン・ピクチャ"
+          }
+        }
+      }
+    },
     "共有" : {
       "localizations" : {
         "en" : {
@@ -4246,6 +4310,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "再生すると、ここに字幕が出ます"
+          }
+        }
+      }
+    },
+    "再生中" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Playing"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "再生中"
           }
         }
       }
@@ -5032,6 +5112,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "字幕をぼかす"
+          }
+        }
+      }
+    },
+    "字幕を編集" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit Subtitle"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "字幕を編集"
           }
         }
       }
@@ -6864,6 +6960,22 @@
         }
       }
     },
+    "画質" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quality"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "画質"
+          }
+        }
+      }
+    },
     "画面のどこからでもスワイプで戻る" : {
       "localizations" : {
         "en" : {
@@ -6956,6 +7068,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "登録済み"
+          }
+        }
+      }
+    },
+    "登録者%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ subscribers"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "登録者%@"
+          }
+        }
+      }
+    },
+    "直した字幕はこの動画に保存され、カードの例文にも使われます。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The corrected line is saved for this video and used as the card's sentence."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "直した字幕はこの動画に保存され、カードの例文にも使われます。"
           }
         }
       }
@@ -7086,6 +7230,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "背景"
+          }
+        }
+      }
+    },
+    "自動" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auto"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自動"
           }
         }
       }
@@ -7861,6 +8021,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "過去ログ"
+          }
+        }
+      }
+    },
+    "選んだ画質か、ない場合はそれより下の一番よい画質で再生します。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plays at the chosen quality, or the best one below it when the video doesn't have it."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "選んだ画質か、ない場合はそれより下の一番よい画質で再生します。"
           }
         }
       }

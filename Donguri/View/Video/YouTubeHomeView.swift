@@ -456,11 +456,14 @@ private struct VideoThumbnail: View {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
+                    .transition(.opacity)
             }
         }
         .task(id: url) {
             guard image == nil else { return }
-            image = await MediaStore.shared.image(for: url, maxPixelSize: maxPixelSize)
+            let loaded = await MediaStore.shared.image(for: url, maxPixelSize: maxPixelSize)
+            // Cached ones are there from the start; a downloaded one fades in.
+            withAnimation(.easeOut(duration: 0.2)) { image = loaded }
         }
     }
 }

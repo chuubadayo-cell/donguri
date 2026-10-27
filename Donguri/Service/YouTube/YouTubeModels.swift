@@ -83,6 +83,8 @@ nonisolated struct YTPlayerInfo: Sendable {
     var reason: String?
     var viewCount: String?
     var description: String?
+    /// The day it was published, from the page's microformat.
+    var publishDate: Date? = nil
 }
 
 /// One subtitle line.
@@ -366,8 +368,19 @@ nonisolated enum YTParse {
             playable: statusName == "OK",
             reason: (status["reason"] as? String) ?? text(status["messages"]),
             viewCount: details["viewCount"] as? String,
-            description: details["shortDescription"] as? String
+            description: details["shortDescription"] as? String,
+            publishDate: publishDate(response)
         )
+    }
+
+    /// "2024-05-01" or "2024-05-01T09:00:00-07:00": only the day is used.
+    private static func publishDate(_ response: [String: Any]) -> Date? {
+        guard let microformat = (response["microformat"] as? [String: Any])?["playerMicroformatRenderer"] as? [String: Any],
+              let raw = (microformat["publishDate"] as? String) ?? (microformat["uploadDate"] as? String),
+              raw.count >= 10 else { return nil }
+        let parts = raw.prefix(10).split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 3 else { return nil }
+        return Calendar(identifier: .gregorian).date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2]))
     }
 
     // MARK: Comments

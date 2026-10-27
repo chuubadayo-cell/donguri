@@ -16,6 +16,7 @@
 import SwiftUI
 import AVFoundation
 import WebKit
+import AVKit
 import UniformTypeIdentifiers
 
 struct VideoPlayerView: View {
@@ -42,6 +43,10 @@ struct VideoPlayerView: View {
     /// The last tap on the video, to tell a double tap without making
     /// single taps wait for it.
     @State private var lastTap: (time: Date, forward: Bool, controlsWereVisible: Bool)?
+    /// Sideways, full screen: leaving the app floats the video.
+    @State private var showsFullScreen = false
+    /// A transcript line being corrected.
+    @State private var editingCue: SubtitleCue?
 
     private enum Pane: String, CaseIterable {
         case transcript, comments, related
@@ -69,10 +74,14 @@ struct VideoPlayerView: View {
     /// never stops between the two.
     var body: some View {
         ZStack {
+            // No structural transition between the two (the web view can
+            // only be in one of them); each eases itself in instead.
             if minimized {
                 miniPlayer
+                    .modifier(EaseIn(from: .mini))
             } else {
                 fullPlayer
+                    .modifier(EaseIn(from: .full))
             }
         }
         .task {
@@ -80,8 +89,12 @@ struct VideoPlayerView: View {
             scheduleHide()
         }
         .onDisappear {
+            PictureInPicture.shared.setWanted(false)
             model.stop()
             OrientationLock.returnToPortrait()
+        }
+        .onChange(of: showsFullScreen && model.isPlaying && !minimized, initial: true) { _, wanted in
+            PictureInPicture.shared.setWanted(wanted)
         }
         .onChange(of: model.isPlaying) { _, playing in
             if playing { scheduleHide() } else { showControls(autoHide: false) }
@@ -122,6 +135,8 @@ struct VideoPlayerView: View {
                     }
                     .statusBarHidden(true)
                     .persistentSystemOverlays(.hidden)
+                    .onAppear { showsFullScreen = true }
+                    .onDisappear { showsFullScreen = false }
                 } else {
                     VStack(spacing: 0) {
                         videoArea(fullScreen: false)
@@ -301,6 +316,7 @@ struct VideoPlayerView: View {
 
             if !model.isAd {
                 subtitleOverlay(fullScreen: fullScreen)
+                    .animation(.easeOut(duration: 0.14), value: model.activeCue?.id)
             }
 
             if model.isAd {
@@ -482,24 +498,25 @@ struct VideoPlayerView: View {
             let blurred = isBlurred(cue)
             VStack {
                 if settings.subtitlePosition == .bottom { Spacer() }
-                ZStack {
-                    SubtitleTextView(text: cue.text,
-                                     fontSize: fullScreen ? settings.subtitleSize * 1.2 : settings.subtitleSize * 0.85,
-                                     scanNonJapaneseText: userConfig.scanNonJapaneseText,
-                                     lookupOpen: !model.popups.isEmpty,
-                                     onTextSelected: { selection in lookUp(selection, in: cue) },
-                                     onTapOutside: { model.popups.closeAll() })
-                        .blur(radius: blurred ? 7 : 0)
-                        .allowsHitTesting(!blurred)
-                    if blurred {
-                        // Tap the blurred line to read it.
-                        Color.clear
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                reveal(cue)
-                            }
+                SubtitleTextView(text: cue.text,
+                                 fontSize: fullScreen ? settings.subtitleSize * 1.2 : settings.subtitleSize * 0.85,
+                                 scanNonJapaneseText: userConfig.scanNonJapaneseText,
+                                 lookupOpen: !model.popups.isEmpty,
+                                 onTextSelected: { selection in lookUp(selection, in: cue) },
+                                 onTapOutside: { model.popups.closeAll() })
+                    .blur(radius: blurred ? 7 : 0)
+                    .allowsHitTesting(!blurred)
+                    // An overlay, not a sibling in a stack: a clear view takes
+                    // all the width it's offered, which stretched the backing
+                    // of a blurred line across the whole video.
+                    .overlay {
+                        if blurred {
+                            // Tap the blurred line to read it.
+                            Color.clear
+                                .contentShape(Rectangle())
+                                .onTapGesture { reveal(cue) }
+                        }
                     }
-                }
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
@@ -510,6 +527,9 @@ struct VideoPlayerView: View {
                 if settings.subtitlePosition == .top { Spacer() }
             }
             .animation(.easeInOut(duration: 0.2), value: controlsVisible)
+            // One line fades into the next rather than snapping.
+            .id(cue.id)
+            .transition(.opacity)
         }
     }
 
@@ -804,7 +824,7 @@ struct VideoPlayerView: View {
                             }
                         }
                     } header: {
-                        Picker("", selection: $pane) {
+                        Picker("", selection: $pane.animation(.snappy(duration: 0.25))) {
                             Text("字幕").tag(Pane.transcript)
                             if model.videoID != nil {
                                 Text("コメント").tag(Pane.comments)
@@ -821,6 +841,9 @@ struct VideoPlayerView: View {
                     }
                 }
                 .listStyle(.plain)
+                .sheet(item: $editingCue) { cue in
+                    CueEditor(cue: cue) { text in model.editCue(cue, text: text) }
+                }
                 .onScrollPhaseChange { _, phase in
                     if phase == .interacting {
                         followTranscript = false
@@ -946,80 +969,77 @@ struct VideoPlayerView: View {
         .background(Color(.secondarySystemBackground))
     }
 
+    /// Title, channel, one line of numbers, then the buttons, all
+    /// centred.
     private var header: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(spacing: 6) {
             Text(verbatim: model.title)
                 .font(.headline)
+                .multilineTextAlignment(.center)
                 .lineLimit(3)
-            HStack(spacing: 8) {
-                if let views = model.viewCount, let count = Int(views) {
-                    // 12万回視聴, as YouTube writes it.
-                    Text("\(count.formatted(.number.notation(.compactName)))回視聴")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                if let source = model.subtitleSource {
-                    Label(source, systemImage: "captions.bubble")
-                        .font(.caption)
+            if !model.channel.isEmpty {
+                Button {
+                    guard let channelID = model.channelID else { return }
+                    minimize()
+                    AppNavigator.shared.showYouTubeChannel(id: channelID, name: model.channel)
+                } label: {
+                    Text(verbatim: model.channel)
+                        .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .disabled(model.channelID == nil)
             }
-            if !model.channel.isEmpty {
-                channelRow
+            if !infoLine.isEmpty {
+                Text(verbatim: infoLine)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .contentTransition(.opacity)
             }
             if model.videoID != nil {
                 actionRow
+                    .padding(.top, 4)
             }
         }
-        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 6)
+        .animation(.easeOut(duration: 0.2), value: infoLine)
     }
 
-    /// The channel and its 登録 button, as in the YouTube app.
-    private var channelRow: some View {
-        HStack(spacing: 10) {
-            Button {
-                guard let channelID = model.channelID else { return }
-                minimize()
-                AppNavigator.shared.showYouTubeChannel(id: channelID, name: model.channel)
-            } label: {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(verbatim: model.channel)
-                        .font(.subheadline.weight(.semibold))
-                        .lineLimit(1)
-                    if let subscribers = model.subscriberText {
-                        Text(verbatim: subscribers)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .disabled(model.channelID == nil)
-            Spacer(minLength: 8)
-            if model.channelID != nil {
-                Button {
-                    model.toggleSubscribe()
-                } label: {
-                    Text(model.subscribed ? "登録済み" : "登録")
-                        .font(.subheadline.weight(.semibold))
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 7)
-                        .foregroundStyle(model.subscribed ? Color.primary : Color(.systemBackground))
-                        .background(Capsule().fill(model.subscribed ? Color.secondary.opacity(0.18) : Color.primary))
-                        .contentShape(Capsule())
-                }
-                .buttonStyle(.plain)
-                .animation(.snappy, value: model.subscribed)
-            }
+    /// 12万回 · 登録者3.4万 · 2024/5/1
+    private var infoLine: String {
+        var parts: [String] = []
+        if let views = model.viewCount, let count = Int(views) {
+            parts.append(String(localized: "\(count.formatted(.number.notation(.compactName)))回"))
         }
+        if let subscribers = Self.shortSubscribers(model.subscriberText) {
+            parts.append(String(localized: "登録者\(subscribers)"))
+        }
+        if let date = model.publishDate {
+            parts.append(date.formatted(.dateTime.year().month(.defaultDigits).day()))
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    /// "チャンネル登録者数 12.3万人" → "12.3万".
+    private static func shortSubscribers(_ text: String?) -> String? {
+        guard let text, let match = text.firstMatch(of: /[\d][\d.,]*\s*[万億千KMBkmb]?/) else { return nil }
+        return String(match.output).replacingOccurrences(of: " ", with: "")
     }
 
     private var actionRow: some View {
         HStack(spacing: 8) {
+            if model.channelID != nil {
+                actionPill(systemImage: model.subscribed ? "bell.fill" : "bell",
+                           title: model.subscribed ? String(localized: "登録済み") : String(localized: "登録"),
+                           active: model.subscribed) {
+                    model.toggleSubscribe()
+                }
+            }
             actionPill(systemImage: model.liked ? "hand.thumbsup.fill" : "hand.thumbsup",
                        title: likeLabel, active: model.liked) {
                 model.toggleLike()
@@ -1029,8 +1049,8 @@ struct VideoPlayerView: View {
                        title: String(localized: "後で見る"), active: model.inWatchLater) {
                 model.toggleWatchLater()
             }
-            Spacer(minLength: 0)
         }
+        .frame(maxWidth: .infinity)
     }
 
     /// The like count including the account's own like.
@@ -1044,8 +1064,11 @@ struct VideoPlayerView: View {
         Button(action: action) {
             Label {
                 Text(verbatim: title)
+                    .contentTransition(.numericText())
             } icon: {
                 Image(systemName: systemImage)
+                    .contentTransition(.symbolEffect(.replace))
+                    .symbolEffect(.bounce, value: active)
             }
             .font(.footnote.weight(.semibold))
             .padding(.horizontal, 12)
@@ -1202,7 +1225,11 @@ struct VideoPlayerView: View {
                               },
                               onReveal: { reveal(cue) },
                               onSelect: { selection in lookUp(selection, in: cue) },
-                              onTapOutside: { model.popups.closeAll() })
+                              onTapOutside: { model.popups.closeAll() },
+                              onEdit: {
+                                  model.popups.closeAll()
+                                  editingCue = cue
+                              })
                     // Only the rows whose line, highlight or blur changed
                     // redraw when playback moves on a line.
                     .equatable()
@@ -1221,6 +1248,7 @@ private struct TranscriptRow: View, Equatable {
     let onReveal: () -> Void
     let onSelect: (SelectionData) -> Int?
     let onTapOutside: () -> Void
+    let onEdit: () -> Void
     @Environment(UserConfig.self) private var userConfig
 
     var body: some View {
@@ -1251,12 +1279,92 @@ private struct TranscriptRow: View, Equatable {
                 }
         }
         .listRowBackground(isCurrent ? Color.accentColor.opacity(0.12) : Color.clear)
+        // Long press: fix a mis-heard line before mining from it.
+        .contextMenu {
+            Button(action: onEdit) {
+                Label("字幕を編集", systemImage: "pencil")
+            }
+            Button {
+                UIPasteboard.general.string = cue.text
+            } label: {
+                Label("コピー", systemImage: "doc.on.doc")
+            }
+            Button(action: onSeek) {
+                Label("ここから再生", systemImage: "play")
+            }
+        }
     }
 
     /// The closures are rebuilt on every redraw but do the same thing.
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.cue == rhs.cue && lhs.isCurrent == rhs.isCurrent && lhs.blurred == rhs.blurred
             && lhs.textStyle.key == rhs.textStyle.key
+    }
+}
+
+/// Eases a form of the player in as it appears: the miniplayer rises
+/// and settles, the full player slides up a little and fades in.
+private struct EaseIn: ViewModifier {
+    enum Kind { case mini, full }
+    let from: Kind
+    @State private var shown = false
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(shown ? 1 : 0)
+            .offset(y: shown ? 0 : (from == .mini ? 24 : 40))
+            .scaleEffect(shown ? 1 : (from == .mini ? 0.94 : 0.985), anchor: .bottom)
+            .onAppear {
+                withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) { shown = true }
+            }
+    }
+}
+
+/// Corrects one transcript line: automatic captions often mishear the
+/// very word worth mining.
+private struct CueEditor: View {
+    let cue: SubtitleCue
+    let onSave: (String) -> Void
+    @State private var text: String
+    @FocusState private var focused: Bool
+    @Environment(\.dismiss) private var dismiss
+
+    init(cue: SubtitleCue, onSave: @escaping (String) -> Void) {
+        self.cue = cue
+        self.onSave = onSave
+        _text = State(initialValue: cue.text)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("字幕", text: $text, axis: .vertical)
+                        .lineLimit(2...8)
+                        .focused($focused)
+                } header: {
+                    Text(verbatim: cue.timeLabel)
+                } footer: {
+                    Text("直した字幕はこの動画に保存され、カードの例文にも使われます。")
+                }
+            }
+            .navigationTitle(Text("字幕を編集"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("キャンセル") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("保存") {
+                        onSave(text)
+                        dismiss()
+                    }
+                    .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+            .onAppear { focused = true }
+        }
+        .presentationDetents([.medium])
     }
 }
 
@@ -1349,6 +1457,12 @@ private struct WebPlayerSurface: UIViewRepresentable {
 
     final class WebHost: UIView {
         let webView: WKWebView
+        /// The page's size when shown large. Small hosts (the miniplayer)
+        /// shrink the page as a picture instead of resizing it: YouTube's
+        /// page laid out a few dozen points wide stopped drawing its video
+        /// and showed white.
+        private static var pageSize = CGSize(width: 390, height: 219)
+        private static let smallWidth: CGFloat = 240
 
         init(webView: WKWebView) {
             self.webView = webView
@@ -1364,9 +1478,9 @@ private struct WebPlayerSurface: UIViewRepresentable {
         func claim() {
             guard webView.superview !== self else { return }
             webView.removeFromSuperview()
-            webView.frame = bounds
-            webView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            webView.autoresizingMask = []
             addSubview(webView)
+            place()
         }
 
         override func didMoveToWindow() {
@@ -1376,7 +1490,24 @@ private struct WebPlayerSurface: UIViewRepresentable {
 
         override func layoutSubviews() {
             super.layoutSubviews()
-            if webView.superview === self { webView.frame = bounds }
+            if webView.superview === self { place() }
+        }
+
+        private func place() {
+            let size = bounds.size
+            guard size.width > 0, size.height > 0 else { return }
+            if size.width >= Self.smallWidth {
+                Self.pageSize = size
+                webView.transform = .identity
+                webView.frame = bounds
+            } else {
+                let page = Self.pageSize
+                let scale = min(size.width / page.width, size.height / page.height)
+                webView.transform = .identity
+                webView.bounds = CGRect(origin: .zero, size: page)
+                webView.center = CGPoint(x: bounds.midX, y: bounds.midY)
+                webView.transform = CGAffineTransform(scaleX: scale, y: scale)
+            }
         }
     }
 }
@@ -1425,6 +1556,7 @@ private struct PlayerSurface: UIViewRepresentable {
         view.playerLayer.player = player
         view.playerLayer.videoGravity = .resizeAspect
         view.backgroundColor = .black
+        view.pictureInPicture = PictureInPicture.shared.attach(view.playerLayer)
         return view
     }
 
@@ -1438,6 +1570,8 @@ private struct PlayerSurface: UIViewRepresentable {
     final class PlayerLayerView: UIView {
         override class var layerClass: AnyClass { AVPlayerLayer.self }
         var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
+        /// iOS's floating player, started by AVKit when the app is left.
+        var pictureInPicture: AVPictureInPictureController?
         private var parked: AVPlayer?
         private var observers: [NSObjectProtocol] = []
 
@@ -1449,7 +1583,10 @@ private struct PlayerSurface: UIViewRepresentable {
             observers = [
                 center.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { [weak self] _ in
                     MainActor.assumeIsolated {
-                        guard let self, VideoSettings.shared.backgroundPlayback else { return }
+                        // Floating in Picture in Picture, the picture stays.
+                        guard let self, VideoSettings.shared.backgroundPlayback,
+                              !PictureInPicture.shared.isActive,
+                              self.pictureInPicture?.isPictureInPictureActive != true else { return }
                         self.parked = self.playerLayer.player
                         self.playerLayer.player = nil
                     }

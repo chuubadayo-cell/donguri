@@ -49,13 +49,15 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
         configuration.websiteDataStore = .default()
         configuration.allowsInlineMediaPlayback = true
         configuration.mediaTypesRequiringUserActionForPlayback = []
-        configuration.allowsPictureInPictureMediaPlayback = false
+        configuration.allowsPictureInPictureMediaPlayback = true
         let controller = configuration.userContentController
         // The audio hook has to run in the page's own world, before
         // YouTube's player builds its media source.
         controller.addUserScript(WKUserScript(source: Self.audioHook, injectionTime: .atDocumentStart,
                                               forMainFrameOnly: true, in: .page))
         controller.addUserScript(WKUserScript(source: Self.alwaysVisible, injectionTime: .atDocumentStart,
+                                              forMainFrameOnly: true, in: .page))
+        controller.addUserScript(WKUserScript(source: Self.qualityScript, injectionTime: .atDocumentStart,
                                               forMainFrameOnly: true, in: .page))
         controller.addUserScript(WKUserScript(source: Self.controllerScript, injectionTime: .atDocumentStart,
                                               forMainFrameOnly: true, in: Self.world))
@@ -118,6 +120,38 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
         run("irohaPlayer.skipAd()")
     }
 
+    // MARK: Quality
+
+    /// The qualities YouTube offers for this video (best first, as its
+    /// names: hd1080, hd720, large…) and the one playing.
+    func qualities() async -> (levels: [String], current: String) {
+        let result = try? await webView.callAsyncJavaScript(
+            "return window.__irohaQuality ? window.__irohaQuality.info() : null",
+            arguments: [:], in: nil, contentWorld: .page)
+        guard let dictionary = result as? [String: Any] else { return ([], "") }
+        let levels = (dictionary["levels"] as? [String] ?? []).filter { $0 != "auto" }
+        return (levels, dictionary["current"] as? String ?? "")
+    }
+
+    /// Plays at `cap` or the best below it ("auto" leaves it to YouTube).
+    func setQuality(cap: String) {
+        let escaped = cap.replacingOccurrences(of: "'", with: "")
+        webView.evaluateJavaScript("window.__irohaQuality && window.__irohaQuality.set('\(escaped)')",
+                                   in: nil, in: .page, completionHandler: nil)
+    }
+
+    /// YouTube's player gets its API a little after the video is ready,
+    /// and may pick its own quality as it starts: asked a few times.
+    private func applyPreferredQuality() {
+        for delay in [0.0, 1.0, 3.0, 6.0] {
+            Task { [weak self] in
+                try? await Task.sleep(for: .seconds(delay))
+                guard let self, !self.state.isAd else { return }
+                self.setQuality(cap: VideoSettings.shared.videoQuality)
+            }
+        }
+    }
+
     private func run(_ script: String) {
         webView.evaluateJavaScript(script, in: nil, in: Self.world, completionHandler: nil)
     }
@@ -137,10 +171,16 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
         next.buffered = body["buf"] as? Double ?? 0
         next.source = body["src"] as? String ?? ""
         let firstReady = next.ready && !state.ready
+        let adEnded = state.isAd && !next.isAd
         state = next
         if firstReady, !next.isAd {
             if startTime > 5 { seek(to: startTime) }
             startTime = 0
+        }
+        // The chosen quality, once YouTube's player can take it (again
+        // after an ad, which has its own).
+        if next.ready, !next.isAd, firstReady || adEnded {
+            applyPreferredQuality()
         }
         // Autoplay sometimes doesn't take; nudge it for the first while.
         if next.ready, next.paused, wantsPlaying, !next.isAd, Date.now.timeIntervalSince(loadedAt) < 15 {
@@ -260,6 +300,43 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
         window.addEventListener(type, swallow, true);
         document.addEventListener(type, swallow, true);
       });
+    })();
+    """
+
+    /// YouTube's player's own quality API (page world: the methods live on
+    /// its element there).
+    static let qualityScript = """
+    (function () {
+      if (window.__irohaQuality) { return; }
+      const order = ['highres', 'hd2880', 'hd2160', 'hd1440', 'hd1080', 'hd720', 'large', 'medium', 'small', 'tiny'];
+      function player() { return document.getElementById('movie_player') || document.querySelector('.html5-video-player'); }
+      window.__irohaQuality = {
+        info: function () {
+          const p = player();
+          if (!p || typeof p.getAvailableQualityLevels !== 'function') { return { levels: [], current: '' }; }
+          return { levels: p.getAvailableQualityLevels() || [], current: (p.getPlaybackQuality && p.getPlaybackQuality()) || '' };
+        },
+        set: function (cap) {
+          const p = player();
+          if (!p || typeof p.getAvailableQualityLevels !== 'function') { return false; }
+          if (cap === 'auto') {
+            if (p.setPlaybackQualityRange) { p.setPlaybackQualityRange('auto', 'auto'); }
+            return true;
+          }
+          const levels = (p.getAvailableQualityLevels() || []).filter(function (q) { return q !== 'auto'; });
+          const limit = order.indexOf(cap);
+          let chosen = null;
+          for (const q of levels) {
+            const rank = order.indexOf(q);
+            if (rank >= 0 && rank >= limit) { chosen = q; break; }
+          }
+          if (!chosen) { chosen = levels[levels.length - 1]; }
+          if (!chosen) { return false; }
+          if (p.setPlaybackQualityRange) { p.setPlaybackQualityRange(chosen, chosen); }
+          if (p.setPlaybackQuality) { p.setPlaybackQuality(chosen); }
+          return chosen;
+        }
+      };
     })();
     """
 
@@ -566,6 +643,10 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
       if (window.irohaPlayer) { return; }
       const css = [
         'html, body { background: #000 !important; overflow: hidden !important; }',
+        // Nothing of the page but the player: its header and banners
+        // flashed white as the page opened, before the player was found.
+        'body { visibility: hidden !important; }',
+        '.iroha-player { visibility: visible !important; }',
         '.iroha-player { position: fixed !important; inset: 0 !important; left: 0 !important; top: 0 !important; width: 100vw !important; height: 100vh !important; z-index: 2147483647 !important; background: #000 !important; margin: 0 !important; padding: 0 !important; transform: none !important; }',
         '.iroha-player video { position: absolute !important; left: 0 !important; top: 0 !important; width: 100vw !important; height: 100vh !important; object-fit: contain !important; transform: none !important; }',
         '.ytp-caption-window-container, .caption-window, .captions-text, .ytp-chrome-bottom, .ytp-chrome-top, .ytp-gradient-bottom, .ytp-gradient-top,',

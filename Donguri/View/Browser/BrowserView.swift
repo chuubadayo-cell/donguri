@@ -16,7 +16,7 @@ struct BrowserView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Picker("", selection: $mode) {
+            Picker("", selection: $mode.animation(.snappy(duration: 0.22))) {
                 Text(verbatim: "YouTube").tag(BrowserMode.youtube.rawValue)
                 Text(verbatim: "X").tag(BrowserMode.x.rawValue)
                 Text("ウェブ").tag(BrowserMode.web.rawValue)
@@ -26,16 +26,19 @@ struct BrowserView: View {
             .padding(.top, 6)
             .padding(.bottom, mode == BrowserMode.youtube.rawValue ? 2 : 0)
 
-            switch BrowserMode(rawValue: mode) ?? .youtube {
-            case .youtube:
-                YouTubeHomeView()
-            case .x:
-                WebPane(model: BrowserModel.x)
-                    .id("x")
-            case .web:
-                WebPane(model: BrowserModel.shared)
-                    .id("web")
+            Group {
+                switch BrowserMode(rawValue: mode) ?? .youtube {
+                case .youtube:
+                    YouTubeHomeView()
+                case .x:
+                    WebPane(model: BrowserModel.x)
+                        .id("x")
+                case .web:
+                    WebPane(model: BrowserModel.shared)
+                        .id("web")
+                }
             }
+            .transition(.opacity)
         }
         .themedScreen()
     }

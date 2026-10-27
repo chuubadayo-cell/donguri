@@ -55,6 +55,7 @@ final class VideoPlayerModel {
     private(set) var channel = ""
     private(set) var channelID: String?
     private(set) var viewCount: String?
+    private(set) var publishDate: Date?
     private(set) var details: String?
     private(set) var isPlaying = false
     private(set) var isBuffering = false
@@ -347,6 +348,7 @@ final class VideoPlayerModel {
                 channel = info.channel
                 channelID = info.channelID
                 viewCount = info.viewCount
+                publishDate = info.publishDate
                 details = info.description
                 tracks = info.captionTracks
                 Task { await loadSubtitles(track: YouTubeClient.defaultTrack(in: info.captionTracks)) }
@@ -422,6 +424,7 @@ final class VideoPlayerModel {
         let web = YouTubeWebPlayer(videoID: id, startAt: position)
         web.onState = { [weak self] state in self?.webStateChanged(state) }
         self.web = web
+        PictureInPicture.shared.attach(web.webView)
         web.load()
         phase = .ready
         if position > 0 { clock.time = position }
@@ -455,9 +458,52 @@ final class VideoPlayerModel {
         if self[keyPath: keyPath] != value { self[keyPath: keyPath] = value }
     }
 
+    // MARK: Quality
+
+    /// What this video can be played at (YouTube's names, best first) and
+    /// what it plays at now, for the settings sheet.
+    private(set) var availableQualities: [String] = []
+    private(set) var currentQuality = ""
+
+    func refreshQualities() async {
+        switch engine {
+        case .web:
+            guard let web else { return }
+            let info = await web.qualities()
+            availableQualities = info.levels
+            currentQuality = info.current
+        case .native:
+            // The stream adapts by itself; any cap can be asked for.
+            availableQualities = VideoSettings.qualities.map { $0.id }.filter { $0 != "auto" }
+            let height = Int(player.currentItem?.presentationSize.height ?? 0)
+            currentQuality = height > 0 ? "\(height)p" : ""
+        }
+    }
+
+    func setQuality(_ id: String) {
+        VideoSettings.shared.videoQuality = id
+        switch engine {
+        case .web: web?.setQuality(cap: id)
+        case .native: if let item = player.currentItem { Self.applyQuality(to: item) }
+        }
+        Task {
+            try? await Task.sleep(for: .seconds(1.5))
+            await refreshQualities()
+        }
+    }
+
+    private static func applyQuality(to item: AVPlayerItem) {
+        let id = VideoSettings.shared.videoQuality
+        let height = VideoSettings.qualities.first(where: { $0.id == id })?.height ?? 0
+        item.preferredMaximumResolution = height > 0
+            ? CGSize(width: (Double(height) * 16 / 9).rounded(), height: Double(height))
+            : .zero
+    }
+
     private func prepare(_ asset: AVURLAsset) {
         let playerItem = AVPlayerItem(asset: asset)
         playerItem.preferredForwardBufferDuration = 8
+        if case .youtube = item { Self.applyQuality(to: playerItem) }
         player.replaceCurrentItem(with: playerItem)
         player.defaultRate = Float(VideoSettings.shared.playbackRate)
     }
@@ -691,11 +737,41 @@ final class VideoPlayerModel {
 
     private func setCues(_ new: [SubtitleCue], source: String) {
         // Lines too long to read over the video come in pieces.
-        rawCues = CaptionSentences.splitLong(new)
+        rawCues = applyEdits(to: CaptionSentences.splitLong(new))
         subtitleSource = source
         subtitleDelay = 0
         applyDelay()
         mediaTasks.removeAll()
+    }
+
+    // MARK: Corrected lines
+
+    /// Lines corrected by hand (a mis-heard word in automatic captions),
+    /// kept per video by each line's start, so they survive reloading.
+    private var editsKey: String { "iroha.video.edits." + item.id }
+
+    private func applyEdits(to lines: [SubtitleCue]) -> [SubtitleCue] {
+        guard let edits = UserDefaults.standard.dictionary(forKey: editsKey) as? [String: String], !edits.isEmpty else { return lines }
+        return lines.map { cue in
+            var cue = cue
+            if let text = edits[Self.editKey(cue.start)] { cue.text = text }
+            return cue
+        }
+    }
+
+    private static func editKey(_ start: Double) -> String { String(Int((start * 1000).rounded())) }
+
+    /// Replaces a line's text (empty text is ignored).
+    func editCue(_ cue: SubtitleCue, text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let index = rawCues.firstIndex(where: { $0.id == cue.id }),
+              rawCues[index].text != trimmed else { return }
+        rawCues[index].text = trimmed
+        var edits = UserDefaults.standard.dictionary(forKey: editsKey) as? [String: String] ?? [:]
+        edits[Self.editKey(rawCues[index].start)] = trimmed
+        UserDefaults.standard.set(edits, forKey: editsKey)
+        applyDelay()
+        if activeCue?.id == cue.id { activeCue = cues.first { $0.id == cue.id } }
     }
 
     private func applyDelay() {

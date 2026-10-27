@@ -45,6 +45,21 @@ final class VideoSettings {
 
     var playbackRate: Double { didSet { save(playbackRate, "playbackRate") } }
 
+    /// The highest quality to play, by YouTube's names ("auto" leaves it
+    /// to the player).
+    var videoQuality: String { didSet { save(videoQuality, "videoQuality") } }
+
+    static let qualities: [(id: String, label: String, height: Int)] = [
+        ("auto", "自動", 0), ("hd2160", "2160p", 2160), ("hd1440", "1440p", 1440), ("hd1080", "1080p", 1080),
+        ("hd720", "720p", 720), ("large", "480p", 480), ("medium", "360p", 360), ("small", "240p", 240), ("tiny", "144p", 144),
+    ]
+
+    static func qualityLabel(_ id: String) -> String {
+        if let known = qualities.first(where: { $0.id == id }) { return known.label }
+        if id == "highres" { return "4320p" }
+        return id
+    }
+
     static let rates: [Double] = [0.5, 0.75, 0.9, 1, 1.25, 1.5, 2]
 
     private init() {
@@ -64,6 +79,7 @@ final class VideoSettings {
         paddingBefore = d.object(forKey: p + "paddingBefore") as? Int ?? 0
         paddingAfter = d.object(forKey: p + "paddingAfter") as? Int ?? 250
         playbackRate = d.object(forKey: p + "playbackRate") as? Double ?? 1
+        videoQuality = d.string(forKey: p + "videoQuality") ?? "hd1080"
     }
 
     private func save(_ value: Any, _ key: String) {

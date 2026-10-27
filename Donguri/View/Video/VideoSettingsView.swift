@@ -11,9 +11,12 @@ struct VideoSettingsView: View {
     /// The video playing, when opened from the player.
     var model: VideoPlayerModel? = nil
     @State private var settings = VideoSettings.shared
+    @AppStorage("iroha.video.autoPiP") private var autoPiP = true
 
     var body: some View {
         Form {
+            qualitySection
+
             Section {
                 Toggle("字幕を表示", isOn: $settings.showSubtitles)
                 Picker("字幕の位置", selection: $settings.subtitlePosition) {
@@ -39,6 +42,8 @@ struct VideoSettingsView: View {
                 Toggle("ダブルタップで前後の字幕へ", isOn: $settings.doubleTapSeeksLines)
                 Toggle("字幕ごとに一時停止", isOn: $settings.autoPause)
                 Toggle("バックグラウンド再生", isOn: $settings.backgroundPlayback)
+                Toggle("全画面からアプリを離れたらピクチャ・イン・ピクチャ", isOn: $autoPiP)
+                    .onChange(of: autoPiP) { _, on in PictureInPicture.shared.enabled = on }
             } header: {
                 Text("操作")
             } footer: {
@@ -91,5 +96,40 @@ struct VideoSettingsView: View {
         }
         .navigationTitle(Text("動画と字幕"))
         .navigationBarTitleDisplayMode(.inline)
+        .task {
+            await model?.refreshQualities()
+        }
+    }
+
+    /// The highest quality to play. With a video open, only what it
+    /// offers, and what it plays at now.
+    private var qualitySection: some View {
+        Section {
+            Picker("画質", selection: Binding(get: { settings.videoQuality },
+                                             set: { id in
+                                                 if let model { model.setQuality(id) } else { settings.videoQuality = id }
+                                             })) {
+                Text("自動").tag("auto")
+                ForEach(qualityChoices, id: \.self) { id in
+                    Text(verbatim: VideoSettings.qualityLabel(id)).tag(id)
+                }
+            }
+            if let model, !model.currentQuality.isEmpty {
+                LabeledContent("再生中", value: VideoSettings.qualityLabel(model.currentQuality))
+            }
+        } header: {
+            Text("画質")
+        } footer: {
+            Text("選んだ画質か、ない場合はそれより下の一番よい画質で再生します。")
+        }
+    }
+
+    private var qualityChoices: [String] {
+        var ids = VideoSettings.qualities.map { $0.id }.filter { $0 != "auto" }
+        if let model, !model.availableQualities.isEmpty { ids = model.availableQualities }
+        // The setting stays choosable even if this video lacks it.
+        if settings.videoQuality != "auto", !ids.contains(settings.videoQuality) { ids.append(settings.videoQuality) }
+        let order = ["highres"] + VideoSettings.qualities.map { $0.id }
+        return ids.sorted { (order.firstIndex(of: $0) ?? 99) < (order.firstIndex(of: $1) ?? 99) }
     }
 }
