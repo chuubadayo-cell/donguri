@@ -49,7 +49,7 @@ enum XScripts {
           '.iroha-x-composer',
           'a[href^="/i/grok"]', '[data-testid="GrokDrawer"]', '[data-testid="grokImgGen"]',
           '[data-testid="caret"]', '[data-testid="retweet"]', '[data-testid="unretweet"]'
-        ].join(',\n') + ' { display: none !important; }';
+        ].join(',\\n') + ' { display: none !important; }';
         (document.head || document.documentElement).appendChild(style);
       }
       addStyle();
