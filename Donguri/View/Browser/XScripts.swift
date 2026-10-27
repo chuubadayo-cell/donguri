@@ -40,7 +40,10 @@ enum XScripts {
         // The home timeline keeps only its first two tabs (おすすめ and
         // フォロー中), not pinned lists or communities; no compose button.
         style.textContent = [
-          '[data-testid="BottomBar"]',
+          '[data-testid="BottomBar"]', '[data-testid="DMDrawer"]',
+          // On home, X's own top bar (logo, avatar) and its feed tabs:
+          // only おすすめ is shown, chosen by the script below.
+          'html.iroha-home [data-testid="TopNavBar"]', 'html.iroha-home .iroha-x-header',
           'html.iroha-home [data-testid="primaryColumn"] [data-testid="ScrollSnap-List"] > div:nth-child(n+3)',
           'html.iroha-home [data-testid="primaryColumn"] [data-testid="ScrollSnap-nextButtonWrapper"]',
           'a[href="/compose/post"]', 'a[href="/compose/tweet"]',
@@ -86,6 +89,29 @@ enum XScripts {
           if (hide) { button.style.display = 'none'; }
         });
       }
+      // The home timeline's sticky header (X's top bar and the
+      // おすすめ / フォロー中 tabs) is marked to be hidden, and おすすめ is
+      // kept selected.
+      let lastTabClick = 0;
+      function homeHeader(column) {
+        const tablist = column.querySelector('[role="tablist"]');
+        if (!tablist) { return; }
+        if (!column.querySelector('.iroha-x-header')) {
+          let node = tablist;
+          while (node && node !== column) {
+            const position = getComputedStyle(node).position;
+            if (position === 'sticky' || position === 'fixed') { break; }
+            node = node.parentElement;
+          }
+          // No sticky container found: hide the tabs themselves.
+          (node && node !== column ? node : tablist).classList.add('iroha-x-header');
+        }
+        const first = tablist.querySelector('[role="tab"]');
+        if (first && first.getAttribute('aria-selected') !== 'true' && Date.now() - lastTabClick > 2000) {
+          lastTabClick = Date.now();
+          first.click();
+        }
+      }
       function cellOf(article) {
         return article.closest('[data-testid="cellInnerDiv"]') || article;
       }
@@ -111,6 +137,7 @@ enum XScripts {
         }
         const column = document.querySelector('[data-testid="primaryColumn"]');
         if (column) { hideTranslateButtons(column); }
+        if (home && column) { homeHeader(column); }
         const on = !!window.__irohaJapaneseOnly;
         // Filter off and nothing left hidden: nothing to do.
         if (!on && !document.querySelector('[data-iroha-hidden]')) { return; }
