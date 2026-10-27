@@ -48,7 +48,9 @@ enum XScripts {
           '[data-testid="SideNav_NewTweet_Button"]', '[data-testid="tweetButtonInline"]',
           '.iroha-x-composer',
           'a[href^="/i/grok"]', '[data-testid="GrokDrawer"]', '[data-testid="grokImgGen"]',
-          '[data-testid="caret"]', '[data-testid="retweet"]', '[data-testid="unretweet"]'
+          '[data-testid="caret"]', '[data-testid="retweet"]', '[data-testid="unretweet"]',
+          '[data-testid="icon-verified"]', 'svg[aria-label="認証済みアカウント"]', 'svg[aria-label="Verified account"]',
+          '.iroha-x-gone'
         ].join(',\\n') + ' { display: none !important; }';
         (document.head || document.documentElement).appendChild(style);
       }
@@ -65,17 +67,32 @@ enum XScripts {
       }
       // X's labels on a post it translated by itself ("Translated from …",
       // "原文を表示"). A translation reads as Japanese but isn't.
-      const translated = /自動翻訳|から翻訳|翻訳されました|原文を表示|原文を見る|Translated from|Auto-?translated|Show original/i;
+      // The label can sit inside the post's text block, so the whole post
+      // is searched. Translations from Korean and Chinese are kept.
+      const translated = /自動翻訳|から翻訳|翻訳されました|翻訳済み|原文を表示|原文を見る|Translated from|Translated by|Auto-?translated|Show original|See original/i;
+      const keptOrigin = /韓国語|朝鮮語|ハングル|中国語|繁体字|簡体字|広東語|Korean|Chinese|Cantonese|Mandarin/i;
+      // X's language for the original text, where it isn't Japanese and
+      // the text shown is: a translation. (und, qme… are X's "unknown",
+      // "media only" and the like.)
+      const neutralLangs = { ja: 1, ko: 1, zh: 1, 'zh-cn': 1, 'zh-tw': 1, und: 1, zxx: 1, art: 1, qme: 1, qam: 1, qct: 1, qht: 1, qst: 1, qbo: 1 };
+      function isTranslation(article, main) {
+        const all = article.textContent || '';
+        const at = all.search(translated);
+        if (at >= 0) {
+          // The language named next to the label.
+          const label = all.slice(Math.max(0, at - 24), at + 48);
+          return !keptOrigin.test(label);
+        }
+        const lang = (main.getAttribute('lang') || '').toLowerCase();
+        return !!lang && !neutralLangs[lang] && isJapanese(main.textContent);
+      }
       function keep(article) {
         if (article.querySelector('[data-testid="placementTracking"]')) { return false; }
         const texts = article.querySelectorAll('[data-testid="tweetText"]');
         // Only pictures or a video: nothing to read.
         if (!texts.length) { return false; }
-        // The labels around the post, not the post's own words.
-        let around = article.textContent || '';
-        texts.forEach(function (text) { around = around.replace(text.textContent || '', ''); });
-        if (translated.test(around)) { return false; }
         const main = texts[0];
+        if (isTranslation(article, main)) { return false; }
         return main.getAttribute('lang') === 'ja' || isJapanese(main.textContent);
       }
       // X's offers to translate a post or a bio into the UI's language.
@@ -131,6 +148,23 @@ enum XScripts {
           }
         }
       }
+      // A post's action bar without the gaps the hidden buttons left: a
+      // slot holding nothing but hidden buttons goes too, so the rest
+      // spread evenly. Bars are looked at again only when they change.
+      const goneButtons = '[data-testid="retweet"], [data-testid="unretweet"], [data-iroha-t="1"]';
+      function tidyActions(column) {
+        column.querySelectorAll('[role="group"]').forEach(function (group) {
+          const signature = group.childElementCount + ':' + group.querySelectorAll('button, [role="button"]').length;
+          if (group.dataset.irohaTidy === signature) { return; }
+          group.dataset.irohaTidy = signature;
+          Array.prototype.forEach.call(group.children, function (slot) {
+            const buttons = slot.querySelectorAll('button, [role="button"]');
+            if (!buttons.length) { return; }
+            const all = Array.prototype.every.call(buttons, function (b) { return b.matches(goneButtons); });
+            slot.classList.toggle('iroha-x-gone', all);
+          });
+        });
+      }
       // The reply box under an opened post.
       function hideComposer(column) {
         const box = column.querySelector('[data-testid="tweetTextarea_0"]:not([data-iroha-c])');
@@ -165,6 +199,7 @@ enum XScripts {
         const column = document.querySelector('[data-testid="primaryColumn"]');
         if (column) {
           hideTranslateButtons(column);
+          tidyActions(column);
           if (home) { homeHeader(column); } else { pageHeader(column); }
           hideComposer(column);
         }
