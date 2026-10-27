@@ -95,6 +95,17 @@ struct VideoPlayerView: View {
     /// never stops between the two.
     var body: some View {
         ZStack {
+            // YouTube's page while the miniplayer shows: kept full size and
+            // in the window (so it plays on), all but invisible. Shown small,
+            // WebKit drew it black or white; the miniplayer shows frames
+            // taken from its video instead (MiniFrames).
+            if surfaceInMini, model.engine == .web, let web = model.web {
+                WebPlayerSurface(webView: web.webView, active: true)
+                    .frame(width: 390, height: 219)
+                    .opacity(0.01)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
             if fullMounted {
                 fullPlayer
                     .offset(y: presentedFull ? 0 : containerHeight + 80)
@@ -323,7 +334,11 @@ struct VideoPlayerView: View {
         let active = inMini == surfaceInMini
         ZStack {
             if model.engine == .web, let web = model.web {
-                WebPlayerSurface(webView: web.webView, active: active)
+                if inMini {
+                    if active { MiniFrames(web: web) }
+                } else {
+                    WebPlayerSurface(webView: web.webView, active: active)
+                }
             } else {
                 PlayerSurface(player: model.player, active: active)
             }
@@ -1348,6 +1363,34 @@ private struct TranscriptRow: View, Equatable {
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.cue == rhs.cue && lhs.isCurrent == rhs.isCurrent && lhs.blurred == rhs.blurred
             && lhs.textStyle.key == rhs.textStyle.key
+    }
+}
+
+/// The miniplayer's picture for YouTube's page: frames drawn from its
+/// video element a few times a second (the same drawing a card's
+/// screenshot uses).
+private struct MiniFrames: View {
+    let web: YouTubeWebPlayer
+    @State private var image: UIImage?
+
+    var body: some View {
+        ZStack {
+            Color.black
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            }
+        }
+        .task {
+            while !Task.isCancelled {
+                if let data = await web.frame(maxWidth: 240), let frame = UIImage(data: data) {
+                    image = frame
+                }
+                // Slower while paused: the picture doesn't change.
+                try? await Task.sleep(for: .milliseconds(web.state.paused ? 500 : 100))
+            }
+        }
     }
 }
 
