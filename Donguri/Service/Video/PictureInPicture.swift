@@ -56,6 +56,12 @@ final class PictureInPicture: NSObject, AVPictureInPictureControllerDelegate {
         return controller
     }
 
+    /// The controller of the layer now drawing the video.
+    func use(_ controller: AVPictureInPictureController?) {
+        native = controller
+        apply()
+    }
+
     /// YouTube's page, whose video element can float too.
     func attach(_ webView: WKWebView) {
         self.webView = webView

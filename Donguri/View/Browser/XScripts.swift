@@ -37,18 +37,18 @@ enum XScripts {
         if (document.getElementById('iroha-x-style')) { return; }
         const style = document.createElement('style');
         style.id = 'iroha-x-style';
-        // The home timeline keeps only its first two tabs (おすすめ and
-        // フォロー中), not pinned lists or communities; no compose button.
+        // X reduced to reading: no top or bottom bar (the app's toolbar
+        // has home, search and back), no composing, no Grok, and on each
+        // post no ⋯ menu, repost or share.
         style.textContent = [
-          '[data-testid="BottomBar"]', '[data-testid="DMDrawer"]',
-          // On home, X's own top bar (logo, avatar) and its feed tabs:
-          // only おすすめ is shown, chosen by the script below.
-          'html.iroha-home [data-testid="TopNavBar"]', 'html.iroha-home .iroha-x-header',
-          'html.iroha-home [data-testid="primaryColumn"] [data-testid="ScrollSnap-List"] > div:nth-child(n+3)',
-          'html.iroha-home [data-testid="primaryColumn"] [data-testid="ScrollSnap-nextButtonWrapper"]',
+          '[data-testid="BottomBar"]', '[data-testid="DMDrawer"]', '[data-testid="TopNavBar"]',
+          'header[role="banner"]', '.iroha-x-header',
           'a[href="/compose/post"]', 'a[href="/compose/tweet"]',
           '[data-testid="FloatingActionButtonBase"]', '[data-testid="FloatingActionButtons_Tweet_Button"]',
-          '[data-testid="SideNav_NewTweet_Button"]'
+          '[data-testid="SideNav_NewTweet_Button"]', '[data-testid="tweetButtonInline"]',
+          '.iroha-x-composer',
+          'a[href^="/i/grok"]', '[data-testid="GrokDrawer"]', '[data-testid="grokImgGen"]',
+          '[data-testid="caret"]', '[data-testid="retweet"]', '[data-testid="unretweet"]'
         ].join(',\n') + ' { display: none !important; }';
         (document.head || document.documentElement).appendChild(style);
       }
@@ -80,11 +80,14 @@ enum XScripts {
       }
       // X's offers to translate a post or a bio into the UI's language.
       const translateLabel = /^(Translate post|Translate bio|Translate|Show translation|Rate this translation|ポストを翻訳|自己紹介を翻訳|翻訳を表示|翻訳する)$/i;
+      // Buttons known only by their label: share and Grok on each post.
+      const ariaHidden = /^(Share post|Share|ポストを共有|共有|Grok actions|Grok|Grokのアクション|Grokに説明してもらう|Explain this post)$/i;
       function hideTranslateButtons(root) {
         // Each button is looked at once.
         root.querySelectorAll('button:not([data-iroha-t]), [role="button"]:not([data-iroha-t])').forEach(function (button) {
           const label = (button.textContent || '').trim();
-          const hide = label.length <= 30 && translateLabel.test(label);
+          const aria = (button.getAttribute('aria-label') || '').trim();
+          const hide = (label.length <= 30 && translateLabel.test(label)) || (aria.length <= 30 && ariaHidden.test(aria));
           button.dataset.irohaT = hide ? '1' : '0';
           if (hide) { button.style.display = 'none'; }
         });
@@ -96,7 +99,7 @@ enum XScripts {
       function homeHeader(column) {
         const tablist = column.querySelector('[role="tablist"]');
         if (!tablist) { return; }
-        if (!column.querySelector('.iroha-x-header')) {
+        if (!tablist.closest('.iroha-x-header')) {
           let node = tablist;
           while (node && node !== column) {
             const position = getComputedStyle(node).position;
@@ -111,6 +114,30 @@ enum XScripts {
           lastTabClick = Date.now();
           first.click();
         }
+      }
+      // Other pages' top bar (back arrow and title): the column's first
+      // sticky block, a few levels down.
+      function pageHeader(column) {
+        let node = column;
+        for (let depth = 0; depth < 6 && node; depth++) {
+          node = node.firstElementChild;
+          if (!node) { return; }
+          if (node.classList.contains('iroha-x-header')) { return; }
+          const position = getComputedStyle(node).position;
+          if (position === 'sticky' || position === 'fixed') {
+            // Never a header that holds the posts themselves.
+            if (!node.querySelector('article')) { node.classList.add('iroha-x-header'); }
+            return;
+          }
+        }
+      }
+      // The reply box under an opened post.
+      function hideComposer(column) {
+        const box = column.querySelector('[data-testid="tweetTextarea_0"]:not([data-iroha-c])');
+        if (!box) { return; }
+        box.dataset.irohaC = '1';
+        const cell = box.closest('[data-testid="cellInnerDiv"]');
+        if (cell) { cell.classList.add('iroha-x-composer'); }
       }
       function cellOf(article) {
         return article.closest('[data-testid="cellInnerDiv"]') || article;
@@ -136,8 +163,11 @@ enum XScripts {
           document.documentElement.classList.toggle('iroha-home', home);
         }
         const column = document.querySelector('[data-testid="primaryColumn"]');
-        if (column) { hideTranslateButtons(column); }
-        if (home && column) { homeHeader(column); }
+        if (column) {
+          hideTranslateButtons(column);
+          if (home) { homeHeader(column); } else { pageHeader(column); }
+          hideComposer(column);
+        }
         const on = !!window.__irohaJapaneseOnly;
         // Filter off and nothing left hidden: nothing to do.
         if (!on && !document.querySelector('[data-iroha-hidden]')) { return; }

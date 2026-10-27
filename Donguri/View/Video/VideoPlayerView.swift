@@ -61,9 +61,30 @@ struct VideoPlayerView: View {
     /// Space the miniplayer leaves for the tab bar.
     @State private var tabBarHeight: CGFloat = TabBarMetrics.heightAboveSafeArea()
 
+    // Minimizing and expanding. The full player isn't rebuilt each time:
+    // it slides down off the screen (from wherever a pull left it) and is
+    // let go of once there, and on expanding it's put back below the
+    // screen and slides up. The video moves to the miniplayer only when
+    // the slide has finished (a thumbnail stands in until then), and back
+    // to the full player before it starts sliding up.
+    /// The full player is on screen (or on its way there).
+    @State private var presentedFull: Bool
+    /// The full player exists at all.
+    @State private var fullMounted: Bool
+    /// The video is drawn in the miniplayer rather than the full player.
+    @State private var surfaceInMini: Bool
+    @State private var containerHeight: CGFloat = 900
+    /// The latest minimize or expand, so a finished slide that has been
+    /// overtaken by the opposite one does nothing.
+    @State private var formChange = 0
+    private static let slide = Animation.spring(response: 0.42, dampingFraction: 0.9)
+
     init(item: VideoItem, minimized: Bool = false, onMinimize: @escaping () -> Void = {},
          onExpand: @escaping () -> Void = {}, onClose: @escaping () -> Void) {
         _model = State(initialValue: VideoPlayerModel(item: item))
+        _presentedFull = State(initialValue: !minimized)
+        _fullMounted = State(initialValue: !minimized)
+        _surfaceInMini = State(initialValue: minimized)
         self.minimized = minimized
         self.onMinimize = onMinimize
         self.onExpand = onExpand
@@ -74,16 +95,18 @@ struct VideoPlayerView: View {
     /// never stops between the two.
     var body: some View {
         ZStack {
-            // No structural transition between the two (the web view can
-            // only be in one of them); each eases itself in instead.
-            if minimized {
-                miniPlayer
-                    .modifier(EaseIn(from: .mini))
-            } else {
+            if fullMounted {
                 fullPlayer
-                    .modifier(EaseIn(from: .full))
+                    .offset(y: presentedFull ? 0 : containerHeight + 80)
+                    .allowsHitTesting(presentedFull)
+                    .accessibilityHidden(!presentedFull)
+            }
+            if !presentedFull {
+                miniPlayer
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { containerHeight = $0 }
         .task {
             await model.start()
             scheduleHide()
@@ -105,12 +128,30 @@ struct VideoPlayerView: View {
         .onChange(of: model.engine) { model.refreshNowPlaying() }
         .onChange(of: model.title) { model.refreshNowPlaying() }
         .onChange(of: minimized) { _, isMinimized in
+            formChange += 1
+            let change = formChange
             if isMinimized {
                 model.popups.closeAll()
-                pullDown = 0
                 OrientationLock.returnToPortrait()
+                withAnimation(Self.slide) {
+                    presentedFull = false
+                    pullDown = 0
+                } completion: {
+                    guard formChange == change else { return }
+                    surfaceInMini = true
+                    fullMounted = false
+                }
             } else {
-                showControls(autoHide: true)
+                surfaceInMini = false
+                let wasMounted = fullMounted
+                fullMounted = true
+                Task {
+                    // Laid out below the screen first, then slid up.
+                    if !wasMounted { try? await Task.sleep(for: .milliseconds(20)) }
+                    guard formChange == change else { return }
+                    withAnimation(Self.slide) { presentedFull = true }
+                    showControls(autoHide: true)
+                }
             }
         }
     }
@@ -213,7 +254,7 @@ struct VideoPlayerView: View {
 
     private var miniBar: some View {
         HStack(spacing: 10) {
-            videoSurface
+            videoSurface(inMini: true)
                 .frame(width: 112, height: 63)
                 .background(Color.black)
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -275,13 +316,25 @@ struct VideoPlayerView: View {
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
-    /// YouTube's player or AVPlayer, wherever it's shown.
+    /// YouTube's player or AVPlayer, wherever it's shown. Only one place
+    /// draws it at a time; the miniplayer shows the thumbnail meanwhile.
     @ViewBuilder
-    private var videoSurface: some View {
-        if model.engine == .web, let web = model.web {
-            WebPlayerSurface(webView: web.webView)
-        } else {
-            PlayerSurface(player: model.player)
+    private func videoSurface(inMini: Bool) -> some View {
+        let active = inMini == surfaceInMini
+        ZStack {
+            if model.engine == .web, let web = model.web {
+                WebPlayerSurface(webView: web.webView, active: active)
+            } else {
+                PlayerSurface(player: model.player, active: active)
+            }
+            if inMini, !active, let id = model.videoID,
+               let url = URL(string: "https://i.ytimg.com/vi/\(id)/mqdefault.jpg") {
+                AsyncImage(url: url) { image in
+                    image.resizable().scaledToFill()
+                } placeholder: {
+                    Color.black
+                }
+            }
         }
     }
 
@@ -289,7 +342,7 @@ struct VideoPlayerView: View {
 
     private func videoArea(fullScreen: Bool) -> some View {
         ZStack {
-            videoSurface
+            videoSurface(inMini: false)
 
             // Taps: one shows or hides the controls; two on either side
             // jump a line (or ten seconds) back or forward.
@@ -396,12 +449,8 @@ struct VideoPlayerView: View {
                         withAnimation(.snappy) { pullDown = 0 }
                         OrientationLock.rotate(to: .portrait)
                     } else {
-                        withAnimation(.easeIn(duration: 0.16)) { pullDown = 420 }
-                        Task {
-                            try? await Task.sleep(for: .milliseconds(150))
-                            minimize()
-                            pullDown = 0
-                        }
+                        // Carries on down from where the finger let go.
+                        minimize()
                     }
                 } else {
                     withAnimation(.snappy) { pullDown = 0 }
@@ -1302,24 +1351,6 @@ private struct TranscriptRow: View, Equatable {
     }
 }
 
-/// Eases a form of the player in as it appears: the miniplayer rises
-/// and settles, the full player slides up a little and fades in.
-private struct EaseIn: ViewModifier {
-    enum Kind { case mini, full }
-    let from: Kind
-    @State private var shown = false
-
-    func body(content: Content) -> some View {
-        content
-            .opacity(shown ? 1 : 0)
-            .offset(y: shown ? 0 : (from == .mini ? 24 : 40))
-            .scaleEffect(shown ? 1 : (from == .mini ? 0.94 : 0.985), anchor: .bottom)
-            .onAppear {
-                withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) { shown = true }
-            }
-    }
-}
-
 /// Corrects one transcript line: automatic captions often mishear the
 /// very word worth mining.
 private struct CueEditor: View {
@@ -1451,12 +1482,24 @@ private struct DelayRow: View {
 /// it's hosted in a container that takes it over when shown.
 private struct WebPlayerSurface: UIViewRepresentable {
     let webView: WKWebView
+    /// This is the place the video is drawn now.
+    var active = true
 
-    func makeUIView(context: Context) -> WebHost { WebHost(webView: webView) }
-    func updateUIView(_ host: WebHost, context: Context) { host.claim() }
+    func makeUIView(context: Context) -> WebHost {
+        let host = WebHost(webView: webView)
+        host.active = active
+        host.claim()
+        return host
+    }
+
+    func updateUIView(_ host: WebHost, context: Context) {
+        host.active = active
+        host.claim()
+    }
 
     final class WebHost: UIView {
         let webView: WKWebView
+        var active = true
         /// The page's size when shown large. Small hosts (the miniplayer)
         /// shrink the page as a picture instead of resizing it: YouTube's
         /// page laid out a few dozen points wide stopped drawing its video
@@ -1469,14 +1512,13 @@ private struct WebPlayerSurface: UIViewRepresentable {
             super.init(frame: .zero)
             backgroundColor = .black
             clipsToBounds = true
-            claim()
         }
 
         @available(*, unavailable)
         required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
         func claim() {
-            guard webView.superview !== self else { return }
+            guard active, window != nil || webView.superview == nil, webView.superview !== self else { return }
             webView.removeFromSuperview()
             webView.autoresizingMask = []
             addSubview(webView)
@@ -1550,20 +1592,29 @@ enum TabBarMetrics {
 
 private struct PlayerSurface: UIViewRepresentable {
     let player: AVPlayer
+    /// This is the place the video is drawn now.
+    var active = true
 
     func makeUIView(context: Context) -> PlayerLayerView {
         let view = PlayerLayerView()
-        view.playerLayer.player = player
         view.playerLayer.videoGravity = .resizeAspect
         view.backgroundColor = .black
-        view.pictureInPicture = PictureInPicture.shared.attach(view.playerLayer)
+        updateUIView(view, context: context)
         return view
     }
 
     func updateUIView(_ view: PlayerLayerView, context: Context) {
         // Not while parked in the background (see PlayerLayerView).
-        if view.playerLayer.player !== player, UIApplication.shared.applicationState != .background {
-            view.playerLayer.player = player
+        guard UIApplication.shared.applicationState != .background else { return }
+        let wanted: AVPlayer? = active ? player : nil
+        guard view.playerLayer.player !== wanted else { return }
+        view.playerLayer.player = wanted
+        if active {
+            if view.pictureInPicture == nil {
+                view.pictureInPicture = PictureInPicture.shared.attach(view.playerLayer)
+            } else {
+                PictureInPicture.shared.use(view.pictureInPicture)
+            }
         }
     }
 
