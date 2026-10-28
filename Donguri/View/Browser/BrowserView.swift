@@ -50,6 +50,7 @@ private struct WebPane: View {
     @Bindable var model: BrowserModel
     @State private var behavior = BehaviorSettings.shared
     @State private var japaneseOnly = XScripts.japaneseOnly
+    @State private var shareHost = XScripts.shareHost
     @State private var searchingX = false
     @State private var xQuery = ""
     @Environment(UserConfig.self) private var userConfig
@@ -101,6 +102,20 @@ private struct WebPane: View {
         .overlay {
             PopupStackLayer(stack: model.popups, bottomInset: bottomChrome)
         }
+        .overlay(alignment: .bottom) {
+            if let toast = model.toast {
+                Label(toast, systemImage: "link")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(Capsule().fill(Color.black.opacity(0.8)))
+                    .padding(.bottom, bottomChrome + 16)
+                    .allowsHitTesting(false)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.snappy(duration: 0.25), value: model.toast)
         .sheet(isPresented: $showsTranscript) {
             TranscriptView(model: model)
         }
@@ -347,6 +362,14 @@ private struct WebPane: View {
                                      set: { japaneseOnly = $0; model.setJapaneseOnly($0) })) {
                     Label("日本語の投稿だけ表示", systemImage: "character.ja")
                 }
+                Picker(selection: Binding(get: { shareHost }, set: { shareHost = $0; XScripts.shareHost = $0 })) {
+                    ForEach(XScripts.shareHosts, id: \.self) { host in
+                        Text(verbatim: host).tag(host)
+                    }
+                } label: {
+                    Label("コピーするリンク", systemImage: "link")
+                }
+                .pickerStyle(.menu)
             }
             Toggle(isOn: Binding(get: { behavior.contentBlocking },
                                  set: { model.setBlocking($0) })) {

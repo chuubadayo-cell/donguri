@@ -2280,6 +2280,22 @@
         }
       }
     },
+    "コピーするリンク" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copied Link Site"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "コピーするリンク"
+          }
+        }
+      }
+    },
     "コメント" : {
       "localizations" : {
         "en" : {

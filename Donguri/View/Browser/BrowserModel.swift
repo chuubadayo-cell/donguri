@@ -131,7 +131,7 @@ final class BrowserModel: NSObject {
         super.init()
 
         let bridge = BrowserBridge(model: self)
-        for name in ["tapOutside", "scrolled", "caption"] {
+        for name in ["tapOutside", "scrolled", "caption", "irohaShare"] {
             controller.add(bridge, contentWorld: BrowserScripts.world, name: name)
         }
         // Answered, so the page can highlight the word the moment the
@@ -380,6 +380,25 @@ final class BrowserModel: NSObject {
         return 0
     }
 
+    /// A short message over the page ("link copied").
+    private(set) var toast: String?
+    @ObservationIgnored private var toastTask: Task<Void, Never>?
+
+    /// The copy-link button on an X post.
+    fileprivate func copyShareLink(path: String) {
+        guard let url = XScripts.shareLink(for: path) else { return }
+        UIPasteboard.general.url = url
+        UIPasteboard.general.string = url.absoluteString
+        Haptics.play(.success)
+        toast = String(localized: "リンクをコピーしました")
+        toastTask?.cancel()
+        toastTask = Task {
+            try? await Task.sleep(for: .seconds(1.6))
+            guard !Task.isCancelled else { return }
+            toast = nil
+        }
+    }
+
     fileprivate func tappedOutside() {
         popups.closeAll()
         clearPageSelection()
@@ -518,6 +537,9 @@ private final class BrowserBridge: NSObject, WKScriptMessageHandler, WKScriptMes
             guard let body = message.body as? [String: Any], let text = body["text"] as? String else { return }
             let time = (body["time"] as? Double) ?? 0
             model.captionArrived(text, time: time)
+        case "irohaShare":
+            guard let body = message.body as? [String: Any], let path = body["path"] as? String else { return }
+            model.copyShareLink(path: path)
         default:
             break
         }

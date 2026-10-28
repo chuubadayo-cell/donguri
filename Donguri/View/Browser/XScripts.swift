@@ -25,6 +25,22 @@ enum XScripts {
     }
 
     /// Turns the filter on or off on a page already showing.
+    /// Where copied post links point: a site that shows X posts as proper
+    /// embeds where they're pasted.
+    static let shareHostKey = "iroha.x.shareHost"
+    static let shareHosts = ["girlcockx.com", "fxtwitter.com", "vxtwitter.com", "fixupx.com", "x.com"]
+
+    static var shareHost: String {
+        get { UserDefaults.standard.string(forKey: shareHostKey) ?? "girlcockx.com" }
+        set { UserDefaults.standard.set(newValue, forKey: shareHostKey) }
+    }
+
+    /// "/user/status/123" as a link on the chosen site.
+    static func shareLink(for path: String) -> URL? {
+        guard path.range(of: #"^/[A-Za-z0-9_]+/status/\d+$"#, options: .regularExpression) != nil else { return nil }
+        return URL(string: "https://" + shareHost + path)
+    }
+
     static func toggleScript(_ on: Bool) -> String {
         "window.__irohaJapaneseOnly = \(on); window.__irohaFilter && window.__irohaFilter();"
     }
@@ -152,6 +168,49 @@ enum XScripts {
       // slot holding nothing but hidden buttons goes too, so the rest
       // spread evenly. Bars are looked at again only when they change.
       const goneButtons = '[data-testid="retweet"], [data-testid="unretweet"], [data-iroha-t="1"]';
+      // A copy-link button in each post's action bar, where share was: the
+      // app copies the post's address on an embed-friendly site.
+      const linkIcon = '<svg viewBox="0 0 24 24" width="18.75" height="18.75" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5"/></svg>';
+      const doneIcon = '<svg viewBox="0 0 24 24" width="18.75" height="18.75" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+      function statusPath(article) {
+        const links = article.querySelectorAll('a[href*="/status/"]');
+        let fallback = null;
+        for (const link of links) {
+          const match = (link.getAttribute('href') || '').match(/^\\/([^\\/]+)\\/status\\/(\\d+)/);
+          if (!match) { continue; }
+          // The post's own link is the one around its time.
+          if (link.querySelector('time')) { return '/' + match[1] + '/status/' + match[2]; }
+          if (!fallback) { fallback = '/' + match[1] + '/status/' + match[2]; }
+        }
+        const here = location.pathname.match(/^\\/([^\\/]+)\\/status\\/(\\d+)/);
+        return fallback || (here ? here[0] : null);
+      }
+      function addShareButtons(column) {
+        column.querySelectorAll('article [role="group"]:not([data-iroha-share])').forEach(function (group) {
+          group.dataset.irohaShare = '1';
+          const slot = document.createElement('div');
+          slot.style.cssText = 'display:flex;align-items:center;justify-content:flex-start;flex:1 1 0;';
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.setAttribute('aria-label', 'リンクをコピー');
+          button.dataset.irohaT = '0';
+          button.style.cssText = 'display:flex;align-items:center;justify-content:center;background:none;border:0;padding:0;margin:0;height:34px;min-width:34px;color:rgb(113,118,123);cursor:pointer;-webkit-tap-highlight-color:transparent;';
+          button.innerHTML = linkIcon;
+          button.addEventListener('click', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            const article = group.closest('article');
+            const path = article ? statusPath(article) : null;
+            if (!path) { return; }
+            try { webkit.messageHandlers.irohaShare.postMessage({ path: path }); } catch (e) { return; }
+            button.innerHTML = doneIcon;
+            button.style.color = 'rgb(29,155,240)';
+            setTimeout(function () { button.innerHTML = linkIcon; button.style.color = 'rgb(113,118,123)'; }, 1400);
+          }, true);
+          slot.appendChild(button);
+          group.appendChild(slot);
+        });
+      }
       function tidyActions(column) {
         column.querySelectorAll('[role="group"]').forEach(function (group) {
           const signature = group.childElementCount + ':' + group.querySelectorAll('button, [role="button"]').length;
@@ -199,6 +258,7 @@ enum XScripts {
         const column = document.querySelector('[data-testid="primaryColumn"]');
         if (column) {
           hideTranslateButtons(column);
+          addShareButtons(column);
           tidyActions(column);
           if (home) { homeHeader(column); } else { pageHeader(column); }
           hideComposer(column);
