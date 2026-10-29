@@ -15,7 +15,7 @@
 import AppIntents
 import Foundation
 
-nonisolated struct OpenInIrohaIntent: AppIntent {
+struct OpenInIrohaIntent: AppIntent {
     static let title: LocalizedStringResource = "いろはで開く"
     static let description = IntentDescription("X・YouTube・ウェブのリンクをいろはで開きます。共有シートのショートカットから使えます。")
     static let openAppWhenRun = true
