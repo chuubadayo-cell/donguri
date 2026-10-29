@@ -77,6 +77,10 @@ struct VideoPlayerView: View {
     /// The latest minimize or expand, so a finished slide that has been
     /// overtaken by the opposite one does nothing.
     @State private var formChange = 0
+    /// Closing: the player animates itself away, then is removed with no
+    /// animation of its own (two transitions at once left a grey ghost of
+    /// the miniplayer behind and made closing stutter).
+    @State private var closing = false
     private static let slide = Animation.spring(response: 0.42, dampingFraction: 0.9)
 
     init(item: VideoItem, minimized: Bool = false, onMinimize: @escaping () -> Void = {},
@@ -117,6 +121,9 @@ struct VideoPlayerView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
+        .offset(y: closing ? (presentedFull ? containerHeight : 140) : 0)
+        .opacity(closing ? 0 : 1)
+        .allowsHitTesting(!closing)
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { containerHeight = $0 }
         .task {
             await model.start()
@@ -164,6 +171,21 @@ struct VideoPlayerView: View {
                     showControls(autoHide: true)
                 }
             }
+        }
+    }
+
+    /// Slides the player away, then lets the app remove it.
+    private func close() {
+        guard !closing else { return }
+        model.popups.closeAll()
+        model.pause()
+        OrientationLock.returnToPortrait()
+        withAnimation(.easeIn(duration: 0.2)) {
+            closing = true
+        } completion: {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) { onClose() }
         }
     }
 
@@ -292,7 +314,7 @@ struct VideoPlayerView: View {
             }
             .accessibilityLabel(model.isPlaying ? Text("一時停止") : Text("再生"))
             Button {
-                onClose()
+                close()
             } label: {
                 Image(systemName: "xmark")
                     .font(.body.weight(.semibold))
@@ -320,11 +342,10 @@ struct VideoPlayerView: View {
                     if value.translation.height < -20 {
                         onExpand()
                     } else if value.translation.height > 40 {
-                        onClose()
+                        close()
                     }
                 }
         )
-        .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
     /// YouTube's player or AVPlayer, wherever it's shown. Only one place
@@ -544,7 +565,7 @@ struct VideoPlayerView: View {
                 .multilineTextAlignment(.center)
             if let id = model.videoID, let url = URL(string: "https://m.youtube.com/watch?v=\(id)") {
                 Button("ブラウザで開く") {
-                    onClose()
+                    close()
                     AppNavigator.shared.openInBrowser(url, allowNativePlayer: false)
                 }
                 .buttonStyle(.borderedProminent)

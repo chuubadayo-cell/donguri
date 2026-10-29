@@ -64,7 +64,9 @@ struct ContentView: View {
                                 onExpand: { navigator.expandVideo() },
                                 onClose: { navigator.closeVideo() })
                     .id(item.id)
-                    .transition(.move(edge: .bottom))
+                    // Closing animates inside the player (VideoPlayerView.close);
+                    // only opening slides in from here.
+                    .transition(.asymmetric(insertion: .move(edge: .bottom), removal: .identity))
             }
         }
         .animation(.snappy(duration: 0.3), value: navigator.videoRequest?.id)

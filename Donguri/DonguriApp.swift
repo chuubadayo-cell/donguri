@@ -68,6 +68,8 @@ struct DonguriApp: App {
         case "ankiFetch":
             // Anki has written decks/notetypes to the pasteboard for us to read.
             AnkiManager.shared.fetch()
+        case "open":
+            _ = OpenInIroha.handle(url)
         case "ankiSuccess":
             if let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
                let expression = components.queryItems?.first(where: { $0.name == "expression" })?.value {
