@@ -906,6 +906,13 @@ struct VideoPlayerView: View {
                                     YouTubeVideoRow(video: video, compact: true)
                                 }
                                 .buttonStyle(.plain)
+                                .contextMenu {
+                                    Button {
+                                        withAnimation(.snappy) { model.markNotInterested(video) }
+                                    } label: {
+                                        Label("興味なし", systemImage: "hand.thumbsdown")
+                                    }
+                                }
                             }
                         }
                     } header: {

@@ -7346,6 +7346,22 @@
         }
       }
     },
+    "興味なし" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not Interested"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "興味なし"
+          }
+        }
+      }
+    },
     "色" : {
       "localizations" : {
         "en" : {

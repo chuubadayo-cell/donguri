@@ -80,9 +80,9 @@ final class YouTubeFeedModel {
             case .channel(let id, _): page = try await YouTubeClient.shared.channel(id)
             }
             guard self.source == source else { return }
-            videos = page.videos
+            videos = visible(page.videos)
             continuation = page.continuation
-            pages[source] = Page(videos: page.videos, continuation: page.continuation, loadedAt: .now)
+            pages[source] = Page(videos: videos, continuation: page.continuation, loadedAt: .now)
             if page.videos.isEmpty {
                 error = signedIn || !Self.needsAccount(source)
                     ? String(localized: "動画が見つかりませんでした")
@@ -104,10 +104,41 @@ final class YouTubeFeedModel {
         let current = source
         guard let page = try? await YouTubeClient.shared.more(token, isSearch: isSearch), source == current else { return }
         let known = Set(videos.map(\.id))
-        videos += page.videos.filter { !known.contains($0.id) }
+        videos += visible(page.videos).filter { !known.contains($0.id) }
         continuation = page.continuation
         pages[current]?.videos = videos
         pages[current]?.continuation = continuation
+    }
+
+    // MARK: 興味なし
+
+    /// Videos marked 興味なし, kept out of every feed here (YouTube takes a
+    /// while to stop offering them, and search never does).
+    @ObservationIgnored private var hiddenIDs: Set<String> = {
+        Set(UserDefaults.standard.stringArray(forKey: YouTubeFeedModel.hiddenKey) ?? [])
+    }()
+    private static let hiddenKey = "iroha.youtube.notInterested"
+
+    /// The video leaves the list at once; YouTube is told when it offers
+    /// a way to (signed in, and the feed carried the video's menu).
+    func markNotInterested(_ video: YTVideo) {
+        hiddenIDs.insert(video.id)
+        var stored = UserDefaults.standard.stringArray(forKey: Self.hiddenKey) ?? []
+        stored.append(video.id)
+        UserDefaults.standard.set(Array(stored.suffix(1000)), forKey: Self.hiddenKey)
+        videos.removeAll { $0.id == video.id }
+        for key in pages.keys { pages[key]?.videos.removeAll { $0.id == video.id } }
+        Haptics.play(.light)
+        guard signedIn, let token = video.notInterestedToken else { return }
+        Task {
+            if (try? await YouTubeClient.shared.markNotInterested(token: token)) == nil {
+                Haptics.play(.warning)
+            }
+        }
+    }
+
+    private func visible(_ list: [YTVideo]) -> [YTVideo] {
+        hiddenIDs.isEmpty ? list : list.filter { !hiddenIDs.contains($0.id) }
     }
 
     static func needsAccount(_ source: Source) -> Bool {
@@ -322,7 +353,19 @@ struct YouTubeHomeView: View {
                     .buttonStyle(.plain)
                     .listRowSeparator(.hidden)
                     .listRowInsets(EdgeInsets(top: 6, leading: 12, bottom: 10, trailing: 12))
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        Button(role: .destructive) {
+                            withAnimation(.snappy) { model.markNotInterested(video) }
+                        } label: {
+                            Label("興味なし", systemImage: "hand.thumbsdown")
+                        }
+                    }
                     .contextMenu {
+                        Button {
+                            withAnimation(.snappy) { model.markNotInterested(video) }
+                        } label: {
+                            Label("興味なし", systemImage: "hand.thumbsdown")
+                        }
                         if let channelID = video.channelID, let name = video.channel {
                             Button {
                                 Task { await model.load(.channel(id: channelID, name: name)) }

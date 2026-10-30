@@ -360,6 +360,21 @@ final class YouTubeClient {
                                 body: ["channelIds": [channelID]])
     }
 
+    /// 興味なし: the feedback token from the video's menu, which also
+    /// teaches the account's recommendations.
+    func markNotInterested(token: String) async throws {
+        let data = try await innertube("feedback", body: [
+            "feedbackTokens": [token],
+            "isFeedbackTokenUnencrypted": false,
+            "shouldMerge": false,
+        ])
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let responses = json["feedbackResponses"] as? [[String: Any]],
+           responses.contains(where: { ($0["isProcessed"] as? Bool) == false }) {
+            throw URLError(.badServerResponse)
+        }
+    }
+
     /// 後で見る is the playlist "WL".
     func setWatchLater(_ saved: Bool, videoID: String) async throws {
         let action: [String: Any] = saved

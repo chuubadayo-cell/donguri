@@ -149,6 +149,12 @@ final class VideoPlayerModel {
         await loadComments()
     }
 
+    /// 興味なし on a video in 次の動画 (and every feed).
+    func markNotInterested(_ video: YTVideo) {
+        related.removeAll { $0.id == video.id }
+        YouTubeFeedModel.shared.markNotInterested(video)
+    }
+
     func hasMoreReplies(_ comment: YTComment) -> Bool { replyContinuations[comment.id] != nil }
 
     /// A word tapped in a comment: no clip, but a picture of the comment

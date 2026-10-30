@@ -20,6 +20,9 @@ nonisolated struct YTVideo: Identifiable, Hashable, Sendable {
     /// Views and age, already formatted by YouTube ("12万 回視聴 · 3 日前").
     var meta: String?
     var thumbnail: URL?
+    /// YouTube's own 興味なし for this video in this feed (its menu's
+    /// feedback token), when the feed offers one.
+    var notInterestedToken: String?
 
     var watchURL: URL { URL(string: "https://www.youtube.com/watch?v=\(id)")! }
 }
@@ -222,7 +225,8 @@ nonisolated enum YTParse {
         let meta = [views, published].compactMap { $0 }.joined(separator: " · ")
         return YTVideo(id: id, title: title, channel: text(owner), channelID: channelID,
                        duration: duration, meta: meta.isEmpty ? nil : meta,
-                       thumbnail: thumbnail(renderer["thumbnail"]))
+                       thumbnail: thumbnail(renderer["thumbnail"]),
+                       notInterestedToken: notInterestedToken(in: renderer["menu"] ?? renderer))
     }
 
     static func video(fromLockup lockup: [String: Any]) -> YTVideo? {
@@ -251,7 +255,40 @@ nonisolated enum YTParse {
         let badge = firstValue(forKey: "thumbnailBadgeViewModel", in: lockup) as? [String: Any]
         return YTVideo(id: id, title: title, channel: channel, channelID: nil,
                        duration: badge.flatMap { $0["text"] as? String },
-                       meta: meta.isEmpty ? nil : meta, thumbnail: thumb)
+                       meta: meta.isEmpty ? nil : meta, thumbnail: thumb,
+                       notInterestedToken: notInterestedToken(in: metadata["menuButton"] ?? lockup))
+    }
+
+    /// The feedback token behind a video menu's 興味なし. Older renderers
+    /// carry a `menuServiceItemRenderer` with the NOT_INTERESTED icon; the
+    /// newer lockups a `listItemViewModel` in a sheet, known by its icon or
+    /// its title.
+    static func notInterestedToken(in node: Any, depth: Int = 0) -> String? {
+        guard depth < 30 else { return nil }
+        if let array = node as? [Any] {
+            for child in array {
+                if let token = notInterestedToken(in: child, depth: depth + 1) { return token }
+            }
+            return nil
+        }
+        guard let dictionary = node as? [String: Any] else { return nil }
+        if let item = dictionary["menuServiceItemRenderer"] as? [String: Any],
+           (item["icon"] as? [String: Any])?["iconType"] as? String == "NOT_INTERESTED",
+           let token = firstValue(forKey: "feedbackToken", in: item) as? String {
+            return token
+        }
+        if let item = dictionary["listItemViewModel"] as? [String: Any] {
+            let title = ((item["title"] as? [String: Any])?["content"] as? String) ?? ""
+            let icon = (firstValue(forKey: "imageName", in: item) as? String) ?? ""
+            if icon == "NOT_INTERESTED" || ["興味なし", "Not interested"].contains(title),
+               let token = firstValue(forKey: "feedbackToken", in: item) as? String {
+                return token
+            }
+        }
+        for value in dictionary.values where value is [Any] || value is [String: Any] {
+            if let token = notInterestedToken(in: value, depth: depth + 1) { return token }
+        }
+        return nil
     }
 
     /// Depth-first search for a key anywhere below `node`.
