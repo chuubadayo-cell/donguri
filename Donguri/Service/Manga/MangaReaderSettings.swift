@@ -130,6 +130,12 @@ final class MangaReaderSettings {
         let d = UserDefaults.standard
         let p = Self.prefix
         defaultMode = MangaReadingMode(rawValue: d.string(forKey: p + "mode") ?? "") ?? .rightToLeft
+        // Spreads in landscape are the default; a choice made before that
+        // was settled is set back to it once.
+        if !d.bool(forKey: p + "spreadDefaultApplied") {
+            d.set(MangaSpreadMode.landscape.rawValue, forKey: p + "spread")
+            d.set(true, forKey: p + "spreadDefaultApplied")
+        }
         spread = MangaSpreadMode(rawValue: d.string(forKey: p + "spread") ?? "") ?? .landscape
         coverAlone = d.object(forKey: p + "coverAlone") as? Bool ?? true
         fit = MangaPageFit(rawValue: d.string(forKey: p + "fit") ?? "") ?? .screen

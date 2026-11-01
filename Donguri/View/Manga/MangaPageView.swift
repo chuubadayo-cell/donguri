@@ -230,9 +230,14 @@ final class MangaPageScrollView: UIScrollView, UIScrollViewDelegate {
         let x = max((bounds.width - contentSize.width) / 2, 0)
         let y = max((bounds.height - contentSize.height) / 2, 0)
         let insets = UIEdgeInsets(top: y, left: x, bottom: y, right: x)
-        if contentInset != insets {
-            contentInset = insets
-            if !isZoomed { contentOffset = CGPoint(x: -x, y: -y) }
+        if contentInset != insets { contentInset = insets }
+        // At normal size the page always sits where the insets put it: a
+        // page view reused for another page, or a page un-zoomed while off
+        // screen, otherwise kept its old offset and showed the page pinned
+        // to the top.
+        if !isZoomed {
+            let rest = CGPoint(x: -x, y: -y)
+            if contentOffset != rest { contentOffset = rest }
         }
     }
 
