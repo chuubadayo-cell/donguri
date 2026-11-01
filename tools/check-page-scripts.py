@@ -4,13 +4,17 @@
 Every `static let name = \"\"\" ... \"\"\"` script must use only escapes Swift
 knows (\\n, \\t, \\\\, \\"…; `\\d` or `\\/` fail the build), and is read with Swift's
 escapes applied (so `\\n` in the Swift source is a real line break, which
-inside a JS string is a syntax error) and run through `node --check`,
+inside a JS string is a syntax error) and run through `node --check` (or, without node, macOS's own
+JavaScriptCore via `osascript`, which only defines the function),
 wrapped in an async function so callAsyncJavaScript bodies pass too.
 Interpolated literals are skipped.
 
     python3 tools/check-page-scripts.py
 """
-import os, re, subprocess, sys, tempfile
+import os, re, shutil, subprocess, sys, tempfile
+
+# The wrapper only defines the function, so evaluating it is a syntax check.
+CHECK = ['node', '--check'] if shutil.which('node') else ['osascript', '-l', 'JavaScript']
 
 ESCAPES = {'n': '\n', 't': '\t', '\\': '\\', '"': '"', "'": "'", '0': '\0', 'r': '\r'}
 root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'Donguri')
@@ -36,7 +40,7 @@ for folder, _, files in os.walk(root):
             body = re.sub(r'\\(.)', lambda m: ESCAPES.get(m.group(1), '\\' + m.group(1)), body)
             with tempfile.NamedTemporaryFile('w', suffix='.js', delete=False) as f:
                 f.write('(async function () {\n' + body + '\n});\n')
-            result = subprocess.run(['node', '--check', f.name], capture_output=True, text=True)
+            result = subprocess.run(CHECK + [f.name], capture_output=True, text=True)
             os.unlink(f.name)
             label = f'{os.path.relpath(path, root)} {script}'
             if result.returncode:

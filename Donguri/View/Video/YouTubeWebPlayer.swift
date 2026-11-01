@@ -213,6 +213,21 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
         return (result as? String).flatMap(Self.decodeDataURL)
     }
 
+    /// A small frame for the miniplayer, decoded off the main actor so
+    /// drawing it never waits on JPEG decoding.
+    func miniFrame(maxWidth: Int) async -> UIImage? {
+        guard let result = try? await webView.callAsyncJavaScript("return irohaPlayer.miniFrame(\(maxWidth))",
+                                                                  arguments: [:], in: nil, contentWorld: Self.world),
+              let string = result as? String else { return nil }
+        return await Self.decodeImage(string)
+    }
+
+    @concurrent
+    private nonisolated static func decodeImage(_ dataURL: String) async -> UIImage? {
+        guard let data = decodeDataURL(dataURL) else { return nil }
+        return UIImage(data: data)?.preparingForDisplay()
+    }
+
     /// The frame at `time`: seeks there and back if it isn't on screen.
     func frame(at time: Double, maxWidth: Int) async -> Data? {
         let result = try? await webView.callAsyncJavaScript("return await irohaPlayer.frameAt(time, width)",
@@ -274,7 +289,7 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
         return ((data, first, (dictionary["kind"] as? String) == "webm"), "")
     }
 
-    private static func decodeDataURL(_ string: String) -> Data? {
+    private nonisolated static func decodeDataURL(_ string: String) -> Data? {
         guard let comma = string.firstIndex(of: ","), string.hasPrefix("data:") else { return nil }
         return Data(base64Encoded: String(string[string.index(after: comma)...]))
     }
@@ -710,15 +725,18 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
       setInterval(tick, 200);
       document.addEventListener('DOMContentLoaded', style);
 
-      function draw(v, width) {
+      function draw(v, width, canvas, quality) {
         if (!v || !v.videoWidth) { return null; }
         const scale = Math.min(1, width / v.videoWidth);
-        const c = document.createElement('canvas');
-        c.width = Math.round(v.videoWidth * scale);
-        c.height = Math.round(v.videoHeight * scale);
-        c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
-        try { return c.toDataURL('image/jpeg', 0.8); } catch (e) { return null; }
+        const c = canvas || document.createElement('canvas');
+        const w = Math.round(v.videoWidth * scale), h = Math.round(v.videoHeight * scale);
+        if (c.width !== w) { c.width = w; }
+        if (c.height !== h) { c.height = h; }
+        c.getContext('2d').drawImage(v, 0, 0, w, h);
+        try { return c.toDataURL('image/jpeg', quality || 0.8); } catch (e) { return null; }
       }
+      // The miniplayer asks many times a second: one canvas, lighter JPEG.
+      let miniCanvas = null;
       function seekTo(v, t) {
         return new Promise(function (resolve) {
           let done = false;
@@ -744,6 +762,10 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
         rate: function (r) { const v = video(); if (v) { v.playbackRate = r; } },
         skipAd: function () { const b = skipButton(); if (b) { b.click(); } },
         frame: function (width) { return draw(video(), width); },
+        miniFrame: function (width) {
+          if (!miniCanvas) { miniCanvas = document.createElement('canvas'); }
+          return draw(video(), width, miniCanvas, 0.6);
+        },
         frameAt: async function (t, width) {
           const v = video();
           if (!v) { return null; }

@@ -37,7 +37,9 @@ struct VideoPlayerView: View {
     @State private var followTranscript = true
     @State private var seekFlash: SeekFlash?
     /// How far the player has been pulled down (swipe down to minimize).
-    @State private var pullDown: CGFloat = 0
+    /// Read only by `PullDownOffset`: as plain state, every point of a
+    /// pull redrew the whole player, and the pull stuttered.
+    @State private var pull = PullDown()
     /// The video's height, to tell a swipe from a drag on the scrubber.
     @State private var videoHeight: CGFloat = 0
     /// The last tap on the video, to tell a double tap without making
@@ -153,7 +155,7 @@ struct VideoPlayerView: View {
                 OrientationLock.returnToPortrait()
                 withAnimation(Self.slide) {
                     presentedFull = false
-                    pullDown = 0
+                    pull.set(0)
                 } completion: {
                     guard formChange == change else { return }
                     surfaceInMini = true
@@ -204,7 +206,7 @@ struct VideoPlayerView: View {
                     ZStack {
                         Color.black.ignoresSafeArea()
                         videoArea(fullScreen: true)
-                            .offset(y: pullDown)
+                            .modifier(PullDownOffset(pull: pull, fades: false))
                             .simultaneousGesture(pullDownGesture(fullScreen: true))
                     }
                     .statusBarHidden(true)
@@ -221,8 +223,7 @@ struct VideoPlayerView: View {
                         portraitBody
                     }
                     .background(Color(.systemBackground))
-                    .offset(y: pullDown)
-                    .opacity(1 - Double(min(pullDown / 600, 0.4)))
+                    .modifier(PullDownOffset(pull: pull, fades: true))
                 }
             }
             // On its own view: a sheet and a file importer on the same
@@ -455,10 +456,10 @@ struct VideoPlayerView: View {
                 let down = value.translation.height
                 // Only a mostly vertical, downward drag (not scrubbing).
                 guard down > 0, down > abs(value.translation.width) * 1.4 else {
-                    if pullDown != 0 { pullDown = 0 }
+                    pull.set(0)
                     return
                 }
-                pullDown = fullScreen ? min(down * 0.5, 120) : down
+                pull.set(fullScreen ? min(down * 0.5, 120) : down)
             }
             .onEnded { value in
                 let down = value.translation.height
@@ -468,7 +469,7 @@ struct VideoPlayerView: View {
                 let onScrubber = controlsVisible && value.startLocation.y > videoHeight - (fullScreen ? 64 : 52)
                 if !onScrubber, abs(across) > abs(down) * 1.4,
                    abs(across) > 60 || (abs(value.predictedEndTranslation.width) > 180 && abs(across) > 24) {
-                    if pullDown != 0 { withAnimation(.snappy) { pullDown = 0 } }
+                    if pull.value != 0 { withAnimation(.snappy) { pull.set(0) } }
                     let forward = across < 0
                     if forward { model.nextCue() } else { model.previousCue() }
                     if model.cues.isEmpty {
@@ -482,14 +483,14 @@ struct VideoPlayerView: View {
                 let vertical = down > abs(value.translation.width) * 1.4
                 if vertical, down > 110 || (flicked && down > 30) {
                     if fullScreen {
-                        withAnimation(.snappy) { pullDown = 0 }
+                        withAnimation(.snappy) { pull.set(0) }
                         OrientationLock.rotate(to: .portrait)
                     } else {
                         // Carries on down from where the finger let go.
                         minimize()
                     }
                 } else {
-                    withAnimation(.snappy) { pullDown = 0 }
+                    withAnimation(.snappy) { pull.set(0) }
                 }
             }
     }
@@ -1395,8 +1396,8 @@ private struct TranscriptRow: View, Equatable {
 }
 
 /// The miniplayer's picture for YouTube's page: frames drawn from its
-/// video element a few times a second (the same drawing a card's
-/// screenshot uses).
+/// video element about 30 times a second (the same drawing a card's
+/// screenshot uses, smaller and lighter).
 private struct MiniFrames: View {
     let web: YouTubeWebPlayer
     @State private var image: UIImage?
@@ -1411,12 +1412,17 @@ private struct MiniFrames: View {
             }
         }
         .task {
+            let clock = ContinuousClock()
             while !Task.isCancelled {
-                if let data = await web.frame(maxWidth: 240), let frame = UIImage(data: data) {
+                let started = clock.now
+                if let frame = await web.miniFrame(maxWidth: 240) {
                     image = frame
                 }
-                // Slower while paused: the picture doesn't change.
-                try? await Task.sleep(for: .milliseconds(web.state.paused ? 500 : 100))
+                // About 30 a second while playing (the time spent fetching
+                // counts), slower while paused: the picture doesn't change.
+                let interval: Duration = web.state.paused ? .milliseconds(500) : .milliseconds(33)
+                let wait = interval - (clock.now - started)
+                if wait > .zero { try? await Task.sleep(for: wait) } else { await Task.yield() }
             }
         }
     }
@@ -1622,6 +1628,29 @@ private struct WebPlayerSurface: UIViewRepresentable {
                 webView.transform = CGAffineTransform(scaleX: scale, y: scale)
             }
         }
+    }
+}
+
+/// How far the full player is pulled down, kept out of the player's own
+/// state so a pull redraws only what moves.
+@Observable
+private final class PullDown {
+    private(set) var value: CGFloat = 0
+
+    /// Writes only a change: every assignment notifies.
+    func set(_ newValue: CGFloat) {
+        if value != newValue { value = newValue }
+    }
+}
+
+private struct PullDownOffset: ViewModifier {
+    let pull: PullDown
+    let fades: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .offset(y: pull.value)
+            .opacity(fades ? 1 - Double(min(pull.value / 600, 0.4)) : 1)
     }
 }
 
