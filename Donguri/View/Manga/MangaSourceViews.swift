@@ -30,6 +30,11 @@ struct InstalledSourcesList: View {
                 }
             } else {
                 Section {
+                    NavigationLink(value: MangaRoute.search) {
+                        Label("すべてのソースを検索", systemImage: "magnifyingglass")
+                    }
+                }
+                Section {
                     ForEach(sources.installedSources, id: \.key) { source in
                         NavigationLink(value: MangaRoute.source(source.key)) {
                             SourceRow(name: source.name, iconURL: source.imageUrl,
@@ -220,6 +225,8 @@ struct ManageSourcesView: View {
 
 struct SourceBrowseView: View {
     let sourceKey: String
+    /// Opened from the search across all sources: this source's results.
+    var initialQuery: String?
 
     @State private var sources = MangaSources.shared
     @State private var listings: [AidokuRunner.Listing] = []
@@ -296,6 +303,10 @@ struct SourceBrowseView: View {
         .refreshable { await reload() }
         .task {
             guard entries.isEmpty, let source else { return }
+            if let initialQuery, !initialQuery.isEmpty, submittedQuery.isEmpty {
+                query = initialQuery
+                submittedQuery = initialQuery
+            }
             if source.features.providesListings {
                 listings = (try? await source.getListings()) ?? []
                 listing = listings.first

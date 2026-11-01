@@ -21,6 +21,9 @@ final class MangaReaderPresenter {
 
 enum MangaRoute: Hashable {
     case source(String)
+    /// A source's own search, already run.
+    case sourceSearch(String, String)
+    case search
     case manga(source: String, manga: AidokuRunner.Manga)
     case localSeries(String)
     case mokuroRemote(name: String, url: URL)
@@ -64,6 +67,8 @@ struct MangaHomeView: View {
             .navigationDestination(for: MangaRoute.self) { route in
                 switch route {
                 case .source(let key): SourceBrowseView(sourceKey: key)
+                case .sourceSearch(let key, let query): SourceBrowseView(sourceKey: key, initialQuery: query)
+                case .search: MangaSearchView()
                 case .manga(let source, let manga): MangaDetailView(sourceKey: source, manga: manga)
                 case .localSeries(let id): LocalSeriesView(seriesID: id)
                 case .mokuroRemote(let name, let url): MokuroRemoteView(name: name, url: url)
@@ -71,6 +76,12 @@ struct MangaHomeView: View {
                 }
             }
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    NavigationLink(value: MangaRoute.search) {
+                        Image(systemName: "magnifyingglass")
+                    }
+                    .accessibilityLabel(Text("すべてのソースを検索"))
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         showsSettings = true
