@@ -107,7 +107,8 @@ final class MangaPageScrollView: UIScrollView, UIScrollViewDelegate {
         showsVerticalScrollIndicator = false
         showsHorizontalScrollIndicator = false
         contentInsetAdjustmentBehavior = .never
-        decelerationRate = .fast
+        // A zoomed page glides as it's let go, like Photos.
+        decelerationRate = .normal
         backgroundColor = .clear
         bouncesZoom = true
         addSubview(content)
@@ -145,6 +146,8 @@ final class MangaPageScrollView: UIScrollView, UIScrollViewDelegate {
             imageViews = images.map { image in
                 let view = UIImageView(image: image)
                 view.contentMode = .scaleToFill
+                // Smooth while shrunk below the image's own size.
+                view.layer.minificationFilter = .trilinear
                 content.addSubview(view)
                 return view
             }
@@ -208,6 +211,9 @@ final class MangaPageScrollView: UIScrollView, UIScrollViewDelegate {
             view.frame = CGRect(x: x, y: 0, width: width, height: height)
             x += width
         }
+        // Rounding can leave the pages a hair wider than the screen, which
+        // would make the page scroll sideways instead of turning.
+        if abs(x - bounds.width) < 1 { x = bounds.width }
         content.frame = CGRect(x: 0, y: 0, width: x, height: height)
         contentSize = content.frame.size
         contentOffset = .zero
@@ -254,6 +260,25 @@ final class MangaPageScrollView: UIScrollView, UIScrollViewDelegate {
     // MARK: Zoom
 
     func viewForZooming(in scrollView: UIScrollView) -> UIView? { zoomable ? content : nil }
+
+    /// Zooming holds the pages still: a pinch whose first finger had
+    /// started a swipe no longer drags the next page in.
+    func scrollViewWillBeginZooming(_ scrollView: UIScrollView, with view: UIView?) {
+        pager?.holdForZoom()
+    }
+
+    func scrollViewDidEndZooming(_ scrollView: UIScrollView, with view: UIView?, atScale scale: CGFloat) {
+        if scale <= minimumZoomScale + 0.01 { pager?.release() }
+    }
+
+    private var pager: PagerCollectionView? {
+        var view = superview
+        while let current = view {
+            if let pager = current as? PagerCollectionView { return pager }
+            view = current.superview
+        }
+        return nil
+    }
 
     func scrollViewDidZoom(_ scrollView: UIScrollView) {
         center()
@@ -321,6 +346,13 @@ final class MangaPageScrollView: UIScrollView, UIScrollViewDelegate {
     // MARK: Swipe down to close
 
     override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        // At normal size a sideways drag turns the page: the page doesn't
+        // take it unless it really is wider than the screen.
+        if gestureRecognizer === panGestureRecognizer, zoomScale <= minimumZoomScale + 0.01,
+           contentSize.width <= bounds.width + 1 {
+            let velocity = panGestureRecognizer.velocity(in: self)
+            if abs(velocity.x) > abs(velocity.y) { return false }
+        }
         guard gestureRecognizer === dismissPan else {
             return super.gestureRecognizerShouldBegin(gestureRecognizer)
         }

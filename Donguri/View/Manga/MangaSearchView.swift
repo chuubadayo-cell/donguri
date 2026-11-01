@@ -164,11 +164,15 @@ struct MangaSearchView: View {
                 LazyHStack(alignment: .top, spacing: 12) {
                     ForEach(localMatches) { series in
                         NavigationLink(value: MangaRoute.localSeries(series.id)) {
-                            ResultCard(title: series.title) {
+                            ResultCard(title: series.title,
+                                       saved: MangaLibrary.shared.isSaved(local: series.id)) {
                                 LocalCover(volume: series.volumes.first)
                             }
                         }
                         .buttonStyle(.plain)
+                        .contextMenu {
+                            LibraryMenuItems(target: .local(seriesID: series.id, title: series.title))
+                        }
                     }
                 }
                 .padding(.horizontal, 16)
@@ -235,6 +239,9 @@ struct MangaSearchView: View {
                                 }
                             }
                             .buttonStyle(.plain)
+                            .contextMenu {
+                                LibraryMenuItems(target: .source(key: source.key, manga: manga))
+                            }
                         }
                     }
                     .padding(.horizontal, 16)

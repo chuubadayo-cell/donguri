@@ -218,42 +218,32 @@ struct MangaReaderView: View {
 
     private var pagedReader: some View {
         let rightToLeft = mode == .rightToLeft
-        let ordered = rightToLeft ? Array(slots.reversed()) : slots
-        return ScrollView(.horizontal) {
-            LazyHStack(spacing: 0) {
-                ForEach(ordered) { slot in
-                    Group {
-                        switch slot {
-                        case .pages(let indices, _):
-                            ReaderSlotView(pages: indices.map { pages[$0] },
-                                           rightToLeft: rightToLeft,
-                                           texts: texts,
-                                           fit: settings.fit,
-                                           zoomable: true,
-                                           showsBoxes: settings.showTextBoxes,
-                                           highlighted: bubble,
-                                           onTap: tapped,
-                                           onTextTap: textTapped,
-                                           onBubble: { page, block in openBubble(page: page, block: block) },
-                                           onZoomChange: { isZoomed = $0 },
-                                           onDismissProgress: { [dismiss] in dismiss.value = $0 },
-                                           onDismiss: close)
-                        case .end:
-                            endCard
-                        }
-                    }
-                    .containerRelativeFrame([.horizontal, .vertical])
-                    .id(slot.id)
-                }
+        let all = slots
+        let ordered = rightToLeft ? Array(all.reversed()) : all
+        let byID = Dictionary(all.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        return MangaPager(ids: ordered.map(\.id), currentID: $currentID, locked: isZoomed) { id in
+            switch byID[id] {
+            case .pages(let indices, _):
+                ReaderSlotView(pages: indices.map { pages[$0] },
+                               rightToLeft: rightToLeft,
+                               texts: texts,
+                               fit: settings.fit,
+                               zoomable: true,
+                               showsBoxes: settings.showTextBoxes,
+                               highlighted: bubble,
+                               onTap: tapped,
+                               onTextTap: textTapped,
+                               onBubble: { page, block in openBubble(page: page, block: block) },
+                               onZoomChange: { isZoomed = $0 },
+                               onDismissProgress: { [dismiss] in dismiss.value = $0 },
+                               onDismiss: close)
+            case .end:
+                endCard
+            case nil:
+                Color.clear
             }
-            .scrollTargetLayout()
         }
-        .scrollTargetBehavior(.paging)
-        .scrollPosition(id: $currentID)
-        .scrollIndicators(.hidden)
-        .scrollDisabled(isZoomed)
         .ignoresSafeArea()
-        .defaultScrollAnchor(rightToLeft ? .trailing : .leading)
     }
 
     private var verticalReader: some View {
@@ -397,6 +387,19 @@ struct MangaReaderView: View {
             }
 
             Menu {
+                if mode != .vertical {
+                    Picker(selection: $settings.spread) {
+                        ForEach(MangaSpreadMode.allCases) { Text(verbatim: $0.label).tag($0) }
+                    } label: {
+                        Label("見開き", systemImage: "book.pages")
+                    }
+                    .pickerStyle(.menu)
+                    if settings.spread != .off {
+                        Toggle(isOn: $settings.coverAlone) {
+                            Label("表紙を単独で表示", systemImage: "book.closed")
+                        }
+                    }
+                }
                 Toggle(isOn: $settings.showTextBoxes) {
                     Label("吹き出しの枠を表示", systemImage: "rectangle.dashed")
                 }
@@ -461,22 +464,27 @@ struct MangaReaderView: View {
                     .font(.footnote.monospacedDigit().weight(.semibold))
             }
             if pages.count > 1 {
+                // Left and right follow the reading direction: in a manga
+                // the next chapter is to the left.
+                let rtl = mode == .rightToLeft
+                let hasNext = unitIndex + 1 < request.units.count
+                let hasPrevious = unitIndex > 0
                 HStack(spacing: 10) {
-                    iconButton(mode == .rightToLeft ? "forward.end" : "backward.end", label: Text("前の章")) {
-                        if unitIndex > 0 { unitIndex -= 1 }
+                    iconButton("backward.end", label: rtl ? Text("次の章") : Text("前の章")) {
+                        if rtl { if hasNext { unitIndex += 1 } } else if hasPrevious { unitIndex -= 1 }
                     }
-                    .opacity(unitIndex > 0 ? 1 : 0.3)
+                    .opacity((rtl ? hasNext : hasPrevious) ? 1 : 0.3)
                     Slider(value: $sliderPage, in: 0...Double(max(pages.count - 1, 1)), step: 1) { editing in
                         draggingSlider = editing
                         if !editing { show(page: Int(sliderPage), animated: false) }
                     }
                     .tint(.white)
                     // Manga turn the other way: the slider does too.
-                    .environment(\.layoutDirection, mode == .rightToLeft ? .rightToLeft : .leftToRight)
-                    iconButton(mode == .rightToLeft ? "backward.end" : "forward.end", label: Text("次の章")) {
-                        if unitIndex + 1 < request.units.count { unitIndex += 1 }
+                    .environment(\.layoutDirection, rtl ? .rightToLeft : .leftToRight)
+                    iconButton("forward.end", label: rtl ? Text("前の章") : Text("次の章")) {
+                        if rtl { if hasPrevious { unitIndex -= 1 } } else if hasNext { unitIndex += 1 }
                     }
-                    .opacity(unitIndex + 1 < request.units.count ? 1 : 0.3)
+                    .opacity((rtl ? hasPrevious : hasNext) ? 1 : 0.3)
                 }
                 .environment(\.layoutDirection, .leftToRight)
             }
@@ -547,6 +555,7 @@ struct MangaReaderView: View {
             return
         }
         library.setPage(index, of: pages.count, for: unit.id)
+        if let seriesID = request.seriesID { library.noteRead(seriesID) }
         if !draggingSlider { sliderPage = Double(index) }
         preload(around: index)
         readText()
@@ -666,9 +675,15 @@ struct MangaReaderView: View {
     private func lookUp(_ selection: SelectionData, page: ReaderPage, region: CGRect) -> Int? {
         popups.coverURL = nil
         popups.documentTitle = request.title
+        let picture = settings.cardPicture
         popups.mediaProvider = {
             guard let image = try? await page.load() else { return nil }
-            return CardMedia(imageURL: await MangaCardImage.write(image, around: region))
+            switch picture {
+            case .page:
+                return CardMedia(imageURL: await MangaCardImage.page(image))
+            case .bubble:
+                return CardMedia(imageURL: await MangaCardImage.write(image, around: region))
+            }
         }
         let matched = popups.replace(with: selection, userConfig: userConfig)
         if matched == nil {
@@ -937,9 +952,15 @@ private struct ReaderBackdrop: View {
     }
 }
 
-/// The card's picture: the bubble with some of the panel around it, not
-/// the whole page, whose text would be too small to read on a card.
+/// The card's picture: the page (the default), or just the bubble with
+/// some of the panel around it.
 enum MangaCardImage {
+    /// The whole page, large enough for its text to stay readable.
+    @concurrent
+    nonisolated static func page(_ image: UIImage) async -> URL? {
+        CardImage.write(image, maxSide: 1400)
+    }
+
     @concurrent
     nonisolated static func write(_ image: UIImage, around region: CGRect) async -> URL? {
         guard let cgImage = image.cgImage else { return CardImage.write(image, maxSide: 900) }

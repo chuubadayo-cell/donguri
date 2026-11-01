@@ -63,6 +63,9 @@ struct LocalHomeList: View {
                             Label("削除", systemImage: "trash")
                         }
                     }
+                    .contextMenu {
+                        LibraryMenuItems(target: .local(seriesID: series.id, title: series.title))
+                    }
                 }
                 Button {
                     importing = true
@@ -191,7 +194,7 @@ enum LocalCovers {
         let book = LocalBook(volume: volume)
         guard (try? await book.open()) != nil,
               let page = try? await book.image(at: 0, maxPixel: 400) else { return nil }
-        let thumbnail = await page.byPreparingThumbnail(ofSize: CGSize(width: 132, height: 192)) ?? page
+        let thumbnail = await page.byPreparingThumbnail(ofSize: CGSize(width: 300, height: 450)) ?? page
         cache.setObject(thumbnail, forKey: volume.id as NSString)
         return thumbnail
     }
@@ -246,6 +249,19 @@ struct LocalSeriesView: View {
         }
         .navigationTitle(Text(verbatim: series?.title ?? ""))
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if let series {
+                ToolbarItem(placement: .topBarTrailing) {
+                    let saved = reading.isSaved(local: series.id)
+                    Button {
+                        reading.toggleSaved(local: series)
+                    } label: {
+                        Image(systemName: saved ? "bookmark.fill" : "bookmark")
+                    }
+                    .accessibilityLabel(saved ? Text("ライブラリから外す") : Text("ライブラリに保存"))
+                }
+            }
+        }
         .refreshable { await library.scan() }
     }
 }

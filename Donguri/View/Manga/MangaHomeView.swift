@@ -111,25 +111,6 @@ struct MangaHomeView: View {
 
 // MARK: - Library
 
-private struct MangaLibraryList: View {
-    @State private var library = MangaLibrary.shared
-
-    var body: some View {
-        if library.saved.isEmpty {
-            ContentUnavailableView {
-                Label("ライブラリは空です", systemImage: "books.vertical")
-            } description: {
-                Text("ソースで見つけたマンガを保存すると、ここに並びます。")
-            }
-        } else {
-            ScrollView {
-                MangaGrid(items: library.saved.map { ($0.sourceKey, $0.manga) })
-                    .padding(16)
-            }
-        }
-    }
-}
-
 /// Covers in a grid, each opening its manga.
 struct MangaGrid: View {
     let items: [(source: String, manga: AidokuRunner.Manga)]
@@ -151,6 +132,9 @@ struct MangaGrid: View {
                     }
                 }
                 .buttonStyle(.plain)
+                .contextMenu {
+                    LibraryMenuItems(target: .source(key: item.source, manga: item.manga))
+                }
                 .onAppear {
                     if index == items.count - 1 { onAppearLast?() }
                 }

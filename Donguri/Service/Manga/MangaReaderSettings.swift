@@ -77,6 +77,19 @@ enum MangaTextTap: String, CaseIterable, Identifiable {
     }
 }
 
+/// What a card mined from a page gets as its picture.
+enum MangaCardPicture: String, CaseIterable, Identifiable {
+    case page, bubble
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .page: String(localized: "ページ全体")
+        case .bubble: String(localized: "吹き出しの周り")
+        }
+    }
+}
+
 @Observable
 final class MangaReaderSettings {
     static let shared = MangaReaderSettings()
@@ -102,6 +115,7 @@ final class MangaReaderSettings {
     var showTextBoxes: Bool { didSet { save("textBoxes", showTextBoxes) } }
     /// Pages read ahead of the one on screen, both their images and text.
     var preload: Int { didSet { save("preload", preload) } }
+    var cardPicture: MangaCardPicture { didSet { save("cardPicture", cardPicture.rawValue) } }
 
     /// Reading modes chosen for one title.
     private var modes: [String: String] { didSet { save("modes", modes) } }
@@ -128,6 +142,7 @@ final class MangaReaderSettings {
         textTap = MangaTextTap(rawValue: d.string(forKey: p + "textTap") ?? "") ?? .lookUp
         showTextBoxes = d.object(forKey: p + "textBoxes") as? Bool ?? false
         preload = d.object(forKey: p + "preload") as? Int ?? 3
+        cardPicture = MangaCardPicture(rawValue: d.string(forKey: p + "cardPicture") ?? "") ?? .page
         modes = d.dictionary(forKey: p + "modes") as? [String: String] ?? [:]
         googleAPIKey = Keychain.get(Self.googleKeyAccount) ?? ""
     }

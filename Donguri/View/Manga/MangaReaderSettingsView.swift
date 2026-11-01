@@ -81,6 +81,9 @@ struct MangaReaderSettingsView: View {
                         ForEach(MangaTextTap.allCases) { Text(verbatim: $0.label).tag($0) }
                     }
                     Toggle("吹き出しの枠を表示", isOn: $settings.showTextBoxes)
+                    Picker("カードの画像", selection: $settings.cardPicture) {
+                        ForEach(MangaCardPicture.allCases) { Text(verbatim: $0.label).tag($0) }
+                    }
                     Button(clearedCache ? "消去しました" : "文字認識の結果を消去") {
                         MangaOCR.clearCache()
                         clearedCache = true
