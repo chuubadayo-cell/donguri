@@ -19,6 +19,13 @@ nonisolated struct OCRLine: Sendable, Hashable {
     let box: CGRect
     /// Lines whose characters run top to bottom (縦書き).
     let isVertical: Bool
+    /// The whole speech bubble when the line is one of several (mokuro),
+    /// as the sentence for Anki; else the line itself.
+    var sentence: String { blockText ?? text }
+    private let blockText: String?
+    /// The bubble's next lines, so a word broken across columns is still
+    /// scanned whole.
+    let followingText: String
     /// Asking Vision where each character is costs about as much as the
     /// recognition itself on a text-heavy image, so it is done only for a
     /// line that is actually tapped, and remembered.
@@ -26,6 +33,26 @@ nonisolated struct OCRLine: Sendable, Hashable {
 
     /// One per Character of `text`, same order.
     var characterBoxes: [CGRect] { characters.boxes(line: box, vertical: isVertical) }
+
+    init(text: String, box: CGRect, isVertical: Bool, characters: OCRCharacterBoxes) {
+        self.text = text
+        self.box = box
+        self.isVertical = isVertical
+        self.characters = characters
+        blockText = nil
+        followingText = ""
+    }
+
+    /// A line whose characters are already placed (mokuro's text).
+    init(text: String, box: CGRect, isVertical: Bool, characterBoxes: [CGRect],
+         blockText: String?, followingText: String) {
+        self.text = text
+        self.box = box
+        self.isVertical = isVertical
+        characters = OCRCharacterBoxes(fixed: characterBoxes)
+        self.blockText = blockText
+        self.followingText = followingText
+    }
 
     static func == (lhs: OCRLine, rhs: OCRLine) -> Bool {
         lhs.text == rhs.text && lhs.box == rhs.box
@@ -42,7 +69,7 @@ nonisolated struct OCRLine: Sendable, Hashable {
 /// demand. Vision's objects are immutable once the request has finished;
 /// the lock guards the cache.
 nonisolated final class OCRCharacterBoxes: @unchecked Sendable {
-    private let candidate: VNRecognizedText
+    private let candidate: VNRecognizedText?
     private let lock = NSLock()
     private var cached: [CGRect]?
 
@@ -50,10 +77,16 @@ nonisolated final class OCRCharacterBoxes: @unchecked Sendable {
         self.candidate = candidate
     }
 
+    init(fixed boxes: [CGRect]) {
+        candidate = nil
+        cached = boxes
+    }
+
     func boxes(line: CGRect, vertical: Bool) -> [CGRect] {
         lock.lock()
         defer { lock.unlock() }
         if let cached { return cached }
+        guard let candidate else { return [] }
         let text = candidate.string
         var boxes: [CGRect] = []
         boxes.reserveCapacity(text.count)
@@ -187,14 +220,14 @@ nonisolated enum TextRecognizer {
             }
             guard let start = best else { continue }
             var scanned = ""
-            for character in characters[start...] {
+            for character in characters[start...] + Array(line.followingText) {
                 guard let scalar = character.unicodeScalars.first,
                       !PostTextScanner.isScanBoundary(scalar, scanNonJapanese: true) else { break }
                 scanned.append(character)
                 if scanned.count >= maxLength { break }
             }
             guard !scanned.isEmpty else { continue }
-            return OCRHit(text: scanned, sentence: line.text, characterBox: line.characterBoxes[start])
+            return OCRHit(text: scanned, sentence: line.sentence, characterBox: line.characterBoxes[start])
         }
         return nil
     }

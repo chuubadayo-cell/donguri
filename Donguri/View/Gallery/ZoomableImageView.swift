@@ -24,6 +24,8 @@ struct ZoomableImageView: UIViewRepresentable {
     var onDismiss: (CGRect) -> Bool = { _ in false }
     /// Recognised text to show and make tappable (OCR), or nil.
     var ocrLines: [OCRLine]? = nil
+    /// Outlines the text; off, it's still tappable (the manga reader).
+    var showsTextBoxes = true
     /// A tap on recognised text, with the character's rect in the window.
     var onTextTap: ((OCRHit, CGRect) -> Void)? = nil
 
@@ -37,6 +39,7 @@ struct ZoomableImageView: UIViewRepresentable {
         context.coordinator.parent = self
         view.display(image)
         view.ocrLines = ocrLines
+        view.showsTextBoxes = showsTextBoxes
         return view
     }
 
@@ -47,6 +50,9 @@ struct ZoomableImageView: UIViewRepresentable {
         }
         if view.ocrLines != ocrLines {
             view.ocrLines = ocrLines
+        }
+        if view.showsTextBoxes != showsTextBoxes {
+            view.showsTextBoxes = showsTextBoxes
         }
     }
 
@@ -74,6 +80,10 @@ final class ZoomingScrollView: UIScrollView, UIScrollViewDelegate {
     /// Boxes around recognised text, drawn over the image (so they zoom
     /// with it).
     private let ocrLayer = CAShapeLayer()
+
+    var showsTextBoxes = true {
+        didSet { ocrLayer.isHidden = !showsTextBoxes }
+    }
 
     var ocrLines: [OCRLine]? {
         didSet {

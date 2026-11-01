@@ -1,107 +1,7 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "" : {
-
-    },
-    "（削除されました）" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "(deleted)"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "（削除されました）"
-          }
-        }
-      }
-    },
-    "「全幅で下に表示」では、辞書が画面の下に横幅いっぱいで表示されます。オフにすると、タップした語のそばに表示されます。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "With “Full Width at Bottom”, the dictionary appears across the bottom of the screen. Turn it off to show it next to the word you tapped."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "「全幅で下に表示」では、辞書が画面の下に横幅いっぱいで表示されます。オフにすると、タップした語のそばに表示されます。"
-          }
-        }
-      }
-    },
-    "「名無しを隠す」は、そのスレで最も多い名前（名無しさん、風吹けば名無しなど）を表示しません。トリップ付きの名前は常に表示されます。" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "“Hide Default Names” hides the most common name in each thread (名無しさん, 風吹けば名無し …). Names with a tripcode always show."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "「名無しを隠す」は、そのスレで最も多い名前（名無しさん、風吹けば名無しなど）を表示しません。トリップ付きの名前は常に表示されます。"
-          }
-        }
-      }
-    },
-    "「名無しを隠す」は、そのスレで最も多い名前（名無しさん、風吹けば名無しなど）を表示しません。トリップ付きの名前は常に表示されます。「AAを専用フォントで表示」は、アスキーアートを見つけるとMS Pゴシック互換のフォント（Saitamaar）で画面幅に合わせて表示し、ずれないようにします。" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hide Default Names hides the thread's most common name (名無しさん, 風吹けば名無し, …); names with a tripcode always show. Show ASCII Art in AA Font draws posts that look like ASCII art in an MS P Gothic–compatible font (Saitamaar), scaled to the screen width, so they line up."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "「名無しを隠す」は、そのスレで最も多い名前（名無しさん、風吹けば名無しなど）を表示しません。トリップ付きの名前は常に表示されます。「AAを専用フォントで表示」は、アスキーアートを見つけるとMS Pゴシック互換のフォント（Saitamaar）で画面幅に合わせて表示し、ずれないようにします。"
-          }
-        }
-      }
-    },
-    "「名無しを隠す」は、そのスレで最も多い名前（名無しさん、風吹けば名無しなど）を表示しません。トリップ付きの名前は常に表示されます。「AAを専用フォントで表示」は、アスキーアートを見つけるとMS Pゴシック互換のフォント（Saitamaar）で画面幅に合わせて表示し、ずれないようにします。「リンクを短く表示」は、URLの代わりにサイト名（Imgur、X @ユーザー名、YouTubeなど）を表示します。長押しでコピーする本文には元のURLが残ります。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hide Default Names hides the thread's most common name (名無しさん, 風吹けば名無し, …); names with a tripcode always show. Show ASCII Art in AA Font draws posts that look like ASCII art in an MS P Gothic–compatible font (Saitamaar), scaled to the screen width, so they line up. Shorten Links shows the site's name (Imgur, X @user, YouTube…) instead of the URL; copied post text keeps the full URLs."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "「名無しを隠す」は、そのスレで最も多い名前（名無しさん、風吹けば名無しなど）を表示しません。トリップ付きの名前は常に表示されます。「AAを専用フォントで表示」は、アスキーアートを見つけるとMS Pゴシック互換のフォント（Saitamaar）で画面幅に合わせて表示し、ずれないようにします。「リンクを短く表示」は、URLの代わりにサイト名（Imgur、X @ユーザー名、YouTubeなど）を表示します。長押しでコピーする本文には元のURLが残ります。"
-          }
-        }
-      }
-    },
-    "「近くの画像のみ」は、スクロールに合わせて少し先の画像を読み込みます。「すべて」はスレを開いた時点でスレ内の画像をすべて読み込みます（Wi-Fi時のみ、またはモバイル通信でも）。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "“Nearby Images Only” loads images a little ahead of where you’re scrolling. The “All” options load every image in a thread as soon as you open it (on Wi-Fi only, or on cellular too)."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "「近くの画像のみ」は、スクロールに合わせて少し先の画像を読み込みます。「すべて」はスレを開いた時点でスレ内の画像をすべて読み込みます（Wi-Fi時のみ、またはモバイル通信でも）。"
-          }
-        }
-      }
-    },
+    "" : {},
     "%@ %@" : {
       "localizations" : {
         "en" : {
@@ -178,6 +78,22 @@
         }
       }
     },
+    "%lldページ目" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Page %lld"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lldページ目"
+          }
+        }
+      }
+    },
     "%lld件" : {
       "localizations" : {
         "en" : {
@@ -226,22 +142,6 @@
         }
       }
     },
-    "%lld件を写真に保存・%lld件は失敗しました" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Saved %1$lld to Photos · %2$lld failed"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$lld件を写真に保存・%2$lld件は失敗しました"
-          }
-        }
-      }
-    },
     "%lld件を写真に保存しました" : {
       "localizations" : {
         "en" : {
@@ -254,6 +154,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld件を写真に保存しました"
+          }
+        }
+      }
+    },
+    "%lld件を写真に保存・%lld件は失敗しました" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saved %1$lld to Photos · %2$lld failed"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld件を写真に保存・%2$lld件は失敗しました"
           }
         }
       }
@@ -303,6 +219,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld回視聴"
+          }
+        }
+      }
+    },
+    "%lld巻" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld volumes"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld巻"
+          }
+        }
+      }
+    },
+    "%lld巻を読み込みました" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Imported %lld volumes"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld巻を読み込みました"
           }
         }
       }
@@ -371,18 +319,18 @@
         }
       }
     },
-    ">>%lld にジャンプ" : {
+    "%lld章" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Jump to >>%lld"
+            "value" : "%lld chapters"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : ">>%lld にジャンプ"
+            "value" : "%lld章"
           }
         }
       }
@@ -419,23 +367,6 @@
         }
       }
     },
-    "５ちゃんねる" : {
-      "comment" : "App's board-list title.",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "5channel"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "５ちゃんねる"
-          }
-        }
-      }
-    },
     "5ちゃんねるの投稿、YouTubeのコメント、Xの投稿やページから追加したカードの画像フィールドに、その投稿の画像を入れます。" : {
       "localizations" : {
         "en" : {
@@ -468,6 +399,22 @@
         }
       }
     },
+    ">>%lld にジャンプ" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jump to >>%lld"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : ">>%lld にジャンプ"
+          }
+        }
+      }
+    },
     "AAを専用フォントで表示" : {
       "localizations" : {
         "en" : {
@@ -480,6 +427,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "AAを専用フォントで表示"
+          }
+        }
+      }
+    },
+    "Aidoku のソースリストのURL" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The URL of an Aidoku source list"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aidoku のソースリストのURL"
+          }
+        }
+      }
+    },
+    "Aidoku のソースリストを追加して、そこからソースをインストールしてください。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add an Aidoku source list, then install sources from it."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aidoku のソースリストを追加して、そこからソースをインストールしてください。"
           }
         }
       }
@@ -556,22 +535,6 @@
         }
       }
     },
-    "dat落ち" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Archived"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "dat落ち"
-          }
-        }
-      }
-    },
     "Failed to decode Anki response:\n\n%@" : {
       "localizations" : {
         "ja" : {
@@ -592,9 +555,7 @@
         }
       }
     },
-    "GIF" : {
-
-    },
+    "GIF" : {},
     "Invalid URL specified" : {
       "localizations" : {
         "ja" : {
@@ -715,9 +676,7 @@
         }
       }
     },
-    "OK" : {
-
-    },
+    "OK" : {},
     "Safariで開く" : {
       "localizations" : {
         "en" : {
@@ -825,9 +784,6 @@
         }
       }
     },
-    "X・YouTube・ウェブのリンクをいろはで開きます。共有シートのショートカットから使えます。" : {
-
-    },
     "Xで検索" : {
       "localizations" : {
         "en" : {
@@ -844,9 +800,23 @@
         }
       }
     },
-    "YouTube" : {
-
+    "X・YouTube・ウェブのリンクをいろはで開きます。共有シートのショートカットから使えます。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opens X, YouTube and web links in いろは. Use it from a shortcut in the share sheet."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "X・YouTube・ウェブのリンクをいろはで開きます。共有シートのショートカットから使えます。"
+          }
+        }
+      }
     },
+    "YouTube" : {},
     "YouTubeでは字幕(CC)をオンにすると、字幕をタップして調べたり、Ankiに追加したりできます。" : {
       "localizations" : {
         "en" : {
@@ -987,6 +957,939 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "YouTubeを検索"
+          }
+        }
+      }
+    },
+    "dat落ち" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archived"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dat落ち"
+          }
+        }
+      }
+    },
+    "mokuro で処理したフォルダ（.mokuro と画像フォルダ）か、それを入れた zip / cbz を読み込めます。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import a folder processed by mokuro (the .mokuro file and its image folder), or a zip / cbz containing one."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mokuro で処理したフォルダ（.mokuro と画像フォルダ）か、それを入れた zip / cbz を読み込めます。"
+          }
+        }
+      }
+    },
+    "mokuro の巻が見つかりませんでした。.mokuro ファイルと同じ名前の画像フォルダが必要です。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No mokuro volumes found. Each .mokuro file needs an image folder with the same name."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mokuro の巻が見つかりませんでした。.mokuro ファイルと同じ名前の画像フォルダが必要です。"
+          }
+        }
+      }
+    },
+    "mokuro の巻もフォルダも見つかりませんでした" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No mokuro volumes or folders found"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mokuro の巻もフォルダも見つかりませんでした"
+          }
+        }
+      }
+    },
+    "mokuro の巻（.mokuro と画像フォルダ）を公開しているフォルダのURL。ディレクトリ一覧のページか .mokuro ファイルを指定できます。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The URL of a folder serving mokuro volumes (.mokuro files and their image folders): a directory listing page or a .mokuro file."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mokuro の巻（.mokuro と画像フォルダ）を公開しているフォルダのURL。ディレクトリ一覧のページか .mokuro ファイルを指定できます。"
+          }
+        }
+      }
+    },
+    "「全幅で下に表示」では、辞書が画面の下に横幅いっぱいで表示されます。オフにすると、タップした語のそばに表示されます。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "With “Full Width at Bottom”, the dictionary appears across the bottom of the screen. Turn it off to show it next to the word you tapped."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「全幅で下に表示」では、辞書が画面の下に横幅いっぱいで表示されます。オフにすると、タップした語のそばに表示されます。"
+          }
+        }
+      }
+    },
+    "「名無しを隠す」は、そのスレで最も多い名前（名無しさん、風吹けば名無しなど）を表示しません。トリップ付きの名前は常に表示されます。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“Hide Default Names” hides the most common name in each thread (名無しさん, 風吹けば名無し …). Names with a tripcode always show."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「名無しを隠す」は、そのスレで最も多い名前（名無しさん、風吹けば名無しなど）を表示しません。トリップ付きの名前は常に表示されます。"
+          }
+        }
+      }
+    },
+    "「名無しを隠す」は、そのスレで最も多い名前（名無しさん、風吹けば名無しなど）を表示しません。トリップ付きの名前は常に表示されます。「AAを専用フォントで表示」は、アスキーアートを見つけるとMS Pゴシック互換のフォント（Saitamaar）で画面幅に合わせて表示し、ずれないようにします。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide Default Names hides the thread's most common name (名無しさん, 風吹けば名無し, …); names with a tripcode always show. Show ASCII Art in AA Font draws posts that look like ASCII art in an MS P Gothic–compatible font (Saitamaar), scaled to the screen width, so they line up."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「名無しを隠す」は、そのスレで最も多い名前（名無しさん、風吹けば名無しなど）を表示しません。トリップ付きの名前は常に表示されます。「AAを専用フォントで表示」は、アスキーアートを見つけるとMS Pゴシック互換のフォント（Saitamaar）で画面幅に合わせて表示し、ずれないようにします。"
+          }
+        }
+      }
+    },
+    "「名無しを隠す」は、そのスレで最も多い名前（名無しさん、風吹けば名無しなど）を表示しません。トリップ付きの名前は常に表示されます。「AAを専用フォントで表示」は、アスキーアートを見つけるとMS Pゴシック互換のフォント（Saitamaar）で画面幅に合わせて表示し、ずれないようにします。「リンクを短く表示」は、URLの代わりにサイト名（Imgur、X @ユーザー名、YouTubeなど）を表示します。長押しでコピーする本文には元のURLが残ります。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide Default Names hides the thread's most common name (名無しさん, 風吹けば名無し, …); names with a tripcode always show. Show ASCII Art in AA Font draws posts that look like ASCII art in an MS P Gothic–compatible font (Saitamaar), scaled to the screen width, so they line up. Shorten Links shows the site's name (Imgur, X @user, YouTube…) instead of the URL; copied post text keeps the full URLs."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「名無しを隠す」は、そのスレで最も多い名前（名無しさん、風吹けば名無しなど）を表示しません。トリップ付きの名前は常に表示されます。「AAを専用フォントで表示」は、アスキーアートを見つけるとMS Pゴシック互換のフォント（Saitamaar）で画面幅に合わせて表示し、ずれないようにします。「リンクを短く表示」は、URLの代わりにサイト名（Imgur、X @ユーザー名、YouTubeなど）を表示します。長押しでコピーする本文には元のURLが残ります。"
+          }
+        }
+      }
+    },
+    "「近くの画像のみ」は、スクロールに合わせて少し先の画像を読み込みます。「すべて」はスレを開いた時点でスレ内の画像をすべて読み込みます（Wi-Fi時のみ、またはモバイル通信でも）。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“Nearby Images Only” loads images a little ahead of where you’re scrolling. The “All” options load every image in a thread as soon as you open it (on Wi-Fi only, or on cellular too)."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「近くの画像のみ」は、スクロールに合わせて少し先の画像を読み込みます。「すべて」はスレを開いた時点でスレ内の画像をすべて読み込みます（Wi-Fi時のみ、またはモバイル通信でも）。"
+          }
+        }
+      }
+    },
+    "あぼーん" : {
+      "comment" : "Placeholder shown in place of a post hidden by an NG rule. 5ch slang.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filtered"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "あぼーん"
+          }
+        }
+      }
+    },
+    "いろはで開く" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open in いろは"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "いろはで開く"
+          }
+        }
+      }
+    },
+    "お気に入り" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Favorites"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "お気に入り"
+          }
+        }
+      }
+    },
+    "お気に入り、閲覧履歴、読んだ位置、NG設定、開いているタブ、テーマ、外観や辞書ポップアップの設定などを1つのファイルに保存します。「ファイル」アプリやiCloud Driveに保存しておくと、再インストール後に復元できます。オフライン保存したスレ、画像、辞書は含まれません。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saves your favorites, history, read positions, NG rules, open tabs, themes, appearance and dictionary popup settings to one file. Keep it in the Files app or iCloud Drive to restore after reinstalling. Offline threads, images and dictionaries aren't included."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "お気に入り、閲覧履歴、読んだ位置、NG設定、開いているタブ、テーマ、外観や辞書ポップアップの設定などを1つのファイルに保存します。「ファイル」アプリやiCloud Driveに保存しておくと、再インストール後に復元できます。オフライン保存したスレ、画像、辞書は含まれません。"
+          }
+        }
+      }
+    },
+    "お気に入りから削除" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove from Favorites"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "お気に入りから削除"
+          }
+        }
+      }
+    },
+    "お気に入りに新着があります" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New posts in your favorites"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "お気に入りに新着があります"
+          }
+        }
+      }
+    },
+    "お気に入りに登録したスレに新しいレスがつくと通知します。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Get a notification when a favorite thread has new posts."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "お気に入りに登録したスレに新しいレスがつくと通知します。"
+          }
+        }
+      }
+    },
+    "お気に入りに追加" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add to Favorites"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "お気に入りに追加"
+          }
+        }
+      }
+    },
+    "お気に入りのスレ" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Favorite Threads"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "お気に入りのスレ"
+          }
+        }
+      }
+    },
+    "お気に入りのスレが1000に達するか落ちたあと、同じ板に続きのスレが立つと通知します。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Get a notification when a favorite thread has filled up or dropped off and its next thread appears on the same board."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "お気に入りのスレが1000に達するか落ちたあと、同じ板に続きのスレが立つと通知します。"
+          }
+        }
+      }
+    },
+    "お気に入りのスレはありません" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Favorite Threads"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "お気に入りのスレはありません"
+          }
+        }
+      }
+    },
+    "お気に入りの板" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Favorite Boards"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "お気に入りの板"
+          }
+        }
+      }
+    },
+    "お気に入りの板と最近見た板のスレ一覧から検索します。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Searches the thread lists of your favorite and recently visited boards."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "お気に入りの板と最近見た板のスレ一覧から検索します。"
+          }
+        }
+      }
+    },
+    "お気に入りスレに新着があると、このように通知されます。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This is how you'll be notified about new posts in favorite threads."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "お気に入りスレに新着があると、このように通知されます。"
+          }
+        }
+      }
+    },
+    "お気に入りスレの新着" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New Posts in Favorites"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "お気に入りスレの新着"
+          }
+        }
+      }
+    },
+    "お気に入り・最近の板" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "My Boards"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "お気に入り・最近の板"
+          }
+        }
+      }
+    },
+    "ここから再生" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Play from Here"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ここから再生"
+          }
+        }
+      }
+    },
+    "ここまで読んだ" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Read up to here"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ここまで読んだ"
+          }
+        }
+      }
+    },
+    "このIDをNGにする" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filter this ID"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このIDをNGにする"
+          }
+        }
+      }
+    },
+    "このソースは古い形式で、対応していません" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This source uses Aidoku's old format, which isn't supported"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このソースは古い形式で、対応していません"
+          }
+        }
+      }
+    },
+    "このタブを閉じる" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Close This Tab"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このタブを閉じる"
+          }
+        }
+      }
+    },
+    "このファイルは読み込めませんでした" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This file couldn't be read"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このファイルは読み込めませんでした"
+          }
+        }
+      }
+    },
+    "この動画の字幕は一度に読み込めませんでした。字幕(CC)をオンにして再生すると、表示された字幕がここに記録されます。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This video's subtitles couldn't be loaded all at once. Turn captions (CC) on and play it, and the subtitles shown are recorded here."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この動画の字幕は一度に読み込めませんでした。字幕(CC)をオンにして再生すると、表示された字幕がここに記録されます。"
+          }
+        }
+      }
+    },
+    "この動画はアプリ内で再生できません" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This video can't be played in the app"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この動画はアプリ内で再生できません"
+          }
+        }
+      }
+    },
+    "この名前をNGにする" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filter this name"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この名前をNGにする"
+          }
+        }
+      }
+    },
+    "この字幕をもう一度" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Replay This Line"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この字幕をもう一度"
+          }
+        }
+      }
+    },
+    "この端末" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "On This Device"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この端末"
+          }
+        }
+      }
+    },
+    "さらに返信を表示" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "More replies"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "さらに返信を表示"
+          }
+        }
+      }
+    },
+    "しない" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Off"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "しない"
+          }
+        }
+      }
+    },
+    "しばらくお待ちください..." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Please wait…"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "しばらくお待ちください..."
+          }
+        }
+      }
+    },
+    "すべてのタブを閉じますか？" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Close all tabs?"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "すべてのタブを閉じますか？"
+          }
+        }
+      }
+    },
+    "すべてのレス" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All Posts"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "すべてのレス"
+          }
+        }
+      }
+    },
+    "すべて再表示" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unhide All"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "すべて再表示"
+          }
+        }
+      }
+    },
+    "すべて写真に保存（%lld件）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save All to Photos (%lld)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "すべて写真に保存（%lld件）"
+          }
+        }
+      }
+    },
+    "すべて初期設定に戻す" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reset All to Defaults"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "すべて初期設定に戻す"
+          }
+        }
+      }
+    },
+    "すべて消去" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear All"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "すべて消去"
+          }
+        }
+      }
+    },
+    "すべて閉じる" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Close All"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "すべて閉じる"
+          }
+        }
+      }
+    },
+    "その他のフォント" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Other Fonts"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "その他のフォント"
+          }
+        }
+      }
+    },
+    "なし" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "None"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "なし"
+          }
+        }
+      }
+    },
+    "ふたば" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Futaba"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ふたば"
+          }
+        }
+      }
+    },
+    "ほかのテーマの色をコピー" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy Colors from Another Theme"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ほかのテーマの色をコピー"
+          }
+        }
+      }
+    },
+    "ぼかした字幕はタップすると読めます。聞き取りの練習に。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tap a blurred line to read it. Good for listening practice."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ぼかした字幕はタップすると読めます。聞き取りの練習に。"
+          }
+        }
+      }
+    },
+    "まだありません。辞書の＋でカードを作ると、ここに並びます。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nothing yet. Cards you make with the dictionary's + show up here."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "まだありません。辞書の＋でカードを作ると、ここに並びます。"
+          }
+        }
+      }
+    },
+    "まだ字幕がありません" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No subtitles yet"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "まだ字幕がありません"
+          }
+        }
+      }
+    },
+    "やや大" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Larger"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "やや大"
+          }
+        }
+      }
+    },
+    "やや小" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Smaller"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "やや小"
+          }
+        }
+      }
+    },
+    "ゆっくり順" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slowest"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ゆっくり順"
+          }
+        }
+      }
+    },
+    "ゆったり" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comfortable"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ゆったり"
           }
         }
       }
@@ -1135,25 +2038,21 @@
         }
       }
     },
-    "あぼーん" : {
-      "comment" : "Placeholder shown in place of a post hidden by an NG rule. 5ch slang.",
+    "インストール済み" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Filtered"
+            "value" : "Installed"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "あぼーん"
+            "value" : "インストール済み"
           }
         }
       }
-    },
-    "いろはで開く" : {
-
     },
     "インターネットに接続されていません" : {
       "localizations" : {
@@ -1187,34 +2086,18 @@
         }
       }
     },
-    "エラー：スレや板情報がありません" : {
+    "ウェブのライブラリを追加" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Error: missing thread or board information"
+            "value" : "Add Web Library"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "エラー：スレや板情報がありません"
-          }
-        }
-      }
-    },
-    "エラー：板情報がありません" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Error: missing board information"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "エラー：板情報がありません"
+            "value" : "ウェブのライブラリを追加"
           }
         }
       }
@@ -1249,6 +2132,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "エラーが発生しました: %@"
+          }
+        }
+      }
+    },
+    "エラー：スレや板情報がありません" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Error: missing thread or board information"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "エラー：スレや板情報がありません"
+          }
+        }
+      }
+    },
+    "エラー：板情報がありません" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Error: missing board information"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "エラー：板情報がありません"
           }
         }
       }
@@ -1414,247 +2329,6 @@
         }
       }
     },
-    "お気に入り" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Favorites"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "お気に入り"
-          }
-        }
-      }
-    },
-    "お気に入り・最近の板" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "My Boards"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "お気に入り・最近の板"
-          }
-        }
-      }
-    },
-    "お気に入り、閲覧履歴、読んだ位置、NG設定、開いているタブ、テーマ、外観や辞書ポップアップの設定などを1つのファイルに保存します。「ファイル」アプリやiCloud Driveに保存しておくと、再インストール後に復元できます。オフライン保存したスレ、画像、辞書は含まれません。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Saves your favorites, history, read positions, NG rules, open tabs, themes, appearance and dictionary popup settings to one file. Keep it in the Files app or iCloud Drive to restore after reinstalling. Offline threads, images and dictionaries aren't included."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "お気に入り、閲覧履歴、読んだ位置、NG設定、開いているタブ、テーマ、外観や辞書ポップアップの設定などを1つのファイルに保存します。「ファイル」アプリやiCloud Driveに保存しておくと、再インストール後に復元できます。オフライン保存したスレ、画像、辞書は含まれません。"
-          }
-        }
-      }
-    },
-    "お気に入りから削除" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Remove from Favorites"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "お気に入りから削除"
-          }
-        }
-      }
-    },
-    "お気に入りスレに新着があると、このように通知されます。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This is how you'll be notified about new posts in favorite threads."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "お気に入りスレに新着があると、このように通知されます。"
-          }
-        }
-      }
-    },
-    "お気に入りスレの新着" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "New Posts in Favorites"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "お気に入りスレの新着"
-          }
-        }
-      }
-    },
-    "お気に入りに新着があります" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "New posts in your favorites"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "お気に入りに新着があります"
-          }
-        }
-      }
-    },
-    "お気に入りに登録したスレに新しいレスがつくと通知します。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Get a notification when a favorite thread has new posts."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "お気に入りに登録したスレに新しいレスがつくと通知します。"
-          }
-        }
-      }
-    },
-    "お気に入りに追加" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Add to Favorites"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "お気に入りに追加"
-          }
-        }
-      }
-    },
-    "お気に入りのスレ" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Favorite Threads"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "お気に入りのスレ"
-          }
-        }
-      }
-    },
-    "お気に入りのスレが1000に達するか落ちたあと、同じ板に続きのスレが立つと通知します。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Get a notification when a favorite thread has filled up or dropped off and its next thread appears on the same board."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "お気に入りのスレが1000に達するか落ちたあと、同じ板に続きのスレが立つと通知します。"
-          }
-        }
-      }
-    },
-    "お気に入りのスレはありません" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No Favorite Threads"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "お気に入りのスレはありません"
-          }
-        }
-      }
-    },
-    "お気に入りの板" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Favorite Boards"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "お気に入りの板"
-          }
-        }
-      }
-    },
-    "お気に入りの板と最近見た板のスレ一覧から検索します。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Searches the thread lists of your favorite and recently visited boards."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "お気に入りの板と最近見た板のスレ一覧から検索します。"
-          }
-        }
-      }
-    },
-    "カード用に録音中…" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Recording for the card…"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "カード用に録音中…"
-          }
-        }
-      }
-    },
     "カスタムテーマ" : {
       "localizations" : {
         "en" : {
@@ -1687,18 +2361,18 @@
         }
       }
     },
-    "キーワード" : {
+    "カード用に録音中…" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Keywords"
+            "value" : "Recording for the card…"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "キーワード"
+            "value" : "カード用に録音中…"
           }
         }
       }
@@ -1751,22 +2425,6 @@
         }
       }
     },
-    "ギャラリー（%lld件）" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Gallery (%lld)"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ギャラリー（%lld件）"
-          }
-        }
-      }
-    },
     "キャンセル" : {
       "localizations" : {
         "en" : {
@@ -1799,6 +2457,38 @@
         }
       }
     },
+    "キーワード" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keywords"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "キーワード"
+          }
+        }
+      }
+    },
+    "ギャラリー（%lld件）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gallery (%lld)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ギャラリー（%lld件）"
+          }
+        }
+      }
+    },
     "グリッド表示" : {
       "localizations" : {
         "en" : {
@@ -1811,151 +2501,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "グリッド表示"
-          }
-        }
-      }
-    },
-    "ここから再生" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Play from Here"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ここから再生"
-          }
-        }
-      }
-    },
-    "ここまで読んだ" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Read up to here"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ここまで読んだ"
-          }
-        }
-      }
-    },
-    "このIDをNGにする" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Filter this ID"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "このIDをNGにする"
-          }
-        }
-      }
-    },
-    "このタブを閉じる" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Close This Tab"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "このタブを閉じる"
-          }
-        }
-      }
-    },
-    "このファイルは読み込めませんでした" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This file couldn't be read"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "このファイルは読み込めませんでした"
-          }
-        }
-      }
-    },
-    "この動画の字幕は一度に読み込めませんでした。字幕(CC)をオンにして再生すると、表示された字幕がここに記録されます。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This video's subtitles couldn't be loaded all at once. Turn captions (CC) on and play it, and the subtitles shown are recorded here."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "この動画の字幕は一度に読み込めませんでした。字幕(CC)をオンにして再生すると、表示された字幕がここに記録されます。"
-          }
-        }
-      }
-    },
-    "この動画はアプリ内で再生できません" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This video can't be played in the app"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "この動画はアプリ内で再生できません"
-          }
-        }
-      }
-    },
-    "この名前をNGにする" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Filter this name"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "この名前をNGにする"
-          }
-        }
-      }
-    },
-    "この字幕をもう一度" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Replay This Line"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "この字幕をもう一度"
           }
         }
       }
@@ -2088,38 +2633,6 @@
         }
       }
     },
-    "サーバーから正しい応答がありませんでした。混雑しているか、一時的に止まっている可能性があります。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The server didn't respond properly. It may be busy or temporarily down."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "サーバーから正しい応答がありませんでした。混雑しているか、一時的に止まっている可能性があります。"
-          }
-        }
-      }
-    },
-    "サーバーに接続できませんでした" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Couldn't connect to the server"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "サーバーに接続できませんでした"
-          }
-        }
-      }
-    },
     "サムネイルの位置" : {
       "localizations" : {
         "en" : {
@@ -2152,34 +2665,34 @@
         }
       }
     },
-    "さらに返信を表示" : {
+    "サーバーから正しい応答がありませんでした。混雑しているか、一時的に止まっている可能性があります。" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "More replies"
+            "value" : "The server didn't respond properly. It may be busy or temporarily down."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "さらに返信を表示"
+            "value" : "サーバーから正しい応答がありませんでした。混雑しているか、一時的に止まっている可能性があります。"
           }
         }
       }
     },
-    "システム（標準）" : {
+    "サーバーに接続できませんでした" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "System (Default)"
+            "value" : "Couldn't connect to the server"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "システム（標準）"
+            "value" : "サーバーに接続できませんでした"
           }
         }
       }
@@ -2200,34 +2713,18 @@
         }
       }
     },
-    "しない" : {
+    "システム（標準）" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Off"
+            "value" : "System (Default)"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "しない"
-          }
-        }
-      }
-    },
-    "しばらくお待ちください..." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Please wait…"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "しばらくお待ちください..."
+            "value" : "システム（標準）"
           }
         }
       }
@@ -2296,118 +2793,6 @@
         }
       }
     },
-    "すべてのタブを閉じますか？" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Close all tabs?"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "すべてのタブを閉じますか？"
-          }
-        }
-      }
-    },
-    "すべてのレス" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "All Posts"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "すべてのレス"
-          }
-        }
-      }
-    },
-    "すべて再表示" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Unhide All"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "すべて再表示"
-          }
-        }
-      }
-    },
-    "すべて写真に保存（%lld件）" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Save All to Photos (%lld)"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "すべて写真に保存（%lld件）"
-          }
-        }
-      }
-    },
-    "すべて初期設定に戻す" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Reset All to Defaults"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "すべて初期設定に戻す"
-          }
-        }
-      }
-    },
-    "すべて消去" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Clear All"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "すべて消去"
-          }
-        }
-      }
-    },
-    "すべて閉じる" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Close All"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "すべて閉じる"
-          }
-        }
-      }
-    },
     "スレが見つかりませんでした（削除されたか、dat落ちしています）" : {
       "localizations" : {
         "en" : {
@@ -2420,86 +2805,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "スレが見つかりませんでした（削除されたか、dat落ちしています）"
-          }
-        }
-      }
-    },
-    "スレタイ" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Thread Titles"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "スレタイ"
-          }
-        }
-      }
-    },
-    "スレタイ・板名で絞り込み" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Filter by title or board"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "スレタイ・板名で絞り込み"
-          }
-        }
-      }
-    },
-    "スレタイを検索" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Search thread titles"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "スレタイを検索"
-          }
-        }
-      }
-    },
-    "スレタイ検索" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Search thread titles"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "スレタイ検索"
-          }
-        }
-      }
-    },
-    "スレタイ検索（全板）" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Search All Boards"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "スレタイ検索（全板）"
           }
         }
       }
@@ -2600,6 +2905,86 @@
         }
       }
     },
+    "スレタイ" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Thread Titles"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "スレタイ"
+          }
+        }
+      }
+    },
+    "スレタイを検索" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search thread titles"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "スレタイを検索"
+          }
+        }
+      }
+    },
+    "スレタイ・板名で絞り込み" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filter by title or board"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "スレタイ・板名で絞り込み"
+          }
+        }
+      }
+    },
+    "スレタイ検索" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search thread titles"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "スレタイ検索"
+          }
+        }
+      }
+    },
+    "スレタイ検索（全板）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search All Boards"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "スレタイ検索（全板）"
+          }
+        }
+      }
+    },
     "スレ内を検索" : {
       "localizations" : {
         "en" : {
@@ -2664,98 +3049,146 @@
         }
       }
     },
-    "その他のフォント" : {
+    "ソース" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Other Fonts"
+            "value" : "Sources"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "その他のフォント"
+            "value" : "ソース"
           }
         }
       }
     },
-    "ダーク" : {
+    "ソースがありません" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dark"
+            "value" : "No Sources"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ダーク"
+            "value" : "ソースがありません"
           }
         }
       }
     },
-    "ダークセピア" : {
+    "ソースがインストールされていません" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dark Sepia"
+            "value" : "The source isn't installed"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ダークセピア"
+            "value" : "ソースがインストールされていません"
           }
         }
       }
     },
-    "ダークテーマ" : {
+    "ソースで見つけたマンガを保存すると、ここに並びます。" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dark Theme"
+            "value" : "Manga you save from sources appear here."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ダークテーマ"
+            "value" : "ソースで見つけたマンガを保存すると、ここに並びます。"
           }
         }
       }
     },
-    "ダークテーマでは、メニューやキーボードなどシステムの部品も暗くなります。" : {
+    "ソースのファイルが読めませんでした" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dark themes also make system parts such as menus and the keyboard dark."
+            "value" : "Couldn't read the source's package"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ダークテーマでは、メニューやキーボードなどシステムの部品も暗くなります。"
+            "value" : "ソースのファイルが読めませんでした"
           }
         }
       }
     },
-    "ダーク時のテーマ" : {
+    "ソースを管理" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dark Mode Theme"
+            "value" : "Manage Sources"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ダーク時のテーマ"
+            "value" : "ソースを管理"
+          }
+        }
+      }
+    },
+    "ソースリスト" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Source Lists"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ソースリスト"
+          }
+        }
+      }
+    },
+    "ソースリストを読み込めませんでした" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't load the source list"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ソースリストを読み込めませんでした"
+          }
+        }
+      }
+    },
+    "ソースリストを追加" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add Source List"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ソースリストを追加"
           }
         }
       }
@@ -2856,6 +3289,86 @@
         }
       }
     },
+    "ダーク" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dark"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ダーク"
+          }
+        }
+      }
+    },
+    "ダークセピア" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dark Sepia"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ダークセピア"
+          }
+        }
+      }
+    },
+    "ダークテーマ" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dark Theme"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ダークテーマ"
+          }
+        }
+      }
+    },
+    "ダークテーマでは、メニューやキーボードなどシステムの部品も暗くなります。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dark themes also make system parts such as menus and the keyboard dark."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ダークテーマでは、メニューやキーボードなどシステムの部品も暗くなります。"
+          }
+        }
+      }
+    },
+    "ダーク時のテーマ" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dark Mode Theme"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ダーク時のテーマ"
+          }
+        }
+      }
+    },
     "チャンネルを見る" : {
       "localizations" : {
         "en" : {
@@ -2900,6 +3413,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "ツリー表示"
+          }
+        }
+      }
+    },
+    "テスト通知を送る" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Send Test Notification"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "テスト通知を送る"
           }
         }
       }
@@ -2968,38 +3497,6 @@
         }
       }
     },
-    "テスト通知を送る" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Send Test Notification"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "テスト通知を送る"
-          }
-        }
-      }
-    },
-    "なし" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "None"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "なし"
-          }
-        }
-      }
-    },
     "ニコニコ動画" : {
       "localizations" : {
         "en" : {
@@ -3028,22 +3525,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "ネイビー"
-          }
-        }
-      }
-    },
-    "バー・カード" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bars & Cards"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "バー・カード"
           }
         }
       }
@@ -3160,6 +3641,38 @@
         }
       }
     },
+    "バージョン %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Version %lld"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "バージョン %lld"
+          }
+        }
+      }
+    },
+    "バー・カード" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bars & Cards"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "バー・カード"
+          }
+        }
+      }
+    },
     "ヒラギノ角ゴシック（標準）" : {
       "localizations" : {
         "en" : {
@@ -3172,6 +3685,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "ヒラギノ角ゴシック（標準）"
+          }
+        }
+      }
+    },
+    "ファイルから読み込む" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import from Files"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ファイルから読み込む"
           }
         }
       }
@@ -3237,22 +3766,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "フォントを検索"
-          }
-        }
-      }
-    },
-    "ふたば" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Futaba"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ふたば"
           }
         }
       }
@@ -3369,6 +3882,22 @@
         }
       }
     },
+    "ページがありません" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No pages"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ページがありません"
+          }
+        }
+      }
+    },
     "ページを開いて、アドレスバーの☆をタップすると追加できます。" : {
       "localizations" : {
         "en" : {
@@ -3397,38 +3926,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "ホーム"
-          }
-        }
-      }
-    },
-    "ぼかした字幕はタップすると読めます。聞き取りの練習に。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tap a blurred line to read it. Good for listening practice."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ぼかした字幕はタップすると読めます。聞き取りの練習に。"
-          }
-        }
-      }
-    },
-    "ほかのテーマの色をコピー" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Copy Colors from Another Theme"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ほかのテーマの色をコピー"
           }
         }
       }
@@ -3465,34 +3962,18 @@
         }
       }
     },
-    "まだありません。辞書の＋でカードを作ると、ここに並びます。" : {
+    "マンガ" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nothing yet. Cards you make with the dictionary's + show up here."
+            "value" : "Manga"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "まだありません。辞書の＋でカードを作ると、ここに並びます。"
-          }
-        }
-      }
-    },
-    "まだ字幕がありません" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No subtitles yet"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "まだ字幕がありません"
+            "value" : "マンガ"
           }
         }
       }
@@ -3525,70 +4006,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "メニュー、一覧、ボタンなどの文字です。"
-          }
-        }
-      }
-    },
-    "やや大" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Larger"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "やや大"
-          }
-        }
-      }
-    },
-    "やや小" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Smaller"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "やや小"
-          }
-        }
-      }
-    },
-    "ゆっくり順" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Slowest"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ゆっくり順"
-          }
-        }
-      }
-    },
-    "ゆったり" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Comfortable"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ゆったり"
           }
         }
       }
@@ -3642,7 +4059,6 @@
       }
     },
     "ライブラリ" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3654,6 +4070,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "ライブラリ"
+          }
+        }
+      }
+    },
+    "ライブラリから外す" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove from Library"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ライブラリから外す"
+          }
+        }
+      }
+    },
+    "ライブラリに保存" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save to Library"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ライブラリに保存"
+          }
+        }
+      }
+    },
+    "ライブラリは空です" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Library Is Empty"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ライブラリは空です"
           }
         }
       }
@@ -4266,6 +4730,22 @@
         }
       }
     },
+    "入手" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Get"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "入手"
+          }
+        }
+      }
+    },
     "全幅で下に表示" : {
       "localizations" : {
         "en" : {
@@ -4474,134 +4954,6 @@
         }
       }
     },
-    "最大" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Largest"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "最大"
-          }
-        }
-      }
-    },
-    "最小" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Smallest"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "最小"
-          }
-        }
-      }
-    },
-    "最小化" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Minimize"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "最小化"
-          }
-        }
-      }
-    },
-    "最新の書込順" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Latest Post"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "最新の書込順"
-          }
-        }
-      }
-    },
-    "最近Ankiに追加した語" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Recently added to Anki"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "最近Ankiに追加した語"
-          }
-        }
-      }
-    },
-    "最近の14日間・%@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Last 14 days · %@"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "最近の14日間・%@"
-          }
-        }
-      }
-    },
-    "最近の検索" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Recent Searches"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "最近の検索"
-          }
-        }
-      }
-    },
-    "最近見た板" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Recent Boards"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "最近見た板"
-          }
-        }
-      }
-    },
     "写真から読み取る" : {
       "localizations" : {
         "en" : {
@@ -4726,6 +5078,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "前の字幕"
+          }
+        }
+      }
+    },
+    "前の章" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Previous Chapter"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "前の章"
           }
         }
       }
@@ -5100,6 +5468,22 @@
         }
       }
     },
+    "字幕から追加したカードには、その字幕の時間（＋余白）の音声と、スクリーンショットまたはGIFが付きます。Ankiの設定で、音声は {sentence-audio}、画像は {book-cover} の欄に入ります。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cards added from subtitles get the line's audio (plus padding) and a screenshot or GIF. In the Anki settings, the audio goes in the {sentence-audio} field and the picture in {book-cover}."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "字幕から追加したカードには、その字幕の時間（＋余白）の音声と、スクリーンショットまたはGIFが付きます。Ankiの設定で、音声は {sentence-audio}、画像は {book-cover} の欄に入ります。"
+          }
+        }
+      }
+    },
     "字幕がありません" : {
       "localizations" : {
         "en" : {
@@ -5132,22 +5516,6 @@
         }
       }
     },
-    "字幕から追加したカードには、その字幕の時間（＋余白）の音声と、スクリーンショットまたはGIFが付きます。Ankiの設定で、音声は {sentence-audio}、画像は {book-cover} の欄に入ります。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cards added from subtitles get the line's audio (plus padding) and a screenshot or GIF. In the Anki settings, the audio goes in the {sentence-audio} field and the picture in {book-cover}."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "字幕から追加したカードには、その字幕の時間（＋余白）の音声と、スクリーンショットまたはGIFが付きます。Ankiの設定で、音声は {sentence-audio}、画像は {book-cover} の欄に入ります。"
-          }
-        }
-      }
-    },
     "字幕ごとに一時停止" : {
       "localizations" : {
         "en" : {
@@ -5160,22 +5528,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "字幕ごとに一時停止"
-          }
-        }
-      }
-    },
-    "字幕トラック" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Subtitle Track"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "字幕トラック"
           }
         }
       }
@@ -5260,22 +5612,6 @@
         }
       }
     },
-    "字幕バーを表示" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Show Subtitle Bar"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "字幕バーを表示"
-          }
-        }
-      }
-    },
     "字幕は非表示" : {
       "localizations" : {
         "en" : {
@@ -5304,38 +5640,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "字幕は非表示です"
-          }
-        }
-      }
-    },
-    "字幕ファイルを読み込む" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Load Subtitle File"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "字幕ファイルを読み込む"
-          }
-        }
-      }
-    },
-    "字幕ファイルを読み込めませんでした" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Couldn't read the subtitle file"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "字幕ファイルを読み込めませんでした"
           }
         }
       }
@@ -5436,6 +5740,70 @@
         }
       }
     },
+    "字幕トラック" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Subtitle Track"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "字幕トラック"
+          }
+        }
+      }
+    },
+    "字幕バーを表示" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show Subtitle Bar"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "字幕バーを表示"
+          }
+        }
+      }
+    },
+    "字幕ファイルを読み込む" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Load Subtitle File"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "字幕ファイルを読み込む"
+          }
+        }
+      }
+    },
+    "字幕ファイルを読み込めませんでした" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't read the subtitle file"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "字幕ファイルを読み込めませんでした"
+          }
+        }
+      }
+    },
     "学習の記録" : {
       "localizations" : {
         "en" : {
@@ -5485,7 +5853,20 @@
       }
     },
     "完了" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Done"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "完了"
+          }
+        }
+      }
     },
     "実況板では自動でオン" : {
       "localizations" : {
@@ -5791,6 +6172,22 @@
         }
       }
     },
+    "成人向けのソースも表示" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show Adult Sources"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "成人向けのソースも表示"
+          }
+        }
+      }
+    },
     "戻る" : {
       "localizations" : {
         "en" : {
@@ -5935,6 +6332,22 @@
         }
       }
     },
+    "文字の枠を表示" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show Text Boxes"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文字の枠を表示"
+          }
+        }
+      }
+    },
     "文字の色" : {
       "localizations" : {
         "en" : {
@@ -5983,6 +6396,54 @@
         }
       }
     },
+    "文字認識" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Text Recognition"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文字認識"
+          }
+        }
+      }
+    },
+    "文字認識オフ" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Text recognition off"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文字認識オフ"
+          }
+        }
+      }
+    },
+    "文字認識オン" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Text recognition on"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文字認識オン"
+          }
+        }
+      }
+    },
     "文字読み取りボタンで、画像の中の文字も調べられます。" : {
       "localizations" : {
         "en" : {
@@ -5995,6 +6456,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "文字読み取りボタンで、画像の中の文字も調べられます。"
+          }
+        }
+      }
+    },
+    "文章だけの章には対応していません" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Text-only chapters aren't supported"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文章だけの章には対応していません"
           }
         }
       }
@@ -6367,6 +6844,150 @@
         }
       }
     },
+    "最大" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Largest"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最大"
+          }
+        }
+      }
+    },
+    "最小" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Smallest"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最小"
+          }
+        }
+      }
+    },
+    "最小化" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Minimize"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最小化"
+          }
+        }
+      }
+    },
+    "最後の章です" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This is the last chapter"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最後の章です"
+          }
+        }
+      }
+    },
+    "最新の書込順" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Latest Post"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最新の書込順"
+          }
+        }
+      }
+    },
+    "最近Ankiに追加した語" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recently added to Anki"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最近Ankiに追加した語"
+          }
+        }
+      }
+    },
+    "最近の14日間・%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last 14 days · %@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最近の14日間・%@"
+          }
+        }
+      }
+    },
+    "最近の検索" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recent Searches"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最近の検索"
+          }
+        }
+      }
+    },
+    "最近見た板" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recent Boards"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最近見た板"
+          }
+        }
+      }
+    },
     "本文をコピー" : {
       "localizations" : {
         "en" : {
@@ -6608,6 +7229,70 @@
         }
       }
     },
+    "次の動画" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Up Next"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "次の動画"
+          }
+        }
+      }
+    },
+    "次の字幕" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Next Line"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "次の字幕"
+          }
+        }
+      }
+    },
+    "次の章" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Next Chapter"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "次の章"
+          }
+        }
+      }
+    },
+    "次へ" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Next"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "次へ"
+          }
+        }
+      }
+    },
     "次スレ" : {
       "localizations" : {
         "en" : {
@@ -6716,38 +7401,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "次スレを探す"
-          }
-        }
-      }
-    },
-    "次の動画" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Up Next"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "次の動画"
-          }
-        }
-      }
-    },
-    "次の字幕" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Next Line"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "次の字幕"
           }
         }
       }
@@ -7090,22 +7743,6 @@
         }
       }
     },
-    "登録チャンネル" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Subscriptions"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "登録チャンネル"
-          }
-        }
-      }
-    },
     "登録を解除しました" : {
       "localizations" : {
         "en" : {
@@ -7118,6 +7755,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "登録を解除しました"
+          }
+        }
+      }
+    },
+    "登録チャンネル" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Subscriptions"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "登録チャンネル"
           }
         }
       }
@@ -7186,22 +7839,6 @@
         }
       }
     },
-    "視聴時間" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Watch time"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "視聴時間"
-          }
-        }
-      }
-    },
     "種類" : {
       "comment" : "Kind of NG rule: word, ID or name.",
       "localizations" : {
@@ -7215,6 +7852,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "種類"
+          }
+        }
+      }
+    },
+    "章がありません" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No chapters"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "章がありません"
+          }
+        }
+      }
+    },
+    "第%@巻" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vol. %@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "第%@巻"
+          }
+        }
+      }
+    },
+    "第%@話" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ch. %@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "第%@話"
           }
         }
       }
@@ -7263,6 +7948,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "経過時間を表示"
+          }
+        }
+      }
+    },
+    "続きを読む" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continue Reading"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "続きを読む"
           }
         }
       }
@@ -7364,22 +8065,6 @@
         }
       }
     },
-    "自動更新（%lld秒）" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Auto-Refresh (%lld s)"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "自動更新（%lld秒）"
-          }
-        }
-      }
-    },
     "自動更新は、スレの右上のメニューか右下のボタンを長押しして切り替えます。一番下まで読んでいるときは、新着レスが届くと自動でスクロールします。1000に達したスレでは止まります。" : {
       "localizations" : {
         "en" : {
@@ -7408,6 +8093,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "自動更新中"
+          }
+        }
+      }
+    },
+    "自動更新（%lld秒）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auto-Refresh (%lld s)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自動更新（%lld秒）"
           }
         }
       }
@@ -7557,6 +8258,38 @@
         }
       }
     },
+    "見つかりませんでした" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nothing found"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "見つかりませんでした"
+          }
+        }
+      }
+    },
+    "視聴時間" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Watch time"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "視聴時間"
+          }
+        }
+      }
+    },
     "触覚フィードバック" : {
       "localizations" : {
         "en" : {
@@ -7637,6 +8370,22 @@
         }
       }
     },
+    "読み込み中…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importing…"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "読み込み中…"
+          }
+        }
+      }
+    },
     "読み込めませんでした" : {
       "localizations" : {
         "en" : {
@@ -7649,6 +8398,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "読み込めませんでした"
+          }
+        }
+      }
+    },
+    "読む" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Read"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "読む"
+          }
+        }
+      }
+    },
+    "読了" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Finished"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "読了"
           }
         }
       }
@@ -8375,6 +9156,39 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "高評価を取り消す"
+          }
+        }
+      }
+    },
+    "（削除されました）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "(deleted)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "（削除されました）"
+          }
+        }
+      }
+    },
+    "５ちゃんねる" : {
+      "comment" : "App's board-list title.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "5channel"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "５ちゃんねる"
           }
         }
       }

@@ -35,7 +35,9 @@ enum BrowseRoute: Hashable, Codable {
 }
 
 enum RootTab: String {
-    case boards, saved, history, browser, dictionary, settings
+    // `history` and `settings` are no longer tabs; kept so an old saved
+    // selection can be moved on.
+    case boards, saved, history, browser, manga, dictionary, settings
 }
 
 /// One Chance-style tab: a navigation stack inside the 板 tab.

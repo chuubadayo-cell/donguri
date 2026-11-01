@@ -10,6 +10,7 @@
 		6B486FF02FDF29C400F1F455 /* CHoshiDicts in Frameworks */ = {isa = PBXBuildFile; productRef = 6B486FF12FDF29C400F1F455 /* CHoshiDicts */; };
 		6B486FF32FDF29C400F1F455 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = 6B486FF42FDF29C400F1F455 /* ZIPFoundation */; };
 		6B486FF72FDF29C400F1F455 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 6B486FF62FDF29C400F1F455 /* PrivacyInfo.xcprivacy */; };
+		6B486FF82FDF29C400F1F455 /* AidokuRunner in Frameworks */ = {isa = PBXBuildFile; productRef = 6B486FFA2FDF29C400F1F455 /* AidokuRunner */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -32,6 +33,7 @@
 			files = (
 				6B486FF02FDF29C400F1F455 /* CHoshiDicts in Frameworks */,
 				6B486FF32FDF29C400F1F455 /* ZIPFoundation in Frameworks */,
+				6B486FF82FDF29C400F1F455 /* AidokuRunner in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -77,6 +79,7 @@
 			packageProductDependencies = (
 				6B486FF12FDF29C400F1F455 /* CHoshiDicts */,
 				6B486FF42FDF29C400F1F455 /* ZIPFoundation */,
+				6B486FFA2FDF29C400F1F455 /* AidokuRunner */,
 			);
 			productName = Donguri;
 			productReference = 6B486FDE2FDF29C400F1F455 /* Donguri.app */;
@@ -110,6 +113,7 @@
 			packageReferences = (
 				6B486FF22FDF29C400F1F455 /* XCRemoteSwiftPackageReference "hoshidicts" */,
 				6B486FF52FDF29C400F1F455 /* XCRemoteSwiftPackageReference "ZIPFoundation" */,
+				6B486FF92FDF29C400F1F455 /* XCRemoteSwiftPackageReference "AidokuRunner" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 6B486FDF2FDF29C400F1F455 /* Products */;
@@ -372,6 +376,14 @@
 				minimumVersion = 0.9.0;
 			};
 		};
+		6B486FF92FDF29C400F1F455 /* XCRemoteSwiftPackageReference "AidokuRunner" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/Aidoku/AidokuRunner";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -384,6 +396,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 6B486FF52FDF29C400F1F455 /* XCRemoteSwiftPackageReference "ZIPFoundation" */;
 			productName = ZIPFoundation;
+		};
+		6B486FFA2FDF29C400F1F455 /* AidokuRunner */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 6B486FF92FDF29C400F1F455 /* XCRemoteSwiftPackageReference "AidokuRunner" */;
+			productName = AidokuRunner;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

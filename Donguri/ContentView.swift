@@ -8,12 +8,14 @@
 import SwiftUI
 
 /// Tabs along the bottom, as in Chance: browse boards (with browser tabs of
-/// its own), saved threads, history, the dictionary, and settings.
+/// its own), saved threads, the browser, manga, and the dictionary (whose
+/// gear opens settings).
 struct ContentView: View {
     @State private var navigator = AppNavigator.shared
     @State private var favorites = FavoritesStore.shared
     @State private var appearance = AppearanceSettings.shared
     @Environment(\.colorScheme) private var colorScheme
+    @State private var showsSettings = false
 
     /// New replies across all favorite threads, as the 保存 tab's badge.
     private var unreadFavorites: Int {
@@ -35,9 +37,21 @@ struct ContentView: View {
                 .tabItem { Label("ブラウザ", systemImage: "safari") }
                 .tag(RootTab.browser)
 
+            MangaHomeView()
+                .tabItem { Label("マンガ", systemImage: "book.pages") }
+                .tag(RootTab.manga)
+
             NavigationStack {
                 DictionarySearchView()
                     .toolbar {
+                        ToolbarItem(placement: .topBarLeading) {
+                            Button {
+                                showsSettings = true
+                            } label: {
+                                Image(systemName: "gearshape")
+                            }
+                            .accessibilityLabel(Text("設定"))
+                        }
                         ToolbarItem(placement: .topBarTrailing) {
                             ScanPhotoButton()
                         }
@@ -45,10 +59,13 @@ struct ContentView: View {
             }
             .tabItem { Label("辞書", systemImage: "character.book.closed.ja") }
             .tag(RootTab.dictionary)
-
-            SettingsView(showsCloseButton: false)
-                .tabItem { Label("設定", systemImage: "gearshape") }
-                .tag(RootTab.settings)
+        }
+        // On its own view, apart from the scanner's cover.
+        .background {
+            Color.clear
+                .sheet(isPresented: $showsSettings) {
+                    SettingsView(showsCloseButton: true)
+                }
         }
         .modifier(ThemedTabBar(palette: appearance.palette))
         .overlay {
@@ -80,9 +97,11 @@ struct ContentView: View {
             .presentationBackground(.clear)
         }
         .onAppear {
-            // 履歴 moved into the 保存 tab.
+            // 履歴 moved into the 保存 tab, and 設定 out of the tab bar.
             if navigator.rootTab == .history {
                 navigator.rootTab = .saved
+            } else if navigator.rootTab == .settings {
+                navigator.rootTab = .dictionary
             }
         }
         // The automatic theme follows the system's light or dark mode.
