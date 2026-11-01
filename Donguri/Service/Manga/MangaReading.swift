@@ -5,7 +5,7 @@
 //  What the manga reader is handed: a run of reading units (a source's
 //  chapters, or a title's mokuro volumes) and how to load each unit's
 //  pages. A page loads its own image and may bring its text (mokuro);
-//  pages without text can be read by Vision in the reader.
+//  pages without text are read by MangaOCR in the reader.
 //
 
 import Foundation
@@ -20,10 +20,11 @@ struct ReaderUnit: Identifiable, Hashable {
 }
 
 struct ReaderPage: Identifiable {
+    /// Also the key its OCR is kept under.
     let id: String
     let load: () async throws -> UIImage
     /// mokuro's text, already placed on the page.
-    var text: [OCRLine]?
+    var text: PageText?
 }
 
 struct ReaderRequest: Identifiable {
@@ -33,7 +34,11 @@ struct ReaderRequest: Identifiable {
     /// In reading order (first chapter first).
     let units: [ReaderUnit]
     let startIndex: Int
-    let rightToLeft: Bool
+    /// What the source says (webtoons scroll down), before the user's
+    /// own choice for the title.
+    var suggestedMode: MangaReadingMode?
+    /// The title, for a reading mode chosen for it alone.
+    var seriesID: String?
     /// The manga this belongs to, to remember its last chapter.
     var mangaID: String?
     let pages: (ReaderUnit) async throws -> [ReaderPage]
@@ -66,12 +71,19 @@ extension ReaderRequest {
                        label: $0.displayTitle)
         }
         let startID = MangaLibrary.chapterID(source: source.key, manga: manga.key, chapter: chapter.key)
-        let rightToLeft = manga.viewer != .leftToRight && manga.viewer != .vertical && manga.viewer != .webtoon
+        let mode: MangaReadingMode? = switch manga.viewer {
+        case .leftToRight: .leftToRight
+        case .vertical, .webtoon: .vertical
+        case .rightToLeft: .rightToLeft
+        default: nil
+        }
+        let mangaID = MangaLibrary.mangaID(source: source.key, manga: manga.key)
         return ReaderRequest(title: manga.title,
                              units: units,
                              startIndex: units.firstIndex { $0.id == startID } ?? 0,
-                             rightToLeft: rightToLeft,
-                             mangaID: MangaLibrary.mangaID(source: source.key, manga: manga.key)) { unit in
+                             suggestedMode: mode,
+                             seriesID: mangaID,
+                             mangaID: mangaID) { unit in
             guard let chapter = byID[unit.id] else { throw MangaReaderError.noPages }
             let pages = try await source.getPageList(manga: manga, chapter: chapter)
             if pages.isEmpty { throw MangaReaderError.noPages }
@@ -94,17 +106,23 @@ extension ReaderRequest {
         }
     }
 
-    /// The volumes of one title on the phone.
-    static func local(title: String, volumes: [LocalMokuroVolume], start: LocalMokuroVolume) -> ReaderRequest {
-        let units = volumes.map { ReaderUnit(id: "mokuro\u{1F}\($0.id)", label: $0.volume) }
-        let byID = Dictionary(uniqueKeysWithValues: zip(units.map(\.id), volumes))
-        return ReaderRequest(title: title,
+    /// The books of a series in the Manga folder.
+    static func local(_ series: LocalSeries, start: LocalVolume) -> ReaderRequest {
+        let units = series.volumes.map { ReaderUnit(id: $0.unitID, label: $0.title) }
+        let byID = Dictionary(series.volumes.map { ($0.unitID, $0) }, uniquingKeysWith: { first, _ in first })
+        return ReaderRequest(title: series.title,
                              units: units,
-                             startIndex: volumes.firstIndex(of: start) ?? 0,
-                             rightToLeft: true) { unit in
+                             startIndex: series.volumes.firstIndex(of: start) ?? 0,
+                             seriesID: "local\u{1F}\(series.id)") { unit in
             guard let volume = byID[unit.id] else { throw MangaReaderError.noPages }
-            let mokuro = try await MangaImages.decodeVolume(at: volume.mokuroURL)
-            return mokuroPages(mokuro, unit: unit, images: volume.imagesURL)
+            let book = LocalBook(volume: volume)
+            let names = try await book.open()
+            let texts = await MangaImages.mokuroText(for: volume, book: book, pageNames: names)
+            return names.indices.map { index in
+                ReaderPage(id: "\(unit.id)#\(index)",
+                           load: { try await MangaImages.localPage(book, index: index, cacheKey: "\(unit.id)#\(index)") },
+                           text: texts?[index])
+            }
         }
     }
 
@@ -116,7 +134,7 @@ extension ReaderRequest {
         return ReaderRequest(title: title,
                              units: units,
                              startIndex: volumes.firstIndex { $0.url == start } ?? 0,
-                             rightToLeft: true) { unit in
+                             seriesID: "mokuro-web\u{1F}\(start.deletingLastPathComponent().absoluteString)") { unit in
             guard let url = byID[unit.id] else { throw MangaReaderError.noPages }
             let mokuro = try await MokuroRemote.volume(at: url)
             return mokuroPages(mokuro, unit: unit, images: url.deletingPathExtension())
@@ -128,7 +146,7 @@ extension ReaderRequest {
             let id = "\(unit.id)#\(index)"
             let url = images.appending(path: page.imgPath)
             return ReaderPage(id: id, load: { try await MangaImages.image(at: url, cacheKey: id) },
-                              text: page.textLines())
+                              text: page.pageText())
         }
     }
 }
@@ -225,5 +243,39 @@ enum MangaImages {
     @concurrent
     nonisolated static func decodeVolume(at url: URL) async throws -> MokuroVolume {
         try MokuroVolume.decode(Data(contentsOf: url))
+    }
+
+    /// A page of a book on the phone, at a size that keeps a long volume's
+    /// pages from filling memory.
+    static func localPage(_ book: LocalBook, index: Int, cacheKey: String) async throws -> UIImage {
+        if let image = cached(cacheKey) { return image }
+        let maxPixel = max(UIScreen.main.nativeBounds.height, 2000) * 1.2
+        let image = try await book.image(at: index, maxPixel: maxPixel)
+        cache.setObject(image, forKey: cacheKey as NSString)
+        return image
+    }
+
+    /// The book's mokuro text, page by page: from the .mokuro beside it or
+    /// inside it, matched by file name (or by position when the names
+    /// differ but the counts agree).
+    static func mokuroText(for volume: LocalVolume, book: LocalBook, pageNames: [String]) async -> [PageText?]? {
+        var data: Data?
+        if let sidecar = volume.sidecar { data = try? Data(contentsOf: sidecar) }
+        if data == nil { data = await book.embeddedMokuro() }
+        guard let data, let mokuro = try? MokuroVolume.decode(data) else { return nil }
+        return matchMokuro(mokuro, pageNames: pageNames)
+    }
+
+    nonisolated static func matchMokuro(_ mokuro: MokuroVolume, pageNames: [String]) -> [PageText?] {
+        func stem(_ name: String) -> String {
+            ((name as NSString).lastPathComponent as NSString).deletingPathExtension.lowercased()
+        }
+        var byName: [String: MokuroVolume.Page] = [:]
+        for page in mokuro.pages { byName[stem(page.imgPath)] = page }
+        let matched = pageNames.map { byName[stem($0)]?.pageText() }
+        if matched.allSatisfy({ $0 == nil }), mokuro.pages.count == pageNames.count {
+            return mokuro.pages.map { $0.pageText() }
+        }
+        return matched
     }
 }

@@ -20,6 +20,21 @@
 				<string>world.wumbo.Donguri.colpkg</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Manga</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>com.chase.iroha.cbz</string>
+				<string>public.zip-archive</string>
+				<string>com.adobe.pdf</string>
+				<string>org.idpf.epub-container</string>
+			</array>
+		</dict>
 	</array>
 	<key>CFBundleURLTypes</key>
 	<array>
@@ -35,7 +50,7 @@
 		</dict>
 	</array>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
-	<false/>
+	<true/>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Donguri adds the images and videos you choose to save from a thread to your photo library. / スレの画像や動画を、選んだときだけ写真ライブラリに保存します。</string>
 	<key>UIBackgroundModes</key>
@@ -47,6 +62,23 @@
 	<true/>
 	<key>UTImportedTypeDeclarations</key>
 	<array>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.zip-archive</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Comic Book Archive</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.chase.iroha.cbz</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>cbz</string>
+				</array>
+			</dict>
+		</dict>
 		<dict>
 			<key>UTTypeConformsTo</key>
 			<array>

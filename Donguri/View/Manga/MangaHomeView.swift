@@ -3,7 +3,7 @@
 //  Donguri
 //
 //  The マンガ tab: the library (manga saved from sources), the installed
-//  sources, and mokuro volumes (on the phone or from web addresses).
+//  sources, and local books (the Manga folder, and mokuro on the web).
 //  Every screen opens the reader through MangaReaderPresenter, which this
 //  tab presents over everything.
 //
@@ -22,19 +22,20 @@ final class MangaReaderPresenter {
 enum MangaRoute: Hashable {
     case source(String)
     case manga(source: String, manga: AidokuRunner.Manga)
-    case mokuroTitle(String)
+    case localSeries(String)
     case mokuroRemote(name: String, url: URL)
     case manageSources
 }
 
 struct MangaHomeView: View {
     private enum Section: String, CaseIterable {
-        case library, sources, mokuro
+        case library, sources, local
     }
 
     @State private var presenter = MangaReaderPresenter.shared
     @State private var sources = MangaSources.shared
     @AppStorage("iroha.manga.section") private var section: Section = .library
+    @State private var showsSettings = false
 
     var body: some View {
         NavigationStack {
@@ -42,14 +43,14 @@ struct MangaHomeView: View {
                 switch section {
                 case .library: MangaLibraryList()
                 case .sources: InstalledSourcesList()
-                case .mokuro: MokuroHomeList()
+                case .local: LocalHomeList()
                 }
             }
             .safeAreaInset(edge: .top, spacing: 0) {
                 Picker(selection: $section) {
                     Text("ライブラリ").tag(Section.library)
                     Text("ソース").tag(Section.sources)
-                    Text(verbatim: "mokuro").tag(Section.mokuro)
+                    Text("ローカル").tag(Section.local)
                 } label: {
                     EmptyView()
                 }
@@ -64,10 +65,24 @@ struct MangaHomeView: View {
                 switch route {
                 case .source(let key): SourceBrowseView(sourceKey: key)
                 case .manga(let source, let manga): MangaDetailView(sourceKey: source, manga: manga)
-                case .mokuroTitle(let title): MokuroTitleView(title: title)
+                case .localSeries(let id): LocalSeriesView(seriesID: id)
                 case .mokuroRemote(let name, let url): MokuroRemoteView(name: name, url: url)
                 case .manageSources: ManageSourcesView()
                 }
+            }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showsSettings = true
+                    } label: {
+                        Image(systemName: "slider.horizontal.3")
+                    }
+                    .accessibilityLabel(Text("リーダーの設定"))
+                }
+            }
+            // On the stack's content: the reader's cover is on the stack.
+            .sheet(isPresented: $showsSettings) {
+                MangaReaderSettingsView()
             }
             .background(FullSwipeBack())
         }

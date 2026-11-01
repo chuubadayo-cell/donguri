@@ -165,13 +165,19 @@ nonisolated enum TextRecognizer {
         }
         guard let observations = request.results else { return [] }
 
+        // Boxes are normalised, so their shape is judged at the image's
+        // own proportions: on a tall page a normalised box looks wider
+        // than it is.
+        let sideways = [.left, .right, .leftMirrored, .rightMirrored].contains(orientation)
+        let pixelWidth = CGFloat(sideways ? cgImage.height : cgImage.width)
+        let pixelHeight = CGFloat(sideways ? cgImage.width : cgImage.height)
         var lines: [OCRLine] = []
         for observation in observations {
             guard let candidate = observation.topCandidates(1).first else { continue }
             let text = candidate.string
             guard !text.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
             let lineBox = flip(observation.boundingBox)
-            let vertical = text.count > 1 && lineBox.height > lineBox.width * 1.5
+            let vertical = text.count > 1 && lineBox.height * pixelHeight > lineBox.width * pixelWidth * 1.5
             lines.append(OCRLine(text: text, box: lineBox, isVertical: vertical,
                                  characters: OCRCharacterBoxes(candidate: candidate)))
         }

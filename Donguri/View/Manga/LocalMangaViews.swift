@@ -1,44 +1,66 @@
 //
-//  MokuroViews.swift
+//  LocalMangaViews.swift
 //  Donguri
 //
-//  mokuro in the マンガ tab: volumes imported from Files, grouped by
-//  title, and web addresses that serve mokuro volumes, browsed folder by
-//  folder.
+//  The マンガ tab's ローカル section: the series in the Manga folder (Files
+//  app › いろは › Manga), importing books into it, and web addresses that
+//  serve mokuro volumes, browsed folder by folder.
 //
 
 import SwiftUI
 import UniformTypeIdentifiers
 
-struct MokuroHomeList: View {
-    @State private var library = MokuroLibrary.shared
+struct LocalHomeList: View {
+    @State private var library = LocalMangaLibrary.shared
+    @State private var mokuro = MokuroLibrary.shared
     @State private var importing = false
     @State private var addingRemote = false
     @State private var newRemote = ""
     @State private var message: String?
     @State private var working = false
+    @Environment(\.scenePhase) private var scenePhase
+
+    private static let importTypes: [UTType] = [
+        .folder, .zip, .pdf, .image, .epub,
+        UTType(filenameExtension: "cbz") ?? .zip,
+        UTType(filenameExtension: "mokuro") ?? .json
+    ]
 
     var body: some View {
         List {
             Section {
-                if library.titles.isEmpty {
-                    Text("mokuro で処理したフォルダ（.mokuro と画像フォルダ）か、それを入れた zip / cbz を読み込めます。")
+                if library.series.isEmpty && !library.isScanning {
+                    Text("CBZ・ZIP・PDF・EPUB・画像フォルダ・画像を読めます。ファイル App の「このiPhone内 › いろは › Manga」に入れるか、ここから読み込んでください。フォルダはシリーズになり、同じ名前の .mokuro ファイルがあればその文字を使います。")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
-                ForEach(library.titles, id: \.title) { entry in
-                    NavigationLink(value: MangaRoute.mokuroTitle(entry.title)) {
+                ForEach(library.series) { series in
+                    NavigationLink(value: MangaRoute.localSeries(series.id)) {
                         HStack(spacing: 12) {
-                            MokuroFirstPage(volume: entry.volumes.first)
+                            LocalCover(volume: series.volumes.first)
                                 .frame(width: 44, height: 64)
                                 .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(verbatim: entry.title)
+                                Text(verbatim: series.title)
                                     .lineLimit(2)
-                                Text("\(entry.volumes.count)巻")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                Group {
+                                    if series.volumes.count == 1 {
+                                        Text(verbatim: series.volumes[0].kind == .folder
+                                             ? String(localized: "フォルダ") : series.volumes[0].url.pathExtension.uppercased())
+                                    } else {
+                                        Text("\(series.volumes.count)冊")
+                                    }
+                                }
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                             }
+                        }
+                    }
+                    .swipeActions {
+                        Button(role: .destructive) {
+                            Task { await library.delete(series) }
+                        } label: {
+                            Label("削除", systemImage: "trash")
                         }
                     }
                 }
@@ -56,11 +78,16 @@ struct MokuroHomeList: View {
                 }
                 .disabled(working)
             } header: {
-                Text("この端末")
+                HStack {
+                    Text("この端末")
+                    if library.isScanning && library.series.isEmpty {
+                        ProgressView().controlSize(.mini)
+                    }
+                }
             }
 
             Section {
-                ForEach(library.remotes, id: \.self) { url in
+                ForEach(mokuro.remotes, id: \.self) { url in
                     NavigationLink(value: MangaRoute.mokuroRemote(name: url.host() ?? url.absoluteString, url: url)) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(verbatim: url.host() ?? url.absoluteString)
@@ -72,7 +99,7 @@ struct MokuroHomeList: View {
                     }
                     .swipeActions {
                         Button(role: .destructive) {
-                            library.removeRemote(url)
+                            mokuro.removeRemote(url)
                         } label: {
                             Label("削除", systemImage: "trash")
                         }
@@ -85,14 +112,18 @@ struct MokuroHomeList: View {
                     Label("ウェブのライブラリを追加", systemImage: "plus")
                 }
             } header: {
-                Text("ウェブ")
+                Text(verbatim: "mokuro（ウェブ）")
             } footer: {
                 Text("mokuro の巻（.mokuro と画像フォルダ）を公開しているフォルダのURL。ディレクトリ一覧のページか .mokuro ファイルを指定できます。")
             }
         }
-        .fileImporter(isPresented: $importing,
-                      allowedContentTypes: [.folder, .zip, UTType(filenameExtension: "cbz") ?? .zip,
-                                            UTType(filenameExtension: "mokuro") ?? .json],
+        .refreshable { await library.scan() }
+        .task { await library.scan() }
+        // Books dropped into the folder from the Files app meanwhile.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await library.scan() } }
+        }
+        .fileImporter(isPresented: $importing, allowedContentTypes: Self.importTypes,
                       allowsMultipleSelection: true) { result in
             guard case .success(let urls) = result else { return }
             Task { await importItems(urls) }
@@ -103,7 +134,7 @@ struct MokuroHomeList: View {
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
             Button("追加") {
-                if library.addRemote(newRemote) == nil {
+                if mokuro.addRemote(newRemote) == nil {
                     message = String(localized: "URLが正しくありません")
                 }
             }
@@ -117,24 +148,17 @@ struct MokuroHomeList: View {
     private func importItems(_ urls: [URL]) async {
         working = true
         defer { working = false }
-        var total = 0
-        for url in urls {
-            do {
-                total += try await library.importItem(at: url)
-            } catch {
-                message = error.localizedDescription
-                return
-            }
+        do {
+            _ = try await library.importItems(urls)
+        } catch {
+            message = error.localizedDescription
         }
-        message = total == 0
-            ? String(localized: "mokuro の巻が見つかりませんでした。.mokuro ファイルと同じ名前の画像フォルダが必要です。")
-            : String(localized: "\(total)巻を読み込みました")
     }
 }
 
-/// A volume's first page as its cover.
-private struct MokuroFirstPage: View {
-    let volume: LocalMokuroVolume?
+/// A book's first page as its cover.
+struct LocalCover: View {
+    let volume: LocalVolume?
     @State private var image: UIImage?
 
     var body: some View {
@@ -142,69 +166,87 @@ private struct MokuroFirstPage: View {
             Rectangle().fill(Color.secondary.opacity(0.15))
             if let image {
                 Image(uiImage: image).resizable().scaledToFill()
+            } else if let volume {
+                Image(systemName: volume.kind.systemImage)
+                    .foregroundStyle(.secondary)
             }
         }
         .clipped()
         .task(id: volume?.id) {
             guard let volume else { return }
-            image = await Self.firstImage(in: volume.imagesURL)
+            image = await LocalCovers.cover(for: volume)
         }
-    }
-
-    @concurrent
-    private nonisolated static func firstImage(in folder: URL) async -> UIImage? {
-        let files = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
-        guard let first = files
-            .filter({ ["jpg", "jpeg", "png", "webp", "avif"].contains($0.pathExtension.lowercased()) })
-            .min(by: { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }),
-              let image = UIImage(contentsOfFile: first.path) else { return nil }
-        return image.preparingThumbnail(of: CGSize(width: 132, height: 192))
     }
 }
 
-struct MokuroTitleView: View {
-    let title: String
-    @State private var library = MokuroLibrary.shared
+enum LocalCovers {
+    private static let cache: NSCache<NSString, UIImage> = {
+        let cache = NSCache<NSString, UIImage>()
+        cache.countLimit = 150
+        return cache
+    }()
+
+    static func cover(for volume: LocalVolume) async -> UIImage? {
+        if let cached = cache.object(forKey: volume.id as NSString) { return cached }
+        let book = LocalBook(volume: volume)
+        guard (try? await book.open()) != nil,
+              let page = try? await book.image(at: 0, maxPixel: 400) else { return nil }
+        let thumbnail = await page.byPreparingThumbnail(ofSize: CGSize(width: 132, height: 192)) ?? page
+        cache.setObject(thumbnail, forKey: volume.id as NSString)
+        return thumbnail
+    }
+}
+
+struct LocalSeriesView: View {
+    let seriesID: String
+    @State private var library = LocalMangaLibrary.shared
     @State private var reading = MangaLibrary.shared
 
-    private var volumes: [LocalMokuroVolume] {
-        library.titles.first { $0.title == title }?.volumes ?? []
-    }
+    private var series: LocalSeries? { library.series(id: seriesID) }
 
     var body: some View {
         List {
-            ForEach(volumes) { volume in
-                let unit = "mokuro\u{1F}\(volume.id)"
-                Button {
-                    MangaReaderPresenter.shared.request = .local(title: title, volumes: volumes, start: volume)
-                } label: {
-                    HStack(spacing: 12) {
-                        MokuroFirstPage(volume: volume)
-                            .frame(width: 44, height: 64)
-                            .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(verbatim: volume.volume)
-                                .foregroundStyle(reading.isFinished(unit) ? .secondary : .primary)
-                            if !reading.isFinished(unit), reading.page(for: unit) > 0 {
-                                Text("\(reading.page(for: unit) + 1)ページ目")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+            if let series {
+                ForEach(series.volumes) { volume in
+                    Button {
+                        MangaReaderPresenter.shared.request = .local(series, start: volume)
+                    } label: {
+                        HStack(spacing: 12) {
+                            LocalCover(volume: volume)
+                                .frame(width: 44, height: 64)
+                                .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(verbatim: volume.title)
+                                    .foregroundStyle(reading.isFinished(volume.unitID) ? .secondary : .primary)
+                                    .lineLimit(2)
+                                HStack(spacing: 6) {
+                                    Text(verbatim: volume.kind == .folder ? String(localized: "フォルダ") : volume.url.pathExtension.uppercased())
+                                    if volume.sidecar != nil {
+                                        Text(verbatim: "mokuro")
+                                    }
+                                    if !reading.isFinished(volume.unitID), reading.page(for: volume.unitID) > 0 {
+                                        Text("\(reading.page(for: volume.unitID) + 1)ページ目")
+                                    }
+                                }
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                             }
                         }
                     }
-                }
-                .foregroundStyle(.primary)
-                .swipeActions {
-                    Button(role: .destructive) {
-                        library.delete(volume)
-                    } label: {
-                        Label("削除", systemImage: "trash")
+                    .foregroundStyle(.primary)
+                    .swipeActions {
+                        Button(role: .destructive) {
+                            Task { await library.delete(volume) }
+                        } label: {
+                            Label("削除", systemImage: "trash")
+                        }
                     }
                 }
             }
         }
-        .navigationTitle(Text(verbatim: title))
+        .navigationTitle(Text(verbatim: series?.title ?? ""))
         .navigationBarTitleDisplayMode(.inline)
+        .refreshable { await library.scan() }
     }
 }
 

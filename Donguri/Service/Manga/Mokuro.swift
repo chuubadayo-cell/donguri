@@ -4,16 +4,15 @@
 //
 //  Manga already read by mokuro (github.com/kha-white/mokuro): a volume is
 //  `<name>.mokuro` (JSON: every page's speech bubbles, their lines and where
-//  each line sits) next to a folder `<name>/` of page images. Volumes come
-//  from Files (a folder or a zip/cbz holding both) or from a web address
-//  that serves them, either a .mokuro file or a plain directory listing.
-//  The lines become OCRLines with their characters placed, so the reader
-//  taps and highlights them exactly like Vision's text.
+//  each line sits) next to a folder `<name>/` of page images, or beside an
+//  archive of them. On the phone they're books in the Manga folder
+//  (LocalMangaLibrary); here are the format and web addresses that serve
+//  volumes, either a .mokuro file or a plain directory listing. The text
+//  becomes a PageText, as OCR's does.
 //
 
 import Foundation
 import UIKit
-import ZIPFoundation
 
 nonisolated struct MokuroVolume: Decodable, Sendable {
     let title: String?
@@ -61,32 +60,32 @@ nonisolated struct MokuroVolume: Decodable, Sendable {
 }
 
 extension MokuroVolume.Page {
-    /// The page's text as tappable lines, normalised to the image.
-    nonisolated func textLines() -> [OCRLine] {
-        guard imgWidth > 0, imgHeight > 0 else { return [] }
-        var result: [OCRLine] = []
+    /// The page's speech bubbles, normalised to the image.
+    nonisolated func pageText() -> PageText {
+        guard imgWidth > 0, imgHeight > 0 else { return .empty }
+        var result: [PageText.Block] = []
         for block in blocks {
-            let lines = block.lines.map { $0.trimmingCharacters(in: .whitespaces) }
-            let blockText = lines.joined()
-            for (index, text) in lines.enumerated() where !text.isEmpty {
-                guard let box = lineBox(block: block, index: index) else { continue }
-                let characters = Array(text)
-                let count = CGFloat(characters.count)
-                let boxes: [CGRect] = characters.indices.map { offset in
-                    let i = CGFloat(offset)
-                    return block.vertical
-                        ? CGRect(x: box.minX, y: box.minY + box.height * i / count,
-                                 width: box.width, height: box.height / count)
-                        : CGRect(x: box.minX + box.width * i / count, y: box.minY,
-                                 width: box.width / count, height: box.height)
-                }
-                result.append(OCRLine(text: text, box: box, isVertical: block.vertical,
-                                      characterBoxes: boxes,
-                                      blockText: lines.count > 1 ? blockText : nil,
-                                      followingText: lines.dropFirst(index + 1).joined()))
+            var lines: [PageText.Line] = []
+            for (index, raw) in block.lines.enumerated() {
+                let text = raw.trimmingCharacters(in: .whitespaces)
+                guard !text.isEmpty, let box = lineBox(block: block, index: index) else { continue }
+                lines.append(PageText.Line(text: text, box: box, characters: nil))
             }
+            guard let first = lines.first else { continue }
+            var box = lines.dropFirst().reduce(first.box) { $0.union($1.box) }
+            if block.box.count == 4 {
+                box = CGRect(x: block.box[0] / imgWidth, y: block.box[1] / imgHeight,
+                             width: (block.box[2] - block.box[0]) / imgWidth,
+                             height: (block.box[3] - block.box[1]) / imgHeight).union(box)
+            }
+            result.append(PageText.Block(box: box, vertical: block.vertical, lines: lines))
         }
-        return result
+        return PageText(blocks: result)
+    }
+
+    /// The page's text as tappable lines.
+    nonisolated func textLines() -> [OCRLine] {
+        pageText().ocrLines()
     }
 
     /// A line's own quadrilateral when mokuro gives one, else its share of
@@ -117,116 +116,20 @@ extension MokuroVolume.Page {
     }
 }
 
-// MARK: - Volumes on the phone
+// MARK: - Web libraries
 
-/// A volume imported from Files, kept under Application Support.
-struct LocalMokuroVolume: Identifiable, Hashable, Sendable {
-    /// Its folder's name.
-    let id: String
-    let title: String
-    let volume: String
-    let mokuroURL: URL
-
-    /// mokuro puts the images in a folder named after the .mokuro file.
-    var imagesURL: URL { mokuroURL.deletingPathExtension() }
-}
-
+/// Web addresses that serve mokuro volumes. (Volumes on the phone live in
+/// the Manga folder: LocalMangaLibrary.)
 @Observable
 final class MokuroLibrary {
     static let shared = MokuroLibrary()
 
     private static let remoteKey = "iroha.manga.mokuroLibraries"
 
-    private(set) var volumes: [LocalMokuroVolume] = []
-    /// Web addresses that serve mokuro volumes.
     private(set) var remotes: [URL]
-
-    static var directory: URL {
-        URL.applicationSupportDirectory.appending(path: "Mokuro", directoryHint: .isDirectory)
-    }
 
     private init() {
         remotes = (UserDefaults.standard.stringArray(forKey: Self.remoteKey) ?? []).compactMap(URL.init(string:))
-        reload()
-    }
-
-    var titles: [(title: String, volumes: [LocalMokuroVolume])] {
-        Dictionary(grouping: volumes, by: \.title)
-            .map { (title: $0.key, volumes: $0.value.sorted { $0.volume.localizedStandardCompare($1.volume) == .orderedAscending }) }
-            .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
-    }
-
-    func reload() {
-        let folders = (try? FileManager.default.contentsOfDirectory(at: Self.directory,
-                                                                     includingPropertiesForKeys: nil)) ?? []
-        volumes = folders.compactMap { folder in
-            guard let mokuro = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil))?
-                .first(where: { $0.pathExtension.lowercased() == "mokuro" }) else { return nil }
-            let header = Self.header(of: mokuro)
-            return LocalMokuroVolume(id: folder.lastPathComponent,
-                                     title: header.title ?? mokuro.deletingPathExtension().lastPathComponent,
-                                     volume: header.volume ?? mokuro.deletingPathExtension().lastPathComponent,
-                                     mokuroURL: mokuro)
-        }
-    }
-
-    func delete(_ volume: LocalMokuroVolume) {
-        try? FileManager.default.removeItem(at: Self.directory.appending(path: volume.id, directoryHint: .isDirectory))
-        reload()
-    }
-
-    /// Imports every volume in a folder or zip/cbz picked in Files.
-    /// Returns how many were found.
-    func importItem(at url: URL) async throws -> Int {
-        let secured = url.startAccessingSecurityScopedResource()
-        defer { if secured { url.stopAccessingSecurityScopedResource() } }
-        let count = try await Self.importVolumes(from: url, into: Self.directory)
-        reload()
-        return count
-    }
-
-    @concurrent
-    private nonisolated static func importVolumes(from url: URL, into directory: URL) async throws -> Int {
-        let manager = FileManager.default
-        var root = url
-        var temporary: URL?
-        defer { if let temporary { try? manager.removeItem(at: temporary) } }
-        if !url.hasDirectoryPath, ["zip", "cbz"].contains(url.pathExtension.lowercased()) {
-            let folder = manager.temporaryDirectory.appending(path: "mokuro-\(UUID().uuidString)")
-            try manager.unzipItem(at: url, to: folder)
-            temporary = folder
-            root = folder
-        }
-        let mokuroFiles = root.pathExtension.lowercased() == "mokuro" ? [root] : findMokuroFiles(in: root)
-        try manager.createDirectory(at: directory, withIntermediateDirectories: true)
-        var imported = 0
-        for file in mokuroFiles {
-            let images = file.deletingPathExtension()
-            guard manager.fileExists(atPath: images.path) else { continue }
-            let destination = directory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
-            try manager.createDirectory(at: destination, withIntermediateDirectories: true)
-            try manager.copyItem(at: file, to: destination.appending(path: file.lastPathComponent))
-            try manager.copyItem(at: images, to: destination.appending(path: images.lastPathComponent, directoryHint: .isDirectory))
-            imported += 1
-        }
-        return imported
-    }
-
-    private nonisolated static func findMokuroFiles(in folder: URL) -> [URL] {
-        var files: [URL] = []
-        guard let walker = FileManager.default.enumerator(at: folder, includingPropertiesForKeys: nil) else { return [] }
-        for case let file as URL in walker where file.pathExtension.lowercased() == "mokuro" {
-            files.append(file)
-        }
-        return files
-    }
-
-    /// Title and volume without decoding every page.
-    private static func header(of url: URL) -> (title: String?, volume: String?) {
-        struct Header: Decodable { let title: String?; let volume: String? }
-        guard let data = try? Data(contentsOf: url),
-              let header = try? JSONDecoder().decode(Header.self, from: data) else { return (nil, nil) }
-        return (header.title, header.volume)
     }
 
     // MARK: Remote libraries

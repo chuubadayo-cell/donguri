@@ -2,12 +2,15 @@
 //  MangaReaderView.swift
 //  Donguri
 //
-//  The manga reader: one page at a time, right to left for manga, with
-//  pinch zoom and swipe down to close (the gallery's ZoomableImageView).
-//  Text is tappable: mokuro's when the volume has it, else Vision's once
-//  文字認識 is on. A tap opens the dictionary popups, and a card mined from
-//  them gets the part of the page around the word as its picture.
-//  Swiping past the last page shows the next chapter.
+//  The manga reader, after Suwayomi's (the reader Manatan builds on):
+//  pages right to left or left to right, two-page spreads, or one long
+//  vertical strip; fitted to the screen, width or height; tap zones to
+//  turn pages, a page slider, and an end card leading to the next
+//  chapter. Text, Manatan's way: every page is read as it comes up (mokuro
+//  when the volume has it, else OCR, kept on disk), in speech bubbles. A
+//  tap on a word looks it up; a long press opens the bubble's text as a
+//  card whose words can be tapped too (or the other way round). Cards get
+//  the bubble as their picture.
 //
 
 import SwiftUI
@@ -17,22 +20,31 @@ struct MangaReaderView: View {
     let onClose: () -> Void
 
     @Environment(UserConfig.self) private var userConfig
+    @State private var settings = MangaReaderSettings.shared
     @State private var library = MangaLibrary.shared
     @State private var unitIndex: Int
     @State private var pages: [ReaderPage] = []
     @State private var loadError: String?
     @State private var isLoading = true
     @State private var loadAttempt = 0
+    /// The slot on screen (a page, a spread, or the end card).
     @State private var currentID: String?
     @State private var showChrome = true
     @State private var isZoomed = false
     @State private var popups = PopupStack()
-    @State private var recognizing = false
     @State private var toast: String?
     @State private var dismiss = ReaderDismiss()
-    /// Vision reads pages that have no mokuro text.
-    @AppStorage("iroha.manga.ocr") private var ocrEnabled = false
-    @AppStorage("iroha.manga.textBoxes") private var showsTextBoxes = false
+    @State private var texts = ReaderTexts()
+    @State private var bubble: OpenBubble?
+    @State private var showsSettings = false
+    /// Reading text this session (starts from 自動で文字認識).
+    @State private var ocrActive = MangaReaderSettings.shared.autoOCR
+    @State private var isLandscape = false
+    @State private var sliderPage: Double = 0
+    @State private var draggingSlider = false
+    /// The vertical strip doesn't follow a position given before it's laid
+    /// out, so jumps there are made with its ScrollViewReader.
+    @State private var stripJump = 0
 
     init(request: ReaderRequest, onClose: @escaping () -> Void) {
         self.request = request
@@ -44,39 +56,86 @@ struct MangaReaderView: View {
         request.units.indices.contains(unitIndex) ? request.units[unitIndex] : nil
     }
 
+    private var mode: MangaReadingMode {
+        settings.mode(for: request.seriesID, suggested: request.suggestedMode)
+    }
+
+    private var usesSpreads: Bool {
+        mode != .vertical && (settings.spread == .always || (settings.spread == .landscape && isLandscape))
+    }
+
     private var endID: String { "\(unit?.id ?? "")#end" }
 
-    /// Pages plus the end card, in the order they sit on screen.
+    /// Screens in reading order: single pages or spreads, then the end card.
     private var slots: [ReaderSlot] {
-        let slots = pages.map(ReaderSlot.page) + [.end]
-        return request.rightToLeft ? slots.reversed() : slots
+        var result: [ReaderSlot] = []
+        var index = 0
+        while index < pages.count {
+            let wide = texts.isWide(pages[index].id)
+            let alone = !usesSpreads || wide || (settings.coverAlone && index == 0) || index + 1 >= pages.count
+                || texts.isWide(pages[index + 1].id)
+            if alone {
+                result.append(.pages([index], id: pages[index].id))
+                index += 1
+            } else {
+                result.append(.pages([index, index + 1], id: pages[index].id))
+                index += 2
+            }
+        }
+        result.append(.end(id: endID))
+        return result
     }
 
-    private var currentIndex: Int? {
-        pages.firstIndex { $0.id == currentID }
+    private var currentPageIndex: Int? {
+        guard let currentID else { return nil }
+        for slot in slots {
+            if case .pages(let indices, let id) = slot, id == currentID { return indices.first }
+        }
+        return pages.firstIndex { $0.id == currentID }
     }
 
-    private var hasText: Bool {
-        pages.contains { $0.text != nil }
+    private var pageLabel: String? {
+        guard let currentID else { return nil }
+        for slot in slots {
+            if case .pages(let indices, let id) = slot, id == currentID {
+                let numbers = indices.map { String($0 + 1) }.joined(separator: "-")
+                return "\(numbers) / \(pages.count)"
+            }
+        }
+        return nil
     }
 
     var body: some View {
         ZStack {
-            ReaderBackdrop(dismiss: dismiss)
+            ReaderBackdrop(dismiss: dismiss, color: backgroundColor)
 
             if isLoading {
                 ProgressView()
-                    .tint(.white)
+                    .tint(.gray)
                     .controlSize(.large)
             } else if let loadError {
                 errorView(loadError)
+            } else if mode == .vertical {
+                verticalReader
             } else {
-                pager
+                pagedReader
             }
 
             if showChrome {
                 chrome
                     .transition(.opacity)
+            }
+
+            if let bubble {
+                BubbleCard(bubble: bubble,
+                           onSelect: { selection in lookUp(selection, bubble: bubble) },
+                           onTapOutside: { popups.closeAll() },
+                           onCopy: {
+                               UIPasteboard.general.string = bubble.text
+                               flash(String(localized: "コピーしました"))
+                           },
+                           onClose: { closeBubble() })
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
             if let toast {
@@ -90,54 +149,101 @@ struct MangaReaderView: View {
                     .transition(.opacity)
             }
         }
+        .animation(.snappy(duration: 0.25), value: bubble?.id)
         .overlay {
             PopupStackLayer(stack: popups)
         }
+        .onGeometryChange(for: Bool.self) { $0.size.width > $0.size.height } action: { isLandscape = $0 }
         .statusBarHidden(!showChrome)
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(settings.background == .white ? .light : .dark)
+        .sheet(isPresented: $showsSettings) {
+            MangaReaderSettingsView(seriesID: request.seriesID, suggested: request.suggestedMode)
+                .presentationDetents([.medium, .large])
+        }
         .task(id: "\(unitIndex)#\(loadAttempt)") {
             await loadUnit()
         }
-        .onChange(of: currentID) { _, id in
+        .onChange(of: currentID) { _, _ in
             isZoomed = false
             popups.closeAll()
-            guard let unit, let index = pages.firstIndex(where: { $0.id == id }) else { return }
-            library.setPage(index, of: pages.count, for: unit.id)
-            preload(around: index)
+            closeBubble()
+            pageChanged()
         }
-        .onDisappear {
-            library.flush()
+        .onChange(of: usesSpreads) { _, _ in
+            // The spread holding the current page.
+            if let index = currentPageIndex { show(page: index, animated: false) }
+        }
+        .onChange(of: mode) { _, _ in
+            // The new layout has to exist before it can be scrolled to the
+            // page that was on screen.
+            guard let index = currentPageIndex else { return }
+            currentID = nil
+            Task {
+                try? await Task.sleep(for: .milliseconds(60))
+                show(page: index, animated: false)
+            }
+        }
+        .onChange(of: ocrActive) { _, _ in readText() }
+        .onChange(of: texts.typicalRatio) { _, _ in
+            // The strip's placeholders just took the pages' real shape.
+            if mode == .vertical, let index = currentPageIndex { show(page: index, animated: false) }
+        }
+        .onChange(of: settings.ocrEngine) { _, _ in
+            texts.clear()
+            readText()
         }
         .onAppear {
-            if ocrEnabled { TextRecognizer.warmUp() }
+            UIApplication.shared.isIdleTimerDisabled = settings.keepAwake
+            if ocrActive { TextRecognizer.warmUp() }
+        }
+        .onDisappear {
+            UIApplication.shared.isIdleTimerDisabled = false
+            library.flush()
         }
     }
 
-    // MARK: Pager
+    private var backgroundColor: Color {
+        switch settings.background {
+        case .black: .black
+        case .gray: Color(white: 0.2)
+        case .white: .white
+        }
+    }
 
-    private var pager: some View {
-        ScrollView(.horizontal) {
+    private var foreground: Color {
+        settings.background == .white ? .black : .white
+    }
+
+    // MARK: Readers
+
+    private var pagedReader: some View {
+        let rightToLeft = mode == .rightToLeft
+        let ordered = rightToLeft ? Array(slots.reversed()) : slots
+        return ScrollView(.horizontal) {
             LazyHStack(spacing: 0) {
-                ForEach(slots) { slot in
+                ForEach(ordered) { slot in
                     Group {
                         switch slot {
-                        case .page(let page):
-                            MangaReaderPage(page: page,
-                                            isCurrent: page.id == currentID,
-                                            ocrEnabled: ocrEnabled,
-                                            showsTextBoxes: showsTextBoxes || (ocrEnabled && page.text == nil),
-                                            onRecognizing: { recognizing = $0 },
-                                            onTextTap: { hit, rect, image in lookUp(hit, rect: rect, image: image) },
-                                            onTap: toggleChrome,
-                                            onZoomChange: { isZoomed = $0 },
-                                            onDismissProgress: { [dismiss] in dismiss.value = $0 },
-                                            onDismiss: { close() })
+                        case .pages(let indices, _):
+                            ReaderSlotView(pages: indices.map { pages[$0] },
+                                           rightToLeft: rightToLeft,
+                                           texts: texts,
+                                           fit: settings.fit,
+                                           zoomable: true,
+                                           showsBoxes: settings.showTextBoxes,
+                                           highlighted: bubble,
+                                           onTap: tapped,
+                                           onTextTap: textTapped,
+                                           onBubble: { page, block in openBubble(page: page, block: block) },
+                                           onZoomChange: { isZoomed = $0 },
+                                           onDismissProgress: { [dismiss] in dismiss.value = $0 },
+                                           onDismiss: close)
                         case .end:
                             endCard
                         }
                     }
                     .containerRelativeFrame([.horizontal, .vertical])
-                    .id(slot.id(end: endID))
+                    .id(slot.id)
                 }
             }
             .scrollTargetLayout()
@@ -147,8 +253,44 @@ struct MangaReaderView: View {
         .scrollIndicators(.hidden)
         .scrollDisabled(isZoomed)
         .ignoresSafeArea()
-        // Right to left: the first page is the rightmost.
-        .defaultScrollAnchor(request.rightToLeft ? .trailing : .leading)
+        .defaultScrollAnchor(rightToLeft ? .trailing : .leading)
+    }
+
+    private var verticalReader: some View {
+        ScrollViewReader { proxy in
+        ScrollView(.vertical) {
+            LazyVStack(spacing: 0) {
+                ForEach(pages) { page in
+                    ReaderSlotView(pages: [page],
+                                   rightToLeft: false,
+                                   texts: texts,
+                                   fit: .screen,
+                                   zoomable: false,
+                                   showsBoxes: settings.showTextBoxes,
+                                   highlighted: bubble,
+                                   onTap: { _ in toggleChrome() },
+                                   onTextTap: textTapped,
+                                   onBubble: { page, block in openBubble(page: page, block: block) })
+                        .id(page.id)
+                }
+                endCard
+                    .frame(height: 360)
+                    .id(endID)
+            }
+            .scrollTargetLayout()
+        }
+        .scrollPosition(id: $currentID, anchor: .top)
+        .scrollIndicators(.hidden)
+        .ignoresSafeArea()
+        .onChange(of: stripJump) { _, _ in
+            if let currentID { proxy.scrollTo(currentID, anchor: .top) }
+        }
+        .task {
+            // Laid out now: go to where reading stopped.
+            try? await Task.sleep(for: .milliseconds(30))
+            if let currentID { proxy.scrollTo(currentID, anchor: .top) }
+        }
+        }
     }
 
     private var endCard: some View {
@@ -159,7 +301,7 @@ struct MangaReaderView: View {
                     .multilineTextAlignment(.center)
                 Text("読了")
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .opacity(0.7)
             }
             if unitIndex + 1 < request.units.count {
                 Button {
@@ -179,12 +321,12 @@ struct MangaReaderView: View {
             } else {
                 Text("最後の章です")
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .opacity(0.7)
             }
             Button("閉じる") { close() }
                 .buttonStyle(.bordered)
         }
-        .foregroundStyle(.white)
+        .foregroundStyle(foreground)
         .padding(32)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
@@ -205,7 +347,7 @@ struct MangaReaderView: View {
                     .buttonStyle(.bordered)
             }
         }
-        .foregroundStyle(.white)
+        .foregroundStyle(foreground)
         .padding(32)
     }
 
@@ -213,102 +355,158 @@ struct MangaReaderView: View {
 
     private var chrome: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 4) {
-                Button {
-                    close()
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.headline)
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
-                .accessibilityLabel(Text("閉じる"))
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(verbatim: request.title)
-                        .font(.subheadline.weight(.semibold))
-                        .lineLimit(1)
-                    if let unit {
-                        Text(verbatim: unit.label)
-                            .font(.caption)
-                            .foregroundStyle(.white.opacity(0.75))
-                            .lineLimit(1)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                if recognizing {
-                    ProgressView()
-                        .tint(.white)
-                        .frame(width: 44, height: 44)
-                }
-
-                Menu {
-                    Toggle(isOn: $showsTextBoxes) {
-                        Label("文字の枠を表示", systemImage: "rectangle.dashed")
-                    }
-                    if unitIndex > 0 {
-                        Button {
-                            unitIndex -= 1
-                        } label: {
-                            Label("前の章", systemImage: "chevron.backward")
-                        }
-                    }
-                    if unitIndex + 1 < request.units.count {
-                        Button {
-                            unitIndex += 1
-                        } label: {
-                            Label("次の章", systemImage: "chevron.forward")
-                        }
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                        .font(.headline)
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
-
-                if !hasText || !pages.allSatisfy({ $0.text != nil }) {
-                    Button {
-                        ocrEnabled.toggle()
-                        if ocrEnabled { TextRecognizer.warmUp() }
-                        flash(ocrEnabled ? String(localized: "文字認識オン") : String(localized: "文字認識オフ"))
-                    } label: {
-                        Image(systemName: "text.viewfinder")
-                            .font(.headline)
-                            .foregroundStyle(ocrEnabled ? Color.yellow : Color.white)
-                            .frame(width: 44, height: 44)
-                            .contentShape(Rectangle())
-                    }
-                    .accessibilityLabel(Text("文字認識"))
-                }
-            }
-            .padding(.horizontal, 6)
-            .background(LinearGradient(colors: [.black.opacity(0.7), .clear], startPoint: .top, endPoint: .bottom)
-                .ignoresSafeArea(edges: .top))
-
+            topBar
             Spacer()
-
-            if let index = currentIndex {
-                Text(verbatim: "\(index + 1) / \(pages.count)")
-                    .font(.footnote.monospacedDigit().weight(.semibold))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Capsule().fill(Color.black.opacity(0.55)))
-                    .padding(.bottom, 8)
+            if bubble == nil {
+                bottomBar
             }
         }
         .buttonStyle(.plain)
         .foregroundStyle(.white)
     }
 
-    // MARK: Actions
+    private var topBar: some View {
+        HStack(spacing: 2) {
+            iconButton("xmark", label: Text("閉じる")) { close() }
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(verbatim: request.title)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                if let unit {
+                    Text(verbatim: unit.label)
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.75))
+                        .lineLimit(1)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            if texts.reading > 0 {
+                ProgressView()
+                    .tint(.white)
+                    .frame(width: 36, height: 44)
+            }
+
+            if !pages.allSatisfy({ $0.text != nil }) {
+                iconButton("text.viewfinder", label: Text("文字認識"), tint: ocrActive ? .yellow : .white) {
+                    ocrActive.toggle()
+                    if ocrActive { TextRecognizer.warmUp() }
+                    flash(ocrActive ? String(localized: "文字認識オン") : String(localized: "文字認識オフ"))
+                }
+            }
+
+            Menu {
+                Toggle(isOn: $settings.showTextBoxes) {
+                    Label("吹き出しの枠を表示", systemImage: "rectangle.dashed")
+                }
+                if let index = currentPageIndex, pages.indices.contains(index), pages[index].text == nil, ocrActive {
+                    Button {
+                        rereadPage(index)
+                    } label: {
+                        Label("このページを読み直す", systemImage: "arrow.clockwise")
+                    }
+                }
+                if let seriesID = request.seriesID {
+                    Menu {
+                        ForEach(MangaReadingMode.allCases) { option in
+                            Button {
+                                settings.setMode(option, for: seriesID)
+                            } label: {
+                                if option == mode {
+                                    Label(option.label, systemImage: "checkmark")
+                                } else {
+                                    Text(verbatim: option.label)
+                                }
+                            }
+                        }
+                        if settings.hasOwnMode(seriesID) {
+                            Button("既定に戻す") { settings.setMode(nil, for: seriesID) }
+                        }
+                    } label: {
+                        Label("この作品の読み方", systemImage: "book")
+                    }
+                }
+                if unitIndex > 0 {
+                    Button {
+                        unitIndex -= 1
+                    } label: {
+                        Label("前の章", systemImage: "backward.end")
+                    }
+                }
+                if unitIndex + 1 < request.units.count {
+                    Button {
+                        unitIndex += 1
+                    } label: {
+                        Label("次の章", systemImage: "forward.end")
+                    }
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+                    .font(.headline)
+                    .frame(width: 40, height: 44)
+                    .contentShape(Rectangle())
+            }
+
+            iconButton("gearshape", label: Text("設定")) { showsSettings = true }
+        }
+        .padding(.horizontal, 6)
+        .background(Color.black.opacity(0.82).ignoresSafeArea(edges: .top))
+    }
+
+    private var bottomBar: some View {
+        VStack(spacing: 6) {
+            if settings.showPageNumber, let pageLabel {
+                Text(verbatim: pageLabel)
+                    .font(.footnote.monospacedDigit().weight(.semibold))
+            }
+            if pages.count > 1 {
+                HStack(spacing: 10) {
+                    iconButton(mode == .rightToLeft ? "forward.end" : "backward.end", label: Text("前の章")) {
+                        if unitIndex > 0 { unitIndex -= 1 }
+                    }
+                    .opacity(unitIndex > 0 ? 1 : 0.3)
+                    Slider(value: $sliderPage, in: 0...Double(max(pages.count - 1, 1)), step: 1) { editing in
+                        draggingSlider = editing
+                        if !editing { show(page: Int(sliderPage), animated: false) }
+                    }
+                    .tint(.white)
+                    // Manga turn the other way: the slider does too.
+                    .environment(\.layoutDirection, mode == .rightToLeft ? .rightToLeft : .leftToRight)
+                    iconButton(mode == .rightToLeft ? "backward.end" : "forward.end", label: Text("次の章")) {
+                        if unitIndex + 1 < request.units.count { unitIndex += 1 }
+                    }
+                    .opacity(unitIndex + 1 < request.units.count ? 1 : 0.3)
+                }
+                .environment(\.layoutDirection, .leftToRight)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 10)
+        .padding(.bottom, 6)
+        .background(Color.black.opacity(0.82).ignoresSafeArea(edges: .bottom))
+    }
+
+    private func iconButton(_ systemImage: String, label: Text, tint: Color = .white,
+                            action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.headline)
+                .foregroundStyle(tint)
+                .frame(width: 40, height: 44)
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel(label)
+    }
+
+    // MARK: Loading and moving
 
     private func loadUnit() async {
         guard let unit else { return }
         isLoading = true
         loadError = nil
         popups.closeAll()
+        closeBubble()
         do {
             let loaded = try await request.pages(unit)
             guard !Task.isCancelled else { return }
@@ -316,49 +514,167 @@ struct MangaReaderView: View {
             let saved = library.page(for: unit.id)
             // A finished chapter opens at its start again.
             let start = saved < loaded.count - 1 ? saved : 0
-            currentID = loaded.indices.contains(start) ? loaded[start].id : loaded.first?.id
+            isLoading = false
+            show(page: start, animated: false)
             if let mangaID = request.mangaID, let key = unit.id.split(separator: "\u{1F}").last {
                 library.setLastChapter(String(key), for: mangaID)
             }
-            isLoading = false
-            preload(around: start)
         } catch {
             guard !Task.isCancelled else { return }
-            loadError = error.localizedDescription
+            loadError = (error as? LocalizedError)?.errorDescription ?? UserFacingError.message(for: error)
             isLoading = false
         }
     }
 
-    /// The pages either side load ahead, so turning a page shows it at once.
+    /// Puts the page (or the spread holding it) on screen.
+    private func show(page index: Int, animated: Bool) {
+        guard pages.indices.contains(index) else { return }
+        let id: String = mode == .vertical ? pages[index].id : slots.first { slot in
+            if case .pages(let indices, _) = slot { indices.contains(index) } else { false }
+        }?.id ?? pages[index].id
+        if animated {
+            withAnimation(.snappy(duration: 0.25)) { currentID = id }
+        } else {
+            currentID = id
+        }
+        if mode == .vertical { stripJump += 1 }
+        sliderPage = Double(index)
+    }
+
+    private func pageChanged() {
+        guard let unit, let index = currentPageIndex else {
+            if currentID == endID, let unit { library.setPage(max(pages.count - 1, 0), of: pages.count, for: unit.id) }
+            return
+        }
+        library.setPage(index, of: pages.count, for: unit.id)
+        if !draggingSlider { sliderPage = Double(index) }
+        preload(around: index)
+        readText()
+    }
+
+    private func turn(forward: Bool) {
+        let all = slots
+        guard let position = all.firstIndex(where: { $0.id == currentID }) else { return }
+        let target = forward ? position + 1 : position - 1
+        guard all.indices.contains(target) else { return }
+        withAnimation(.snappy(duration: 0.22)) { currentID = all[target].id }
+    }
+
     private func preload(around index: Int) {
-        for offset in [1, 2, -1] {
-            let neighbour = index + offset
-            guard pages.indices.contains(neighbour) else { continue }
+        let ahead = max(settings.preload, 1)
+        for neighbour in (index - 1)...(index + ahead) where pages.indices.contains(neighbour) && neighbour != index {
             let page = pages[neighbour]
             guard MangaImages.cached(page.id) == nil else { continue }
             Task { _ = try? await page.load() }
         }
     }
 
-    private func toggleChrome() {
-        if !popups.isEmpty {
+    /// Reads the text of the pages on screen and the next few, Manatan's
+    /// way, so it's there by the time they're turned to.
+    private func readText() {
+        guard ocrActive, let index = currentPageIndex else { return }
+        let ahead = max(settings.preload, 1)
+        for neighbour in index...(index + ahead) where pages.indices.contains(neighbour) {
+            let page = pages[neighbour]
+            guard texts.text(of: page) == nil, !texts.isReading(page.id) else { continue }
+            texts.startReading(page.id)
+            let priority: TaskPriority = neighbour <= index + 1 ? .userInitiated : .utility
+            Task(priority: priority) {
+                if let cached = MangaOCR.cached(key: page.id) {
+                    texts.finishReading(page.id, text: cached)
+                    return
+                }
+                guard let image = try? await page.load() else {
+                    texts.finishReading(page.id, text: nil)
+                    return
+                }
+                let text = await MangaOCR.text(for: image, key: page.id, priority: priority)
+                texts.finishReading(page.id, text: text)
+            }
+        }
+    }
+
+    private func rereadPage(_ index: Int) {
+        let page = pages[index]
+        MangaOCR.forget(key: page.id)
+        texts.remove(page.id)
+        readText()
+    }
+
+    // MARK: Taps
+
+    private func tapped(_ fraction: CGFloat) {
+        if !popups.isEmpty || bubble != nil {
             popups.closeAll()
+            closeBubble()
+            return
+        }
+        guard settings.tapZones, mode != .vertical else {
+            toggleChrome()
+            return
+        }
+        if fraction < 0.3 {
+            turn(forward: mode == .rightToLeft)
+        } else if fraction > 0.7 {
+            turn(forward: mode != .rightToLeft)
+        } else {
+            toggleChrome()
+        }
+    }
+
+    private func toggleChrome() {
+        if !popups.isEmpty || bubble != nil {
+            popups.closeAll()
+            closeBubble()
             return
         }
         withAnimation(.easeInOut(duration: 0.2)) { showChrome.toggle() }
     }
 
-    private func lookUp(_ hit: OCRHit, rect: CGRect, image: UIImage) {
+    private func textTapped(_ page: ReaderPage, _ hit: OCRHit, _ rect: CGRect) {
+        let text = texts.text(of: page)
+        let point = CGPoint(x: hit.characterBox.midX, y: hit.characterBox.midY)
+        let block = text?.blockIndex(at: point)
+        if settings.textTap == .bubble, let block {
+            openBubble(page: page, block: block)
+            return
+        }
+        closeBubble()
+        let region = block.flatMap { text?.blocks[$0].box } ?? hit.characterBox
+        lookUp(SelectionData(text: hit.text, sentence: hit.sentence, rect: rect), page: page, region: region)
+    }
+
+    private func openBubble(page: ReaderPage, block: Int) {
+        guard let text = texts.text(of: page), text.blocks.indices.contains(block) else { return }
+        popups.closeAll()
+        Haptics.play(.selection)
+        bubble = OpenBubble(pageID: page.id, page: page, block: block, box: text.blocks[block].box,
+                            text: text.blocks[block].text)
+    }
+
+    private func closeBubble() {
+        if bubble != nil { bubble = nil }
+    }
+
+    private func lookUp(_ selection: SelectionData, bubble: OpenBubble) -> Int? {
+        popups.closeAll()
+        return lookUp(SelectionData(text: selection.text, sentence: bubble.text, rect: selection.rect),
+                      page: bubble.page, region: bubble.box)
+    }
+
+    @discardableResult
+    private func lookUp(_ selection: SelectionData, page: ReaderPage, region: CGRect) -> Int? {
         popups.coverURL = nil
         popups.documentTitle = request.title
-        let box = hit.characterBox
         popups.mediaProvider = {
-            CardMedia(imageURL: await MangaCardImage.write(image, around: box))
+            guard let image = try? await page.load() else { return nil }
+            return CardMedia(imageURL: await MangaCardImage.write(image, around: region))
         }
-        let selection = SelectionData(text: hit.text, sentence: hit.sentence, rect: rect)
-        if popups.replace(with: selection, userConfig: userConfig) == nil {
+        let matched = popups.replace(with: selection, userConfig: userConfig)
+        if matched == nil {
             flash(String(localized: "辞書に見つかりませんでした"))
         }
+        return matched
     }
 
     private func flash(_ message: String) {
@@ -378,56 +694,116 @@ struct MangaReaderView: View {
     }
 }
 
+// MARK: - Pieces
+
 private enum ReaderSlot: Identifiable {
-    case page(ReaderPage)
-    case end
+    /// Page indices in reading order.
+    case pages([Int], id: String)
+    case end(id: String)
 
-    var id: String { id(end: "end") }
-
-    func id(end: String) -> String {
+    var id: String {
         switch self {
-        case .page(let page): page.id
-        case .end: end
+        case .pages(_, let id), .end(let id): id
         }
     }
 }
 
-/// One page: loads its image, reads its text if asked.
-private struct MangaReaderPage: View {
+/// The bubble whose text is open.
+struct OpenBubble: Identifiable {
+    var id: String { "\(pageID)#\(block)" }
+    let pageID: String
     let page: ReaderPage
-    let isCurrent: Bool
-    let ocrEnabled: Bool
-    let showsTextBoxes: Bool
-    var onRecognizing: (Bool) -> Void
-    var onTextTap: (OCRHit, CGRect, UIImage) -> Void
-    var onTap: () -> Void
-    var onZoomChange: (Bool) -> Void
-    var onDismissProgress: (CGFloat) -> Void
-    var onDismiss: () -> Void
+    let block: Int
+    let box: CGRect
+    let text: String
+}
 
-    @State private var image: UIImage?
+/// Each page's text as it's read, and which pages are being read. Kept
+/// out of the reader's own state so a page finishing redraws only pages.
+@Observable
+final class ReaderTexts {
+    private(set) var texts: [String: PageText] = [:]
+    private(set) var readingIDs: Set<String> = []
+    /// Pages wider than tall (already a spread), which stand alone.
+    private(set) var wide: Set<String> = []
+    /// Width over height of the chapter's pages (they're nearly always
+    /// one size), so pages still loading in the vertical strip take the
+    /// room they will need and the strip doesn't shift as they arrive.
+    private(set) var typicalRatio: CGFloat?
+
+    var reading: Int { readingIDs.count }
+
+    /// mokuro's text when the page has it, else what OCR found.
+    func text(of page: ReaderPage) -> PageText? { page.text ?? texts[page.id] }
+    func isReading(_ id: String) -> Bool { readingIDs.contains(id) }
+    func isWide(_ id: String) -> Bool { wide.contains(id) }
+
+    func startReading(_ id: String) { readingIDs.insert(id) }
+
+    func finishReading(_ id: String, text: PageText?) {
+        readingIDs.remove(id)
+        if let text { texts[id] = text }
+    }
+
+    func remove(_ id: String) { texts[id] = nil }
+
+    /// OCR's results go (mokuro's live on the pages themselves).
+    func clear() {
+        texts = [:]
+    }
+
+    func noteSize(_ size: CGSize, for id: String) {
+        if size.width > size.height * 1.1, !wide.contains(id) { wide.insert(id) }
+        if typicalRatio == nil, size.height > 0, size.width <= size.height * 1.1 {
+            typicalRatio = size.width / size.height
+        }
+    }
+}
+
+/// One screen: its pages' images, loaded, with their text.
+private struct ReaderSlotView: View {
+    let pages: [ReaderPage]
+    let rightToLeft: Bool
+    let texts: ReaderTexts
+    let fit: MangaPageFit
+    let zoomable: Bool
+    let showsBoxes: Bool
+    let highlighted: OpenBubble?
+    var onTap: (CGFloat) -> Void
+    var onTextTap: (ReaderPage, OCRHit, CGRect) -> Void
+    var onBubble: (ReaderPage, Int) -> Void
+    var onZoomChange: (Bool) -> Void = { _ in }
+    var onDismissProgress: (CGFloat) -> Void = { _ in }
+    var onDismiss: () -> Void = {}
+
+    @State private var images: [String: UIImage] = [:]
     @State private var failed = false
     @State private var attempt = 0
-    @State private var recognized: [OCRLine]?
 
-    private var lines: [OCRLine]? {
-        page.text ?? (ocrEnabled ? recognized : nil)
+    /// Left to right on screen.
+    private var shown: [ReaderPage] {
+        rightToLeft ? pages.reversed() : pages
     }
 
     var body: some View {
         Group {
-            if let image {
-                ZoomableImageView(image: image,
-                                  onTap: onTap,
-                                  onZoomChange: onZoomChange,
-                                  onDismissProgress: onDismissProgress,
-                                  onDismiss: { _ in onDismiss(); return false },
-                                  ocrLines: lines,
-                                  showsTextBoxes: showsTextBoxes,
-                                  onTextTap: { hit, rect in onTextTap(hit, rect, image) })
-                    .task(id: ocrEnabled && isCurrent) {
-                        await recognizeIfNeeded(image)
-                    }
+            if shown.allSatisfy({ images[$0.id] != nil }) {
+                let ordered = shown
+                let pictures = ordered.compactMap { images[$0.id] }
+                let ratio = pictures.reduce(0) { $0 + $1.size.width / max($1.size.height, 1) }
+                MangaPageView(images: pictures,
+                              texts: ordered.map { texts.text(of: $0) },
+                              fit: fit,
+                              zoomable: zoomable,
+                              showsBoxes: showsBoxes,
+                              highlighted: highlight(in: ordered),
+                              onTap: onTap,
+                              onTextTap: { index, hit, rect in onTextTap(ordered[index], hit, rect) },
+                              onBubble: { index, block, _ in onBubble(ordered[index], block) },
+                              onZoomChange: onZoomChange,
+                              onDismissProgress: onDismissProgress,
+                              onDismiss: onDismiss)
+                    .modifier(VerticalSize(ratio: zoomable ? nil : ratio))
             } else if failed {
                 VStack(spacing: 12) {
                     Image(systemName: "photo.badge.exclamationmark")
@@ -437,77 +813,150 @@ private struct MangaReaderPage: View {
                     Button("再試行") { attempt += 1 }
                         .buttonStyle(.bordered)
                 }
-                .foregroundStyle(.white)
+                .foregroundStyle(.gray)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .modifier(VerticalSize(ratio: zoomable ? nil : texts.typicalRatio ?? 0.7))
                 .contentShape(Rectangle())
-                .onTapGesture(perform: onTap)
+                .onTapGesture { onTap(0.5) }
             } else {
                 ProgressView()
-                    .tint(.white)
+                    .tint(.gray)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .modifier(VerticalSize(ratio: zoomable ? nil : texts.typicalRatio ?? 0.7))
                     .contentShape(Rectangle())
-                    .onTapGesture(perform: onTap)
+                    .onTapGesture { onTap(0.5) }
             }
         }
-        .task(id: "\(page.id)#\(attempt)") {
-            if image != nil { return }
+        .task(id: "\(pages.map(\.id).joined(separator: "|"))#\(attempt)") {
             failed = false
-            if let cached = MangaImages.cached(page.id) {
-                image = cached
-                return
-            }
-            do {
-                image = try await page.load()
-            } catch {
-                if !Task.isCancelled { failed = true }
+            for page in pages where images[page.id] == nil {
+                if let cached = MangaImages.cached(page.id) {
+                    images[page.id] = cached
+                    texts.noteSize(cached.size, for: page.id)
+                    continue
+                }
+                do {
+                    let image = try await page.load()
+                    images[page.id] = image
+                    texts.noteSize(image.size, for: page.id)
+                } catch {
+                    if !Task.isCancelled { failed = true }
+                    return
+                }
             }
         }
     }
 
-    private func recognizeIfNeeded(_ image: UIImage) async {
-        guard ocrEnabled, isCurrent, page.text == nil, recognized == nil else { return }
-        if let cached = OCRCache.lines(for: page.id) {
-            recognized = cached
-            return
+    private func highlight(in ordered: [ReaderPage]) -> (image: Int, box: CGRect)? {
+        guard let highlighted, let index = ordered.firstIndex(where: { $0.id == highlighted.pageID }) else { return nil }
+        return (index, highlighted.box)
+    }
+}
+
+/// In the vertical strip a page is as tall as its width makes it.
+private struct VerticalSize: ViewModifier {
+    let ratio: CGFloat?
+
+    func body(content: Content) -> some View {
+        if let ratio, ratio > 0 {
+            content.aspectRatio(ratio, contentMode: .fit)
+        } else {
+            content
         }
-        onRecognizing(true)
-        let lines = await OCRCache.recognize(image, id: page.id)
-        onRecognizing(false)
-        recognized = lines
+    }
+}
+
+/// A bubble's text, for reading and tapping word by word when OCR's
+/// boxes over the page are too small or slightly off.
+private struct BubbleCard: View {
+    let bubble: OpenBubble
+    var onSelect: (SelectionData) -> Int?
+    var onTapOutside: () -> Void
+    var onCopy: () -> Void
+    var onClose: () -> Void
+    @Environment(UserConfig.self) private var userConfig
+
+    var body: some View {
+        VStack {
+            Spacer()
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("吹き出し")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button(action: onCopy) {
+                        Image(systemName: "doc.on.doc")
+                            .frame(width: 36, height: 32)
+                            .contentShape(Rectangle())
+                    }
+                    .accessibilityLabel(Text("コピー"))
+                    Button(action: onClose) {
+                        Image(systemName: "xmark")
+                            .frame(width: 36, height: 32)
+                            .contentShape(Rectangle())
+                    }
+                    .accessibilityLabel(Text("閉じる"))
+                }
+                .buttonStyle(.plain)
+                ScrollView {
+                    PostTextView(text: bubble.text,
+                                 scanNonJapaneseText: userConfig.scanNonJapaneseText,
+                                 style: AppearanceSettings.shared.postStyle,
+                                 onTextSelected: onSelect,
+                                 onTapOutside: onTapOutside,
+                                 onPostReply: { _ in },
+                                 onThreadRoute: { _ in })
+                        .id(bubble.id)
+                }
+                .frame(maxHeight: 180)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(14)
+            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(.regularMaterial))
+            .padding(.horizontal, 10)
+            .padding(.bottom, 10)
+        }
     }
 }
 
 /// How far a swipe-to-close has gone, read only by the backdrop.
 @Observable
-private final class ReaderDismiss {
+final class ReaderDismiss {
     var value: CGFloat = 0
 }
 
 private struct ReaderBackdrop: View {
     let dismiss: ReaderDismiss
+    let color: Color
 
     var body: some View {
-        Color.black
+        color
             .opacity(1 - dismiss.value * 0.85)
             .ignoresSafeArea()
     }
 }
 
-/// The card's picture: the part of the page around the looked-up word
-/// (the panel it's in, roughly), not the whole page, whose text would be
-/// too small to read on a card.
+/// The card's picture: the bubble with some of the panel around it, not
+/// the whole page, whose text would be too small to read on a card.
 enum MangaCardImage {
     @concurrent
-    nonisolated static func write(_ image: UIImage, around box: CGRect) async -> URL? {
+    nonisolated static func write(_ image: UIImage, around region: CGRect) async -> URL? {
         guard let cgImage = image.cgImage else { return CardImage.write(image, maxSide: 900) }
         let width = CGFloat(cgImage.width)
         let height = CGFloat(cgImage.height)
-        let cropWidth = width * 0.62
-        let cropHeight = min(height, cropWidth * 1.15)
-        let x = min(max(box.midX * width - cropWidth / 2, 0), width - cropWidth)
-        let y = min(max(box.midY * height - cropHeight / 2, 0), height - cropHeight)
-        let rect = CGRect(x: x, y: y, width: cropWidth, height: cropHeight).integral
-        guard let cropped = cgImage.cropping(to: rect) else { return CardImage.write(image, maxSide: 900) }
+        // The bubble plus a margin as big as itself, at least about a
+        // third of the page each way.
+        let side = max(region.width, region.height)
+        var rect = region.insetBy(dx: -side * 0.6, dy: -side * 0.6)
+        if rect.width < 0.4 { rect = rect.insetBy(dx: -(0.4 - rect.width) / 2, dy: 0) }
+        if rect.height < 0.3 { rect = rect.insetBy(dx: 0, dy: -(0.3 - rect.height) / 2) }
+        rect = rect.intersection(CGRect(x: 0, y: 0, width: 1, height: 1))
+        let pixels = CGRect(x: rect.minX * width, y: rect.minY * height,
+                            width: rect.width * width, height: rect.height * height).integral
+        guard !pixels.isEmpty, let cropped = cgImage.cropping(to: pixels) else {
+            return CardImage.write(image, maxSide: 900)
+        }
         return CardImage.write(UIImage(cgImage: cropped), maxSide: 900)
     }
 }

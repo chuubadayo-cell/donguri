@@ -62,6 +62,21 @@ struct DonguriApp: App {
     /// registered in Donguri-Info.plist. `AnkiManager` builds these URLs when it
     /// opens Anki; this is the other half of that round trip.
     private func handleURL(_ url: URL) {
+        // A book opened in いろは from Files or the share sheet goes into
+        // the Manga folder.
+        if url.isFileURL, LocalBookKind(file: url) != nil {
+            Task {
+                let navigator = AppNavigator.shared
+                do {
+                    _ = try await LocalMangaLibrary.shared.importItems([url])
+                    navigator.rootTab = .manga
+                    navigator.flash(String(localized: "マンガに追加しました"))
+                } catch {
+                    navigator.flash(error.localizedDescription)
+                }
+            }
+            return
+        }
         guard url.scheme == "donguri" else { return }
 
         switch url.host {
