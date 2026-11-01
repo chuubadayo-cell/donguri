@@ -7,9 +7,11 @@
 //  Over the pages, their text: a tap on it looks up the word (at once:
 //  that tap doesn't wait to rule out a double tap), a long press picks the
 //  speech bubble, and the bubbles can be outlined. Taps elsewhere report
-//  where across the screen they landed, for tap-to-turn zones. A swipe
-//  down closes the reader. UIScrollView underneath, as the gallery's
-//  ZoomableImageView, for zoom physics SwiftUI doesn't have.
+//  where across the screen they landed, for tap-to-turn zones. No swipe
+//  closes the reader (the ✕ does). UIScrollView underneath, as the
+//  gallery's ZoomableImageView, for zoom physics SwiftUI doesn't have. The
+//  paged reader puts it straight into its pager's cells (MangaPager); the
+//  vertical strip uses it through MangaPageView.
 //
 
 import SwiftUI
@@ -33,8 +35,6 @@ struct MangaPageView: UIViewRepresentable {
     /// A long press on a bubble: image, bubble index, bubble's rect in the window.
     var onBubble: (Int, Int, CGRect) -> Void = { _, _, _ in }
     var onZoomChange: (Bool) -> Void = { _ in }
-    var onDismissProgress: (CGFloat) -> Void = { _ in }
-    var onDismiss: () -> Void = {}
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -56,20 +56,26 @@ struct MangaPageView: UIViewRepresentable {
                        showsBoxes: showsBoxes, highlighted: highlighted)
     }
 
-    final class Coordinator {
+    final class Coordinator: MangaPageCallbacks {
         var parent: MangaPageView?
 
         func tapped(_ fraction: CGFloat) { parent?.onTap(fraction) }
         func textTapped(_ image: Int, _ hit: OCRHit, _ rect: CGRect) { parent?.onTextTap(image, hit, rect) }
         func bubble(_ image: Int, _ block: Int, _ rect: CGRect) { parent?.onBubble(image, block, rect) }
         func zoomChanged(_ zoomed: Bool) { parent?.onZoomChange(zoomed) }
-        func dismissProgress(_ progress: CGFloat) { parent?.onDismissProgress(progress) }
-        func dismissed() { parent?.onDismiss() }
     }
 }
 
+/// What a page tells whoever shows it.
+protocol MangaPageCallbacks: AnyObject {
+    func tapped(_ fraction: CGFloat)
+    func textTapped(_ image: Int, _ hit: OCRHit, _ rect: CGRect)
+    func bubble(_ image: Int, _ block: Int, _ rect: CGRect)
+    func zoomChanged(_ zoomed: Bool)
+}
+
 final class MangaPageScrollView: UIScrollView, UIScrollViewDelegate {
-    weak var callbacks: MangaPageView.Coordinator?
+    weak var callbacks: MangaPageCallbacks?
 
     private let content = UIView()
     private var imageViews: [UIImageView] = []
@@ -94,16 +100,15 @@ final class MangaPageScrollView: UIScrollView, UIScrollViewDelegate {
     private lazy var singleTap = UITapGestureRecognizer(target: self, action: #selector(handleSingleTap(_:)))
     private lazy var textTap = UITapGestureRecognizer(target: self, action: #selector(handleTextTap(_:)))
     private lazy var longPress = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPress(_:)))
-    private lazy var dismissPan = UIPanGestureRecognizer(target: self, action: #selector(handleDismissPan(_:)))
     private let textGate = GestureGate()
 
-    private static let dismissDistance: CGFloat = 140
+    var isZoomed: Bool { zoomScale > minimumZoomScale + 0.01 }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
         delegate = self
         minimumZoomScale = 1
-        maximumZoomScale = 5
+        maximumZoomScale = 6
         showsVerticalScrollIndicator = false
         showsHorizontalScrollIndicator = false
         contentInsetAdjustmentBehavior = .never
@@ -127,9 +132,6 @@ final class MangaPageScrollView: UIScrollView, UIScrollViewDelegate {
         addGestureRecognizer(textTap)
         longPress.minimumPressDuration = 0.4
         addGestureRecognizer(longPress)
-        // No delegate: UIScrollView implements the gesture delegate methods
-        // for its own pan and pinch.
-        addGestureRecognizer(dismissPan)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
@@ -172,7 +174,6 @@ final class MangaPageScrollView: UIScrollView, UIScrollViewDelegate {
         isScrollEnabled = zoomable
         pinchGestureRecognizer?.isEnabled = zoomable
         doubleTap.isEnabled = zoomable
-        dismissPan.isEnabled = zoomable
         if layoutChanged {
             laidOutSize = .zero
             setNeedsLayout()
@@ -186,12 +187,14 @@ final class MangaPageScrollView: UIScrollView, UIScrollViewDelegate {
     override func layoutSubviews() {
         super.layoutSubviews()
         guard bounds.width > 0, bounds.height > 0 else { return }
+        // Only a new size (rotation, a new page) lays the pages out again;
+        // scrolling and zooming never do.
         if bounds.size != laidOutSize {
             laidOutSize = bounds.size
             zoomScale = 1
             layoutPages()
+            centerWithInsets()
         }
-        center()
     }
 
     /// The pages side by side at one height, scaled as the fit asks.
@@ -220,10 +223,17 @@ final class MangaPageScrollView: UIScrollView, UIScrollViewDelegate {
         drawText()
     }
 
-    private func center() {
-        let offsetX = max((bounds.width - contentSize.width) / 2, 0)
-        let offsetY = max((bounds.height - contentSize.height) / 2, 0)
-        content.center = CGPoint(x: contentSize.width / 2 + offsetX, y: contentSize.height / 2 + offsetY)
+    /// A page smaller than the screen sits in its middle. Done with insets,
+    /// which scrolling leaves alone, rather than by moving the page on
+    /// every layout pass, which made panning a zoomed page jump.
+    private func centerWithInsets() {
+        let x = max((bounds.width - contentSize.width) / 2, 0)
+        let y = max((bounds.height - contentSize.height) / 2, 0)
+        let insets = UIEdgeInsets(top: y, left: x, bottom: y, right: x)
+        if contentInset != insets {
+            contentInset = insets
+            if !isZoomed { contentOffset = CGPoint(x: -x, y: -y) }
+        }
     }
 
     private func drawText() {
@@ -281,8 +291,8 @@ final class MangaPageScrollView: UIScrollView, UIScrollViewDelegate {
     }
 
     func scrollViewDidZoom(_ scrollView: UIScrollView) {
-        center()
-        let zoomed = zoomScale > minimumZoomScale + 0.01
+        centerWithInsets()
+        let zoomed = isZoomed
         if zoomed != wasZoomed {
             wasZoomed = zoomed
             callbacks?.zoomChanged(zoomed)
@@ -343,62 +353,21 @@ final class MangaPageScrollView: UIScrollView, UIScrollViewDelegate {
         }
     }
 
-    // MARK: Swipe down to close
+    // MARK: Sharing drags with the pager
 
     override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         // At normal size a sideways drag turns the page: the page doesn't
         // take it unless it really is wider than the screen.
-        if gestureRecognizer === panGestureRecognizer, zoomScale <= minimumZoomScale + 0.01,
-           contentSize.width <= bounds.width + 1 {
+        if gestureRecognizer === panGestureRecognizer, !isZoomed, contentSize.width <= bounds.width + 1 {
             let velocity = panGestureRecognizer.velocity(in: self)
             if abs(velocity.x) > abs(velocity.y) { return false }
         }
-        guard gestureRecognizer === dismissPan else {
-            return super.gestureRecognizerShouldBegin(gestureRecognizer)
-        }
-        // Only an unzoomed page that doesn't scroll down itself, pulled
-        // clearly downward, closes the reader.
-        guard zoomScale <= minimumZoomScale + 0.01, contentSize.height <= bounds.height + 1 else { return false }
-        if let pager = enclosingScrollView, pager.isDragging || pager.isDecelerating { return false }
-        let velocity = dismissPan.velocity(in: self)
-        return velocity.y > 120 && velocity.y > abs(velocity.x) * 2.2
+        return super.gestureRecognizerShouldBegin(gestureRecognizer)
     }
 
-    private var enclosingScrollView: UIScrollView? {
-        var view = superview
-        while let current = view {
-            if let scrollView = current as? UIScrollView { return scrollView }
-            view = current.superview
-        }
-        return nil
-    }
-
-    @objc private func handleDismissPan(_ recognizer: UIPanGestureRecognizer) {
-        let translation = max(recognizer.translation(in: self).y, 0)
-        let progress = min(translation / Self.dismissDistance, 1)
-        switch recognizer.state {
-        case .changed:
-            content.transform = CGAffineTransform(translationX: 0, y: translation)
-            callbacks?.dismissProgress(progress)
-        case .ended, .cancelled:
-            let velocity = recognizer.velocity(in: self).y
-            if recognizer.state == .ended, translation > Self.dismissDistance || velocity > 900 {
-                callbacks?.dismissProgress(1)
-                UIView.animate(withDuration: 0.2, delay: 0, options: .curveEaseOut) {
-                    self.content.transform = CGAffineTransform(translationX: 0, y: self.bounds.height)
-                    self.content.alpha = 0
-                } completion: { _ in
-                    self.callbacks?.dismissed()
-                }
-            } else {
-                UIView.animate(withDuration: 0.3, delay: 0, usingSpringWithDamping: 0.85, initialSpringVelocity: 0) {
-                    self.content.transform = .identity
-                }
-                callbacks?.dismissProgress(0)
-            }
-        default:
-            break
-        }
+    /// Back to the whole page.
+    func resetZoom(animated: Bool) {
+        if isZoomed { setZoomScale(minimumZoomScale, animated: animated) }
     }
 }
 

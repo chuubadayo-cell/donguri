@@ -33,7 +33,8 @@ struct MangaReaderView: View {
     @State private var isZoomed = false
     @State private var popups = PopupStack()
     @State private var toast: String?
-    @State private var dismiss = ReaderDismiss()
+    /// The controls were showing when zooming in, and come back after.
+    @State private var chromeBeforeZoom = true
     @State private var texts = ReaderTexts()
     @State private var bubble: OpenBubble?
     @State private var showsSettings = false
@@ -107,7 +108,7 @@ struct MangaReaderView: View {
 
     var body: some View {
         ZStack {
-            ReaderBackdrop(dismiss: dismiss, color: backgroundColor)
+            backgroundColor.ignoresSafeArea()
 
             if isLoading {
                 ProgressView()
@@ -123,6 +124,11 @@ struct MangaReaderView: View {
 
             if showChrome {
                 chrome
+                    .transition(.opacity)
+            }
+
+            if isZoomed && !showChrome {
+                zoomBadge
                     .transition(.opacity)
             }
 
@@ -164,7 +170,7 @@ struct MangaReaderView: View {
             await loadUnit()
         }
         .onChange(of: currentID) { _, _ in
-            isZoomed = false
+            if isZoomed { zoomChanged(false) }
             popups.closeAll()
             closeBubble()
             pageChanged()
@@ -219,31 +225,48 @@ struct MangaReaderView: View {
     private var pagedReader: some View {
         let rightToLeft = mode == .rightToLeft
         let all = slots
-        let ordered = rightToLeft ? Array(all.reversed()) : all
-        let byID = Dictionary(all.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        return MangaPager(ids: ordered.map(\.id), currentID: $currentID, locked: isZoomed) { id in
-            switch byID[id] {
-            case .pages(let indices, _):
-                ReaderSlotView(pages: indices.map { pages[$0] },
-                               rightToLeft: rightToLeft,
-                               texts: texts,
-                               fit: settings.fit,
-                               zoomable: true,
-                               showsBoxes: settings.showTextBoxes,
-                               highlighted: bubble,
-                               onTap: tapped,
-                               onTextTap: textTapped,
-                               onBubble: { page, block in openBubble(page: page, block: block) },
-                               onZoomChange: { isZoomed = $0 },
-                               onDismissProgress: { [dismiss] in dismiss.value = $0 },
-                               onDismiss: close)
-            case .end:
-                endCard
-            case nil:
-                Color.clear
+        let screenOrder = rightToLeft ? Array(all.reversed()) : all
+        let pagerSlots: [PagerSlot] = screenOrder.map { slot in
+            switch slot {
+            case .pages(let indices, let id):
+                let shown = indices.map { pages[$0] }
+                return PagerSlot(id: id, pages: rightToLeft ? shown.reversed() : shown)
+            case .end(let id):
+                return PagerSlot(id: id, pages: [], isEnd: true)
             }
         }
+        return MangaPager(slots: pagerSlots,
+                          currentID: $currentID,
+                          locked: isZoomed,
+                          fit: settings.fit,
+                          showsBoxes: settings.showTextBoxes,
+                          highlighted: bubble,
+                          textVersion: texts.version,
+                          pageText: { [texts] page in texts.text(of: page) },
+                          handlers: PagerHandlers(onTap: tapped,
+                                                  onTextTap: textTapped,
+                                                  onBubble: { page, block in openBubble(page: page, block: block) },
+                                                  onZoomChange: zoomChanged,
+                                                  onImage: { [texts] page, image in texts.noteSize(image.size, for: page.id) })) {
+            endCard
+        }
         .ignoresSafeArea()
+    }
+
+    /// While a page is zoomed in, a small reminder of how to get out; the
+    /// controls are hidden and taps on the page only look up words.
+    private var zoomBadge: some View {
+        VStack {
+            Spacer()
+            Label("拡大中・ダブルタップで戻る", systemImage: "plus.magnifyingglass")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background(Capsule().fill(Color.black.opacity(0.6)))
+                .padding(.bottom, 14)
+                .allowsHitTesting(false)
+        }
     }
 
     private var verticalReader: some View {
@@ -618,6 +641,9 @@ struct MangaReaderView: View {
             closeBubble()
             return
         }
+        // Zoomed in, a tap off the text does nothing: no page turns, no
+        // controls, so looking around never throws the page away.
+        if isZoomed { return }
         guard settings.tapZones, mode != .vertical else {
             toggleChrome()
             return
@@ -628,6 +654,20 @@ struct MangaReaderView: View {
             turn(forward: mode != .rightToLeft)
         } else {
             toggleChrome()
+        }
+    }
+
+    /// Zooming in hides the controls; zooming back out restores them.
+    private func zoomChanged(_ zoomed: Bool) {
+        guard zoomed != isZoomed else { return }
+        withAnimation(.easeInOut(duration: 0.2)) {
+            if zoomed {
+                chromeBeforeZoom = showChrome
+                showChrome = false
+            } else {
+                showChrome = chromeBeforeZoom
+            }
+            isZoomed = zoomed
         }
     }
 
@@ -747,6 +787,8 @@ final class ReaderTexts {
     private(set) var typicalRatio: CGFloat?
 
     var reading: Int { readingIDs.count }
+    /// Bumped whenever a page's text changes.
+    private(set) var version = 0
 
     /// mokuro's text when the page has it, else what OCR found.
     func text(of page: ReaderPage) -> PageText? { page.text ?? texts[page.id] }
@@ -757,14 +799,21 @@ final class ReaderTexts {
 
     func finishReading(_ id: String, text: PageText?) {
         readingIDs.remove(id)
-        if let text { texts[id] = text }
+        if let text {
+            texts[id] = text
+            version += 1
+        }
     }
 
-    func remove(_ id: String) { texts[id] = nil }
+    func remove(_ id: String) {
+        texts[id] = nil
+        version += 1
+    }
 
     /// OCR's results go (mokuro's live on the pages themselves).
     func clear() {
         texts = [:]
+        version += 1
     }
 
     func noteSize(_ size: CGSize, for id: String) {
@@ -788,8 +837,6 @@ private struct ReaderSlotView: View {
     var onTextTap: (ReaderPage, OCRHit, CGRect) -> Void
     var onBubble: (ReaderPage, Int) -> Void
     var onZoomChange: (Bool) -> Void = { _ in }
-    var onDismissProgress: (CGFloat) -> Void = { _ in }
-    var onDismiss: () -> Void = {}
 
     @State private var images: [String: UIImage] = [:]
     @State private var failed = false
@@ -815,9 +862,7 @@ private struct ReaderSlotView: View {
                               onTap: onTap,
                               onTextTap: { index, hit, rect in onTextTap(ordered[index], hit, rect) },
                               onBubble: { index, block, _ in onBubble(ordered[index], block) },
-                              onZoomChange: onZoomChange,
-                              onDismissProgress: onDismissProgress,
-                              onDismiss: onDismiss)
+                              onZoomChange: onZoomChange)
                     .modifier(VerticalSize(ratio: zoomable ? nil : ratio))
             } else if failed {
                 VStack(spacing: 12) {
@@ -932,23 +977,6 @@ private struct BubbleCard: View {
             .padding(.horizontal, 10)
             .padding(.bottom, 10)
         }
-    }
-}
-
-/// How far a swipe-to-close has gone, read only by the backdrop.
-@Observable
-final class ReaderDismiss {
-    var value: CGFloat = 0
-}
-
-private struct ReaderBackdrop: View {
-    let dismiss: ReaderDismiss
-    let color: Color
-
-    var body: some View {
-        color
-            .opacity(1 - dismiss.value * 0.85)
-            .ignoresSafeArea()
     }
 }
 
