@@ -249,14 +249,14 @@ class DictionaryManager {
                         self.currentImport = "Fetching \(name)"
                     }
 
-                    let (data, _) = try await URLSession.shared.data(from: URL(string: url)!)
+                    let (data, _) = try await URLSession.shared.data(from: try Self.requireURL(url))
                     let remoteIndex = try JSONDecoder().decode(DictionaryIndex.self, from: data)
 
                     await MainActor.run {
                         self.currentImport = "Downloading \(remoteIndex.title)"
                     }
 
-                    let (temp, _) = try await URLSession.shared.download(from: URL(string: remoteIndex.downloadUrl)!)
+                    let (temp, _) = try await URLSession.shared.download(from: try Self.requireURL(remoteIndex.downloadUrl))
                     tempFiles.append(temp)
 
                     await MainActor.run {
@@ -372,7 +372,7 @@ class DictionaryManager {
                 }
 
                 do {
-                    let (data, _) = try await session.data(from: URL(string: index.indexUrl)!)
+                    let (data, _) = try await session.data(from: try Self.requireURL(index.indexUrl))
                     let remoteIndex = try JSONDecoder().decode(DictionaryIndex.self, from: data)
 
                     if index.revision == remoteIndex.revision {
@@ -383,7 +383,7 @@ class DictionaryManager {
                         self.currentImport = "Downloading \(remoteIndex.title)"
                     }
 
-                    let (temp, _) = try await session.download(from: URL(string: remoteIndex.downloadUrl)!)
+                    let (temp, _) = try await session.download(from: try Self.requireURL(remoteIndex.downloadUrl))
                     tempFiles.append(temp)
 
                     await MainActor.run {
@@ -613,5 +613,15 @@ class DictionaryManager {
     private func showError(_ message: String) {
         errorMessage = message
         shouldShowError = true
+    }
+}
+
+extension DictionaryManager {
+    /// An address from a dictionary's own index: a malformed one fails
+    /// that dictionary's update instead of crashing the app (updates run
+    /// at launch).
+    nonisolated static func requireURL(_ string: String) throws -> URL {
+        guard let url = URL(string: string) else { throw URLError(.badURL) }
+        return url
     }
 }

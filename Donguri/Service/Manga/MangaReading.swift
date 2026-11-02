@@ -10,6 +10,7 @@
 
 import Foundation
 import UIKit
+import ImageIO
 import AidokuRunner
 
 /// One chapter or volume.
@@ -171,11 +172,21 @@ extension AidokuRunner.Chapter {
 /// Page images, decoded off the main actor and kept for the pages around
 /// the one being read.
 enum MangaImages {
+    /// Kept by size, not count: a dozen full scans could pass 500 MB.
     private static let cache: NSCache<NSString, UIImage> = {
         let cache = NSCache<NSString, UIImage>()
-        cache.countLimit = 14
+        cache.totalCostLimit = 240 * 1024 * 1024
         return cache
     }()
+
+    /// The largest side a page is decoded at: sharper than any screen
+    /// shows unzoomed, far smaller than a raw scan.
+    nonisolated static let maxPixel: CGFloat = 2600
+
+    private static func store(_ image: UIImage, _ key: String) {
+        let pixels = Int(image.size.width * image.scale * image.size.height * image.scale)
+        cache.setObject(image, forKey: key as NSString, cost: pixels * 4)
+    }
 
     static func cached(_ key: String) -> UIImage? {
         cache.object(forKey: key as NSString)
@@ -185,7 +196,7 @@ enum MangaImages {
     static func image(at url: URL, cacheKey: String) async throws -> UIImage {
         if let image = cached(cacheKey) { return image }
         let image = try await fetch(url)
-        cache.setObject(image, forKey: cacheKey as NSString)
+        store(image, cacheKey)
         return image
     }
 
@@ -201,7 +212,9 @@ enum MangaImages {
         }
         request = MangaSources.prepared(request)
         let (data, response) = try await URLSession.shared.data(for: request)
-        var image = try await decode(data)
+        // A source that unscrambles pages works in the original's pixels,
+        // so its pages are decoded whole.
+        var image = try await decode(data, maxPixel: source.features.processesPages ? nil : maxPixel)
         if source.features.processesPages {
             let http = response as? HTTPURLResponse
             let headers = (http?.allHeaderFields ?? [:]).reduce(into: [String: String]()) { result, pair in
@@ -217,7 +230,7 @@ enum MangaImages {
             try? await source.remove(value: reference)
             if let processed { image = processed }
         }
-        cache.setObject(image, forKey: cacheKey as NSString)
+        store(image, cacheKey)
         return image
     }
 
@@ -231,13 +244,29 @@ enum MangaImages {
             request.setValue(SafariUserAgent.mobile, forHTTPHeaderField: "User-Agent")
             data = try await URLSession.shared.data(for: request).0
         }
-        return try await decode(data)
+        return try await decode(data, maxPixel: maxPixel)
     }
 
     @concurrent
-    private nonisolated static func decode(_ data: Data) async throws -> UIImage {
+    private nonisolated static func decode(_ data: Data, maxPixel: CGFloat?) async throws -> UIImage {
+        if let maxPixel, let image = downsample(data, maxPixel: maxPixel) { return image }
         guard let image = UIImage(data: data) else { throw URLError(.cannotDecodeContentData) }
         return image.preparingForDisplay() ?? image
+    }
+
+    /// Decodes straight to at most `maxPixel` on the longer side (ImageIO
+    /// never holds the full-size bitmap), already prepared for drawing.
+    nonisolated static func downsample(_ data: Data, maxPixel: CGFloat) -> UIImage? {
+        let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions) else { return nil }
+        let options = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: Int(maxPixel)
+        ] as CFDictionary
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options) else { return nil }
+        return UIImage(cgImage: cgImage)
     }
 
     @concurrent
@@ -249,9 +278,8 @@ enum MangaImages {
     /// pages from filling memory.
     static func localPage(_ book: LocalBook, index: Int, cacheKey: String) async throws -> UIImage {
         if let image = cached(cacheKey) { return image }
-        let maxPixel = max(UIScreen.main.nativeBounds.height, 2000) * 1.2
         let image = try await book.image(at: index, maxPixel: maxPixel)
-        cache.setObject(image, forKey: cacheKey as NSString)
+        store(image, cacheKey)
         return image
     }
 

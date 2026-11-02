@@ -343,6 +343,7 @@ actor LocalBook {
         case .folder, .image:
             data = try Data(contentsOf: URL(fileURLWithPath: pagePaths[index]))
         }
+        if let image = MangaImages.downsample(data, maxPixel: maxPixel) { return image }
         guard let image = UIImage(data: data) else { throw Failure.unreadable }
         return image.preparingForDisplay() ?? image
     }
