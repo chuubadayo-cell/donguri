@@ -1481,6 +1481,22 @@
         }
       }
     },
+    "ここまで既読にする" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mark Read Up to Here"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ここまで既読にする"
+          }
+        }
+      }
+    },
     "ここまで読んだ" : {
       "localizations" : {
         "en" : {
@@ -1862,6 +1878,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "すべて初期設定に戻す"
+          }
+        }
+      }
+    },
+    "すべて既読にする" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mark All as Read"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "すべて既読にする"
+          }
+        }
+      }
+    },
+    "すべて未読にする" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mark All as Unread"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "すべて未読にする"
           }
         }
       }
@@ -7410,6 +7458,38 @@
         }
       }
     },
+    "既読にする" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mark as Read"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "既読にする"
+          }
+        }
+      }
+    },
+    "既読の管理" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Read Status"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "既読の管理"
+          }
+        }
+      }
+    },
     "日" : {
       "localizations" : {
         "en" : {
@@ -7774,6 +7854,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "最近見た板"
+          }
+        }
+      }
+    },
+    "未読にする" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mark as Unread"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未読にする"
           }
         }
       }

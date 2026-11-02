@@ -325,3 +325,43 @@ private struct ShelfEditor: View {
         if library.addShelf(newName) != nil { newName = "" }
     }
 }
+
+/// A chapter's or volume's long-press menu: read or unread, or read
+/// everything up to it.
+struct ReadMarkMenu: View {
+    let read: Bool
+    let mark: (Bool) -> Void
+    let markUpTo: () -> Void
+
+    var body: some View {
+        if read {
+            Button { mark(false) } label: { Label("未読にする", systemImage: "circle") }
+        } else {
+            Button { mark(true) } label: { Label("既読にする", systemImage: "checkmark.circle") }
+        }
+        Button(action: markUpTo) {
+            Label("ここまで既読にする", systemImage: "checkmark.circle.badge.questionmark")
+        }
+    }
+}
+
+/// The series page's menu for marking every chapter or volume at once.
+struct SeriesReadMenu: View {
+    let units: [String]
+    @State private var library = MangaLibrary.shared
+
+    var body: some View {
+        Menu {
+            Button { library.setRead(units, read: true) } label: {
+                Label("すべて既読にする", systemImage: "checkmark.circle.fill")
+            }
+            Button { library.setRead(units, read: false) } label: {
+                Label("すべて未読にする", systemImage: "circle")
+            }
+        } label: {
+            Image(systemName: "checklist")
+        }
+        .disabled(units.isEmpty)
+        .accessibilityLabel(Text("既読の管理"))
+    }
+}

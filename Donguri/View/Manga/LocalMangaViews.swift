@@ -244,6 +244,14 @@ struct LocalSeriesView: View {
                             Label("削除", systemImage: "trash")
                         }
                     }
+                    .contextMenu {
+                        ReadMarkMenu(read: reading.isFinished(volume.unitID),
+                                     mark: { reading.setRead([volume.unitID], read: $0) },
+                                     markUpTo: {
+                                         guard let index = series.volumes.firstIndex(of: volume) else { return }
+                                         reading.setRead(series.volumes[...index].map(\.unitID), read: true)
+                                     })
+                    }
                 }
             }
         }
@@ -251,6 +259,9 @@ struct LocalSeriesView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if let series {
+                ToolbarItem(placement: .topBarTrailing) {
+                    SeriesReadMenu(units: series.volumes.map(\.unitID))
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     let saved = reading.isSaved(local: series.id)
                     Button {

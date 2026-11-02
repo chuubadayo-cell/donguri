@@ -243,6 +243,21 @@ final class MangaLibrary {
         if changed { scheduleSave() }
     }
 
+    /// Marks chapters or volumes read (to the end) or unread (from the start).
+    func setRead(_ units: [String], read: Bool) {
+        guard !units.isEmpty else { return }
+        for unit in units {
+            if read {
+                stored.finished.insert(unit)
+                if let count = stored.pageCounts?[unit], count > 0 { stored.pages[unit] = count - 1 }
+            } else {
+                stored.finished.remove(unit)
+                stored.pages[unit] = nil
+            }
+        }
+        scheduleSave()
+    }
+
     /// The title being read now, so the library can put it first.
     func noteRead(_ entryID: String) {
         var map = stored.lastRead ?? [:]

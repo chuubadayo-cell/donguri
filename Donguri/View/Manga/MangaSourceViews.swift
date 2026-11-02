@@ -442,6 +442,9 @@ struct MangaDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
+                SeriesReadMenu(units: chapters.map(unitID))
+            }
+            ToolbarItem(placement: .topBarTrailing) {
                 let saved = library.isSaved(source: sourceKey, manga: manga.key)
                 Button {
                     library.toggleSaved(source: sourceKey, manga: manga)
@@ -517,6 +520,15 @@ struct MangaDetailView: View {
         }
         .disabled(chapter.locked)
         .foregroundStyle(.primary)
+        .contextMenu {
+            ReadMarkMenu(read: finished,
+                         mark: { library.setRead([id], read: $0) },
+                         markUpTo: {
+                             // Chapters are listed newest first: this one and those below it.
+                             guard let index = chapters.firstIndex(where: { $0.key == chapter.key }) else { return }
+                             library.setRead(chapters[index...].map(unitID), read: true)
+                         })
+        }
     }
 
     private func open(_ chapter: AidokuRunner.Chapter) {
