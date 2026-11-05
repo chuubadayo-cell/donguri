@@ -46,7 +46,6 @@ struct VideoPlayerView: View {
     /// single taps wait for it.
     @State private var lastTap: (time: Date, forward: Bool, controlsWereVisible: Bool)?
     /// Sideways, full screen: leaving the app floats the video.
-    @State private var showsFullScreen = false
     /// A transcript line being corrected.
     @State private var editingCue: SubtitleCue?
 
@@ -201,31 +200,25 @@ struct VideoPlayerView: View {
     private var fullPlayer: some View {
         GeometryReader { geometry in
             let landscape = geometry.size.width > geometry.size.height
-            Group {
-                if landscape {
-                    ZStack {
-                        Color.black.ignoresSafeArea()
-                        videoArea(fullScreen: true)
-                            .modifier(PullDownOffset(pull: pull, fades: false))
-                            .simultaneousGesture(pullDownGesture(fullScreen: true))
-                    }
-                    .statusBarHidden(true)
-                    .persistentSystemOverlays(.hidden)
-                    .onAppear { showsFullScreen = true }
-                    .onDisappear { showsFullScreen = false }
-                } else {
-                    VStack(spacing: 0) {
-                        videoArea(fullScreen: false)
-                            .aspectRatio(16 / 9, contentMode: .fit)
-                            .frame(maxWidth: .infinity)
-                            .background(Color.black)
-                            .simultaneousGesture(pullDownGesture(fullScreen: false))
-                        portraitBody
-                    }
-                    .background(Color(.systemBackground))
-                    .modifier(PullDownOffset(pull: pull, fades: true))
+            // One layout for both forms, so turning the screen resizes the
+            // video instead of building it again: the web view must stay
+            // where it is, and iOS can turn a backgrounded app while its
+            // video floats, which left the page broken on return.
+            VStack(spacing: 0) {
+                videoArea(fullScreen: landscape)
+                    .frame(height: landscape ? nil : geometry.size.width * 9 / 16)
+                    .frame(maxWidth: .infinity, maxHeight: landscape ? .infinity : nil)
+                    .background(Color.black)
+                    .modifier(PullDownOffset(pull: pull, fades: false, active: landscape))
+                    .simultaneousGesture(pullDownGesture(fullScreen: landscape))
+                if !landscape {
+                    portraitBody
                 }
             }
+            .background(landscape ? Color.black : Color(.systemBackground))
+            .modifier(PullDownOffset(pull: pull, fades: true, active: !landscape))
+            .statusBarHidden(landscape)
+            .persistentSystemOverlays(landscape ? .hidden : .automatic)
             // On its own view: a sheet and a file importer on the same
             // view fight, and the settings sheet never opened.
             .sheet(isPresented: $showsSettings) {
@@ -1692,11 +1685,12 @@ private final class PullDown {
 private struct PullDownOffset: ViewModifier {
     let pull: PullDown
     let fades: Bool
+    var active = true
 
     func body(content: Content) -> some View {
         content
-            .offset(y: pull.value)
-            .opacity(fades ? 1 - Double(min(pull.value / 600, 0.4)) : 1)
+            .offset(y: active ? pull.value : 0)
+            .opacity(active && fades ? 1 - Double(min(pull.value / 600, 0.4)) : 1)
     }
 }
 

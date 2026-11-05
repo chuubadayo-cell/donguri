@@ -129,8 +129,16 @@ final class PictureInPicture: NSObject, AVPictureInPictureControllerDelegate {
             (function () {
               const v = document.querySelector('video.html5-main-video') || document.querySelector('video');
               if (v && v.webkitPresentationMode === 'picture-in-picture') { v.webkitSetPresentationMode('inline'); }
+              window.dispatchEvent(new Event('resize'));
             })();
             """, completionHandler: nil)
+        // The page sizes itself again once the app has finished turning
+        // back and the video has landed.
+        Task { [weak webView] in
+            try? await Task.sleep(for: .milliseconds(700))
+            webView?.setNeedsLayout()
+            _ = try? await webView?.evaluateJavaScript("window.dispatchEvent(new Event('resize')); null;")
+        }
     }
 
     // MARK: AVPictureInPictureControllerDelegate
