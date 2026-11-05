@@ -286,25 +286,41 @@ final class BrowserModel: NSObject {
     /// Opens one of the account's pages.
     func xOpen(_ page: XAccountPage) {
         Task {
-            if let handle = await xHandle() {
-                UserDefaults.standard.set(handle, forKey: XScripts.handleKey)
-            }
-            guard let handle = UserDefaults.standard.string(forKey: XScripts.handleKey),
-                  let url = URL(string: "https://x.com/\(handle)\(page.suffix)") else {
+            var found = await xHandle()
+            if found == nil { found = UserDefaults.standard.string(forKey: XScripts.handleKey) }
+            if found == nil { found = await xHandleFromRedirect() }
+            guard let handle = found, let url = URL(string: "https://x.com/\(handle)\(page.suffix)") else {
                 showToast(String(localized: "Xのアカウント名を取得できませんでした"))
                 return
             }
+            UserDefaults.standard.set(handle, forKey: XScripts.handleKey)
             load(url)
         }
     }
 
-    /// The signed-in @handle. X's phone layout has no profile link to read
-    /// it from, so it comes from the session data X embeds in its pages,
-    /// or a fresh copy of the home page when that script is gone.
+    /// The signed-in @handle, from the page.
     private func xHandle() async -> String? {
         let result = try? await webView.callAsyncJavaScript(XScripts.handleScript, arguments: [:], in: nil, contentWorld: .page)
         guard let handle = result as? String, !handle.isEmpty else { return nil }
         return handle
+    }
+
+    /// The last resort, which needs only the session: the twid cookie holds
+    /// the account's number, and x.com/i/user/<number> redirects to its
+    /// profile, whose address is the handle.
+    private func xHandleFromRedirect() async -> String? {
+        let cookies = await webView.configuration.websiteDataStore.httpCookieStore.allCookies()
+        guard let twid = cookies.first(where: { $0.name == "twid" })?.value.removingPercentEncoding,
+              let id = twid.firstMatch(of: /\d+/).map({ String($0.output) }),
+              let url = URL(string: "https://x.com/i/user/\(id)") else { return nil }
+        load(url)
+        for _ in 0..<40 {
+            try? await Task.sleep(for: .milliseconds(200))
+            guard let parts = webView.url?.pathComponents, parts.count >= 2 else { continue }
+            let first = parts[1]
+            if first != "i", first != "home", first.wholeMatch(of: /[A-Za-z0-9_]{1,15}/) != nil { return first }
+        }
+        return nil
     }
 
     /// The timeline of accounts followed (フォロー中) or X's picks (おすすめ).

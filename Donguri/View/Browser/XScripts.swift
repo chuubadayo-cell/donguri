@@ -22,37 +22,32 @@ enum XScripts {
     }
 
     /// Finds the signed-in account's handle (a callAsyncJavaScript body,
-    /// run in the page's world for X's own state).
+    /// run in the page's world). X's phone layout has no profile link and
+    /// its embedded state doesn't reliably name the account, so: any
+    /// profile link, the avatar in its hidden top bar (whose test id ends
+    /// in the handle), then the account settings X's site itself requests.
     static let handleScript = """
-    function fromState(state) {
-      try {
-        const id = state.session.user_id;
-        return state.entities.users.entities[id].screen_name;
-      } catch (e) { return null; }
-    }
-    function fromText(text) {
-      const session = text.match(/"session":\\{[^]*?"user_id":"(\\d+)"/);
-      if (session) {
-        const at = text.indexOf('"id_str":"' + session[1] + '"');
-        if (at >= 0) {
-          const near = text.slice(at, at + 4000).match(/"screen_name":"([A-Za-z0-9_]{1,15})"/);
-          if (near) { return near[1]; }
-        }
-      }
-      return null;
-    }
     const link = document.querySelector('a[data-testid="AppTabBar_Profile_Link"]');
     if (link) { return link.getAttribute('href').slice(1); }
-    const state = fromState(window.__INITIAL_STATE__);
-    if (state) { return state; }
-    for (const script of document.scripts) {
-      if (script.textContent.indexOf('__INITIAL_STATE__') < 0) { continue; }
-      const found = fromText(script.textContent);
-      if (found) { return found; }
+    const avatar = document.querySelector('[data-testid="DashButton_ProfileIcon_Link"] [data-testid^="UserAvatar-Container-"], [data-testid="TopNavBar"] [data-testid^="UserAvatar-Container-"]');
+    if (avatar) {
+      const name = avatar.getAttribute('data-testid').slice('UserAvatar-Container-'.length);
+      if (name && name !== 'unknown') { return name; }
     }
+    const csrf = document.cookie.match(/(?:^|; )ct0=([^;]+)/);
+    if (!csrf) { return null; }
     try {
-      const page = await fetch('/home', { credentials: 'include' });
-      return fromText(await page.text());
+      const response = await fetch('/i/api/1.1/account/settings.json', {
+        credentials: 'include',
+        headers: {
+          'authorization': 'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA',
+          'x-csrf-token': csrf[1],
+          'x-twitter-auth-type': 'OAuth2Session',
+          'x-twitter-active-user': 'yes'
+        }
+      });
+      if (!response.ok) { return null; }
+      return (await response.json()).screen_name || null;
     } catch (e) { return null; }
     """
 
