@@ -46,12 +46,45 @@ final class YouTubeFeedModel {
     /// else now.
     func reload() async {
         pages.removeAll()
+        Self.clearSaved()
         await load(source)
+    }
+
+    // The feeds' last pages stay on disk, so the tab opens full and the
+    // fresh page replaces them when it arrives.
+    private static var savedFolder: URL {
+        URL.cachesDirectory.appending(path: "YouTubeFeeds", directoryHint: .isDirectory)
+    }
+
+    private static func savedFile(_ source: Source) -> URL? {
+        guard case .feed(let feed) = source else { return nil }
+        return savedFolder.appending(path: feed.rawValue + ".json")
+    }
+
+    private static func clearSaved() {
+        try? FileManager.default.removeItem(at: savedFolder)
+    }
+
+    private func saved(_ source: Source) -> [YTVideo]? {
+        guard let file = Self.savedFile(source), let data = try? Data(contentsOf: file) else { return nil }
+        return try? JSONDecoder().decode([YTVideo].self, from: data)
+    }
+
+    private func save(_ videos: [YTVideo], for source: Source) {
+        guard let file = Self.savedFile(source) else { return }
+        let folder = Self.savedFolder
+        Task.detached(priority: .utility) {
+            guard let data = try? JSONEncoder().encode(videos) else { return }
+            try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            try? data.write(to: file, options: .atomic)
+        }
     }
 
     func checkSignIn() async {
         signedIn = await YouTubeClient.shared.refreshSignInState()
         checkedSignIn = true
+        // Not while the tab is opening: it costs a moment on the main thread.
+        YouTubeWebPlayer.warmUp(after: .seconds(2))
     }
 
     func load(_ source: Source) async {
@@ -65,9 +98,11 @@ final class YouTubeFeedModel {
                 if Date.now.timeIntervalSince(page.loadedAt) < Self.freshFor { return }
             } else {
                 // A spinner, not the previous tab's videos, until it loads.
-                videos = []
+                videos = visible(saved(source) ?? [])
                 continuation = nil
             }
+        } else if videos.isEmpty, let saved = saved(source) {
+            videos = visible(saved)
         }
         loading = true
         error = nil
@@ -83,6 +118,7 @@ final class YouTubeFeedModel {
             videos = visible(page.videos)
             continuation = page.continuation
             pages[source] = Page(videos: videos, continuation: page.continuation, loadedAt: .now)
+            save(videos, for: source)
             if page.videos.isEmpty {
                 error = signedIn || !Self.needsAccount(source)
                     ? String(localized: "動画が見つかりませんでした")
@@ -90,8 +126,8 @@ final class YouTubeFeedModel {
             }
         } catch {
             guard self.source == source else { return }
-            videos = []
-            self.error = String(localized: "読み込めませんでした")
+            // What's on screen stays; only an empty tab shows the error.
+            if videos.isEmpty { self.error = String(localized: "読み込めませんでした") }
         }
     }
 

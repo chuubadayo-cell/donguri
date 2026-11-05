@@ -11,7 +11,7 @@
 
 import Foundation
 
-nonisolated struct YTVideo: Identifiable, Hashable, Sendable {
+nonisolated struct YTVideo: Identifiable, Hashable, Sendable, Codable {
     let id: String
     let title: String
     var channel: String?

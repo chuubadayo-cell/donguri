@@ -269,6 +269,49 @@ final class BrowserModel: NSObject {
         }
     }
 
+    /// X's pages for the signed-in account.
+    enum XAccountPage {
+        case following, followers, likes, profile
+
+        fileprivate var suffix: String {
+            switch self {
+            case .following: "/following"
+            case .followers: "/followers"
+            case .likes: "/likes"
+            case .profile: ""
+            }
+        }
+    }
+
+    /// Opens one of the account's pages. The handle comes from X's own
+    /// (hidden) profile link, and is remembered for pages that lack it.
+    func xOpen(_ page: XAccountPage) {
+        let script = "var link = document.querySelector('a[data-testid=\"AppTabBar_Profile_Link\"]'); link ? link.getAttribute('href') : null"
+        webView.evaluateJavaScript(script, in: nil, in: BrowserScripts.world) { [weak self] result in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                var handle = UserDefaults.standard.string(forKey: XScripts.handleKey)
+                if case .success(let value) = result, let path = value as? String, path.count > 1 {
+                    handle = String(path.dropFirst())
+                    UserDefaults.standard.set(handle, forKey: XScripts.handleKey)
+                }
+                guard let handle, let url = URL(string: "https://x.com/\(handle)\(page.suffix)") else {
+                    self.showToast(String(localized: "Xにログインしてから開いてください"))
+                    return
+                }
+                self.load(url)
+            }
+        }
+    }
+
+    /// The timeline of accounts followed (フォロー中) or X's picks (おすすめ).
+    func xHomeFeed(following: Bool) {
+        let script = "window.__irohaFollowingFeed = \(following);"
+        webView.evaluateJavaScript(script, in: nil, in: BrowserScripts.world) { [weak self] _ in
+            MainActor.assumeIsolated { self?.xHome() }
+        }
+    }
+
     /// Searches X for the latest posts (Japanese only when the filter is
     /// on, which adds lang:ja).
     func xSearch(_ query: String) {
@@ -390,7 +433,11 @@ final class BrowserModel: NSObject {
         UIPasteboard.general.url = url
         UIPasteboard.general.string = url.absoluteString
         Haptics.play(.success)
-        toast = String(localized: "リンクをコピーしました")
+        showToast(String(localized: "リンクをコピーしました"))
+    }
+
+    fileprivate func showToast(_ text: String) {
+        toast = text
         toastTask?.cancel()
         toastTask = Task {
             try? await Task.sleep(for: .seconds(1.6))

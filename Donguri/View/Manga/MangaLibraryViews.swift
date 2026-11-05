@@ -129,8 +129,7 @@ private struct LibraryCell: View {
                     }
                 Text(verbatim: entry.title)
                     .font(.caption.weight(.medium))
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
+                    .lineLimit(1)
                     .foregroundStyle(.primary)
                 ProgressBar(value: progress)
             }

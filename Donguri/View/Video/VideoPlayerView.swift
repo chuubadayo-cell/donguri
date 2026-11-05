@@ -102,14 +102,13 @@ struct VideoPlayerView: View {
     var body: some View {
         ZStack {
             // YouTube's page while the miniplayer shows: kept full size and
-            // in the window (so it plays on), all but invisible. Shown small,
-            // WebKit drew it black or white; the miniplayer shows frames
-            // taken from its video instead (MiniFrames).
+            // in the window (so it plays on), behind the whole app. Shown
+            // small, WebKit drew it black or white, and on top at 1% opacity
+            // it showed as a grey ghost over light screens; the miniplayer
+            // shows frames taken from its video instead (MiniFrames).
             if surfaceInMini, model.engine == .web, let web = model.web {
-                WebPlayerSurface(webView: web.webView, active: true)
-                    .frame(width: 390, height: 219)
-                    .opacity(0.01)
-                    .allowsHitTesting(false)
+                WebPlayerParking(webView: web.webView)
+                    .frame(width: 0, height: 0)
                     .accessibilityHidden(true)
             }
             if fullMounted {
@@ -136,8 +135,9 @@ struct VideoPlayerView: View {
             model.stop()
             OrientationLock.returnToPortrait()
         }
-        .onChange(of: showsFullScreen && model.isPlaying && !minimized, initial: true) { _, wanted in
-            PictureInPicture.shared.setWanted(wanted)
+        // Leaving the app floats the video, whichever form it's in.
+        .onChange(of: model.isPlaying, initial: true) { _, playing in
+            PictureInPicture.shared.setWanted(playing)
         }
         .onChange(of: model.isPlaying) { _, playing in
             if playing { scheduleHide() } else { showControls(autoHide: false) }
@@ -708,6 +708,16 @@ struct VideoPlayerView: View {
                             .lineLimit(1)
                     }
                     Spacer()
+                    if PictureInPicture.shared.isSupported {
+                        Button {
+                            PictureInPicture.shared.start()
+                        } label: {
+                            Image(systemName: "pip.enter")
+                                .frame(width: 44, height: 44)
+                                .contentShape(Rectangle())
+                        }
+                        .accessibilityLabel(Text("ピクチャ・イン・ピクチャ"))
+                    }
                     captionMenu
                     Button {
                         showsSettings = true
@@ -1553,6 +1563,42 @@ private struct DelayRow: View {
 }
 
 // MARK: - Pieces
+
+/// Keeps YouTube's page playing while nothing shows it: at the very back
+/// of the window, under the app's opaque root view.
+private struct WebPlayerParking: UIViewRepresentable {
+    let webView: WKWebView
+
+    func makeUIView(context: Context) -> Parking { Parking(webView: webView) }
+    func updateUIView(_ view: Parking, context: Context) {}
+
+    final class Parking: UIView {
+        let webView: WKWebView
+        private weak var parkedIn: UIWindow?
+
+        init(webView: WKWebView) {
+            self.webView = webView
+            super.init(frame: .zero)
+        }
+
+        @available(*, unavailable)
+        required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            if let window {
+                webView.removeFromSuperview()
+                webView.transform = .identity
+                webView.frame = CGRect(x: 0, y: 0, width: 390, height: 219)
+                window.insertSubview(webView, at: 0)
+                parkedIn = window
+            } else if webView.superview === parkedIn {
+                // Leaving, and no player claimed it: the page is done.
+                webView.removeFromSuperview()
+            }
+        }
+    }
+}
 
 /// YouTube's own player, styled down to its video.
 /// One web view moves between the full player and the miniplayer, so

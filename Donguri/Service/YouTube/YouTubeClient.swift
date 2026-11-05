@@ -26,7 +26,10 @@ final class YouTubeClient {
     nonisolated static let userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15"
     private static let origin = "https://www.youtube.com"
 
-    private struct Config {
+    /// A page's settings. Fetching them means downloading a whole page, so
+    /// they're kept on disk: requests start at once after a relaunch, and
+    /// old settings are refreshed behind them.
+    private nonisolated struct Config: Codable {
         var apiKey: String?
         var clientVersion: String
         var visitorData: String?
@@ -39,7 +42,17 @@ final class YouTubeClient {
 
     private var config: Config?
     private var configLoadedAt = Date.distantPast
+    private var configTask: Task<Config, Error>?
+    /// WebKit's cookie store is a trip to another process: asked once, not
+    /// for every request of a feed and its thumbnails' neighbours.
+    private var cookieCache: (jar: [HTTPCookie], at: Date)?
     private let session: URLSession
+
+    private static let configKey = "iroha.youtube.config"
+    private static let configDateKey = "iroha.youtube.configDate"
+    /// How long settings count as fresh, and as usable at all.
+    private static let configFresh: TimeInterval = 3600
+    private static let configUsable: TimeInterval = 7 * 24 * 3600
 
     enum Feed: String, CaseIterable, Identifiable {
         case home, subscriptions, history, watchLater
@@ -61,13 +74,24 @@ final class YouTubeClient {
         configuration.httpCookieAcceptPolicy = .never
         configuration.timeoutIntervalForRequest = 20
         session = URLSession(configuration: configuration)
+        let defaults = UserDefaults.standard
+        if let data = defaults.data(forKey: Self.configKey),
+           let saved = try? JSONDecoder().decode(Config.self, from: data),
+           let date = defaults.object(forKey: Self.configDateKey) as? Date,
+           Date.now.timeIntervalSince(date) < Self.configUsable {
+            config = saved
+            configLoadedAt = date
+        }
     }
 
     // MARK: Account
 
     private func cookies() async -> [HTTPCookie] {
+        if let cookieCache, Date.now.timeIntervalSince(cookieCache.at) < 30 { return cookieCache.jar }
         let all = await WKWebsiteDataStore.default().httpCookieStore.allCookies()
-        return all.filter { $0.domain.hasSuffix("youtube.com") }
+        let jar = all.filter { $0.domain.hasSuffix("youtube.com") }
+        cookieCache = (jar, .now)
+        return jar
     }
 
     var isSignedIn: Bool { config?.loggedIn ?? false }
@@ -75,10 +99,30 @@ final class YouTubeClient {
     /// Forgets the cached page config, after signing in or out.
     func reset() {
         config = nil
+        configTask?.cancel()
+        configTask = nil
+        cookieCache = nil
+        UserDefaults.standard.removeObject(forKey: Self.configKey)
+        UserDefaults.standard.removeObject(forKey: Self.configDateKey)
     }
 
+    /// The settings: at once if there are any, refreshed behind the scenes
+    /// when old. However many requests ask, one page is fetched.
     private func loadConfig() async throws -> Config {
-        if let config, Date.now.timeIntervalSince(configLoadedAt) < 3600 { return config }
+        if let config {
+            if Date.now.timeIntervalSince(configLoadedAt) > Self.configFresh, configTask == nil {
+                configTask = Task { try await fetchConfig() }
+            }
+            return config
+        }
+        if let configTask { return try await configTask.value }
+        let task = Task { try await fetchConfig() }
+        configTask = task
+        return try await task.value
+    }
+
+    private func fetchConfig() async throws -> Config {
+        defer { configTask = nil }
         var home = "https://www.youtube.com/?hl=ja&gl=JP"
         if let index = YouTubeAccount.current?.authUser, index > 0 { home += "&authuser=\(index)" }
         let html = try await page(URL(string: home)!)
@@ -96,26 +140,30 @@ final class YouTubeClient {
                             delegatedSessionID: value("DELEGATED_SESSION_ID"),
                             sessionIndex: sessionIndex)
         print("[iroha] YouTube identity: index=\(sessionIndex.map(String.init) ?? "-") channel=\(loaded.delegatedSessionID ?? "own") chosen=\(YouTubeAccount.current?.name ?? "-")")
+        // Reset while this was on its way: it's the old account's.
+        guard !Task.isCancelled else { throw CancellationError() }
         config = loaded
         configLoadedAt = .now
+        if let data = try? JSONEncoder().encode(loaded) {
+            UserDefaults.standard.set(data, forKey: Self.configKey)
+            UserDefaults.standard.set(configLoadedAt, forKey: Self.configDateKey)
+        }
         return loaded
     }
 
-    /// Signed in if Google's session cookies for YouTube are there. The
-    /// page's own LOGGED_IN flag is also asked, but it depends on how the
-    /// page is served, so the cookies decide.
+    /// Signed in if Google's session cookies for YouTube are there. (The
+    /// page's own LOGGED_IN flag depends on how the page is served, and
+    /// asking meant downloading it every time the tab opened.)
     func refreshSignInState() async -> Bool {
-        config = nil
+        cookieCache = nil
         let jar = await cookies()
         let names = Set(jar.map(\.name))
         let hasSession = names.contains("SAPISID") || names.contains("__Secure-3PAPISID") || names.contains("LOGIN_INFO")
-        let pageSaysSignedIn = (try? await loadConfig())?.loggedIn ?? false
-        print("[iroha] YouTube sign-in: cookies=\(hasSession) page=\(pageSaysSignedIn) (\(jar.count) cookies)")
-        if hasSession, var config, !config.loggedIn {
-            config.loggedIn = true
+        if var config, config.loggedIn != hasSession {
+            config.loggedIn = hasSession
             self.config = config
         }
-        return hasSession || pageSaysSignedIn
+        return hasSession
     }
 
     // MARK: Requests
@@ -396,7 +444,53 @@ final class YouTubeClient {
 
     // MARK: Videos
 
+    /// A video's details, stream and captions: from the app-client player
+    /// endpoint, a quarter of a second, or else (a video it won't give
+    /// out) from the watch page, 1.4 MB and a second or three.
     func playerInfo(_ videoID: String) async throws -> YTPlayerInfo {
+        if let fast = await appClientInfo(videoID), fast.playable { return fast }
+        return try await watchPageInfo(videoID)
+    }
+
+    /// YouTube's iPhone app's identity. Answers anonymously, so private
+    /// and members' videos fall through to the signed-in routes. Its
+    /// caption links need no token, and its HLS stream, on the videos that
+    /// have one, is the same one Safari gets. (Its direct files are no
+    /// use: past the start they need the player's attestation token.)
+    private func appClientInfo(_ videoID: String) async -> YTPlayerInfo? {
+        let agent = "com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)"
+        let payload: [String: Any] = [
+            "videoId": videoID, "contentCheckOk": true, "racyCheckOk": true,
+            "context": ["client": [
+                "clientName": "IOS", "clientVersion": "20.10.4", "deviceMake": "Apple", "deviceModel": "iPhone16,2",
+                "osName": "iPhone", "osVersion": "18.3.2.22D82", "userAgent": agent, "hl": "ja", "gl": "JP",
+            ]],
+        ]
+        guard let url = URL(string: "https://www.youtube.com/youtubei/v1/player?prettyPrint=false"),
+              let body = try? JSONSerialization.data(withJSONObject: payload) else { return nil }
+        var request = URLRequest(url: url, timeoutInterval: 6)
+        request.httpMethod = "POST"
+        request.httpBody = body
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(agent, forHTTPHeaderField: "User-Agent")
+        guard let (data, _) = try? await session.data(for: request) else { return nil }
+        return await Self.parseAppClient(data, videoID: videoID)
+    }
+
+    @concurrent
+    private nonisolated static func parseAppClient(_ data: Data, videoID: String) async -> YTPlayerInfo? {
+        guard let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return nil }
+        return YTParse.playerInfo(from: json, videoID: videoID, html: nil)
+    }
+
+    /// What only the watch page has: the publish date and the transcript
+    /// panel's parameters. Worth a background fetch, not a wait.
+    func watchPageDetails(_ videoID: String) async -> (publishDate: Date?, transcriptParams: String?)? {
+        guard let info = try? await watchPageInfo(videoID) else { return nil }
+        return (info.publishDate, info.transcriptParams)
+    }
+
+    private func watchPageInfo(_ videoID: String) async throws -> YTPlayerInfo {
         var components = URLComponents(string: "https://www.youtube.com/watch")!
         components.queryItems = [
             URLQueryItem(name: "v", value: videoID),

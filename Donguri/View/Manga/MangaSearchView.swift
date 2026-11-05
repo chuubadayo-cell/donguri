@@ -350,8 +350,7 @@ private struct ResultCard<Cover: View>: View {
                 }
             Text(verbatim: title)
                 .font(.caption.weight(.medium))
-                .lineLimit(2)
-                .multilineTextAlignment(.leading)
+                .lineLimit(1)
                 .frame(width: 96, alignment: .leading)
         }
     }

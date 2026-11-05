@@ -45,6 +45,39 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
     init(videoID: String, startAt: Double) {
         self.videoID = videoID
         self.startTime = startAt
+        webView = Self.spare ?? Self.makeWebView()
+        Self.spare = nil
+        super.init()
+        webView.configuration.userContentController.add(WeakMessageHandler(self), contentWorld: Self.world, name: "irohaVideo")
+        webView.navigationDelegate = self
+        // Ready for the next video once this one is under way.
+        Self.warmUp(after: .seconds(6))
+    }
+
+    // Creating a web view stalls the main thread and starting its process
+    // takes a second or two more, which was half the wait for a video. So
+    // one is kept ready, its process running, on a blank page.
+    private static var spare: WKWebView?
+    private static var warming = false
+
+    /// Gets the next video's web view ready, unhurried.
+    static func warmUp(after delay: Duration) {
+        guard spare == nil, !warming else { return }
+        warming = true
+        Task {
+            try? await Task.sleep(for: delay)
+            let rules = await compiledRules()
+            if spare == nil {
+                let view = makeWebView()
+                if let rules { view.configuration.userContentController.add(rules) }
+                view.loadHTMLString("", baseURL: nil)
+                spare = view
+            }
+            warming = false
+        }
+    }
+
+    private static func makeWebView() -> WKWebView {
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .default()
         configuration.allowsInlineMediaPlayback = true
@@ -53,31 +86,61 @@ final class YouTubeWebPlayer: NSObject, WKScriptMessageHandler, WKNavigationDele
         let controller = configuration.userContentController
         // The audio hook has to run in the page's own world, before
         // YouTube's player builds its media source.
-        controller.addUserScript(WKUserScript(source: Self.audioHook, injectionTime: .atDocumentStart,
+        controller.addUserScript(WKUserScript(source: audioHook, injectionTime: .atDocumentStart,
                                               forMainFrameOnly: true, in: .page))
-        controller.addUserScript(WKUserScript(source: Self.alwaysVisible, injectionTime: .atDocumentStart,
+        controller.addUserScript(WKUserScript(source: alwaysVisible, injectionTime: .atDocumentStart,
                                               forMainFrameOnly: true, in: .page))
-        controller.addUserScript(WKUserScript(source: Self.qualityScript, injectionTime: .atDocumentStart,
+        controller.addUserScript(WKUserScript(source: qualityScript, injectionTime: .atDocumentStart,
                                               forMainFrameOnly: true, in: .page))
-        controller.addUserScript(WKUserScript(source: Self.controllerScript, injectionTime: .atDocumentStart,
-                                              forMainFrameOnly: true, in: Self.world))
+        controller.addUserScript(WKUserScript(source: controllerScript, injectionTime: .atDocumentStart,
+                                              forMainFrameOnly: true, in: world))
         if BehaviorSettings.shared.contentBlocking {
-            YouTubeAdScripts.install(in: controller, world: Self.world)
+            YouTubeAdScripts.install(in: controller, world: world)
         }
-        webView = WKWebView(frame: .zero, configuration: configuration)
-        webView.customUserAgent = SafariUserAgent.mobile
-        webView.isOpaque = false
-        webView.backgroundColor = .black
-        webView.scrollView.backgroundColor = .black
-        webView.scrollView.isScrollEnabled = false
+        let view = WKWebView(frame: .zero, configuration: configuration)
+        view.customUserAgent = SafariUserAgent.mobile
+        view.isOpaque = false
+        view.backgroundColor = .black
+        view.scrollView.backgroundColor = .black
+        view.scrollView.isScrollEnabled = false
         // The app's controls sit on top; the page never sees a touch.
-        webView.isUserInteractionEnabled = false
-        super.init()
-        controller.add(WeakMessageHandler(self), contentWorld: Self.world, name: "irohaVideo")
-        webView.navigationDelegate = self
+        view.isUserInteractionEnabled = false
+        return view
+    }
+
+    /// What the page doesn't need to show a video: its pictures, web fonts
+    /// and ad or analytics hosts. Compiled once, and half the page's
+    /// requests never happen.
+    private static var pageRules: WKContentRuleList?
+
+    private static func compiledRules() async -> WKContentRuleList? {
+        if let pageRules { return pageRules }
+        let rules = """
+        [
+          {"trigger": {"url-filter": ".*", "resource-type": ["image", "font"]}, "action": {"type": "block"}},
+          {"trigger": {"url-filter": "doubleclick\\\\.net"}, "action": {"type": "block"}},
+          {"trigger": {"url-filter": "googlesyndication\\\\.com"}, "action": {"type": "block"}},
+          {"trigger": {"url-filter": "google-analytics\\\\.com"}, "action": {"type": "block"}},
+          {"trigger": {"url-filter": "googletagmanager\\\\.com"}, "action": {"type": "block"}}
+        ]
+        """
+        let list = try? await WKContentRuleListStore.default().compileContentRuleList(
+            forIdentifier: "iroha-youtube-page", encodedContentRuleList: rules)
+        pageRules = list
+        return list
     }
 
     func load() {
+        Task {
+            // A spare web view has them already; adding again is harmless.
+            if let rules = await Self.compiledRules() {
+                webView.configuration.userContentController.add(rules)
+            }
+            navigate()
+        }
+    }
+
+    private func navigate() {
         loadedAt = .now
         var components = URLComponents(string: "https://m.youtube.com/watch")!
         var items = [URLQueryItem(name: "v", value: videoID), URLQueryItem(name: "hl", value: "ja")]

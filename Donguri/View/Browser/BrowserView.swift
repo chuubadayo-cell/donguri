@@ -263,6 +263,45 @@ private struct WebPane: View {
                 }
             }
             Spacer()
+            // The account's own lists; X's own way there is hidden.
+            Menu {
+                Button {
+                    model.xHomeFeed(following: false)
+                } label: {
+                    Label("おすすめ", systemImage: "sparkles")
+                }
+                Button {
+                    model.xHomeFeed(following: true)
+                } label: {
+                    Label("フォロー中の投稿", systemImage: "person.2.wave.2")
+                }
+                Section {
+                    Button {
+                        model.xOpen(.following)
+                    } label: {
+                        Label("フォロー中のアカウント", systemImage: "person.2")
+                    }
+                    Button {
+                        model.xOpen(.followers)
+                    } label: {
+                        Label("フォロワー", systemImage: "person.3")
+                    }
+                    Button {
+                        model.xOpen(.likes)
+                    } label: {
+                        Label("いいねした投稿", systemImage: "heart")
+                    }
+                    Button {
+                        model.xOpen(.profile)
+                    } label: {
+                        Label("プロフィール", systemImage: "person.crop.circle")
+                    }
+                }
+            } label: {
+                Image(systemName: "person.crop.circle")
+            }
+            .accessibilityLabel(Text("アカウント"))
+            Spacer()
         }
     }
 

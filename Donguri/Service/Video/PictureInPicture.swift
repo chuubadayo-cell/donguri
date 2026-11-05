@@ -2,9 +2,10 @@
 //  PictureInPicture.swift
 //  Donguri
 //
-//  iOS's own floating player when the app is left while a video plays
-//  full screen (sideways): the native player through AVKit's automatic
-//  start, YouTube's page by asking its <video> element. Not while a card
+//  iOS's own floating player when the app is left while a video plays, in
+//  any form (portrait, sideways, the miniplayer): the native player through
+//  AVKit's automatic start, YouTube's page by asking its <video> element,
+//  even parked behind the app. Not while a card
 //  is handed to AnkiMobile, which leaves the app too but comes straight
 //  back.
 //
@@ -24,7 +25,7 @@ final class PictureInPicture: NSObject, AVPictureInPictureControllerDelegate {
         set { UserDefaults.standard.set(newValue, forKey: Self.enabledKey); apply() }
     }
 
-    /// The player is full screen and playing.
+    /// A video is playing.
     private var wanted = false
     private var suppressedUntil = Date.distantPast
     private weak var native: AVPictureInPictureController?
@@ -86,9 +87,27 @@ final class PictureInPicture: NSObject, AVPictureInPictureControllerDelegate {
         native?.canStartPictureInPictureAutomaticallyFromInline = allowed
     }
 
+    /// iOS offers it on this device (the simulator doesn't).
+    var isSupported: Bool { AVPictureInPictureController.isPictureInPictureSupported() }
+
+    /// The player's own button. A real tap, so it works wherever the
+    /// automatic start doesn't.
+    func start() {
+        if let native, native.isPictureInPicturePossible {
+            native.startPictureInPicture()
+        } else {
+            floatPage()
+        }
+    }
+
     private func resigning() {
         // AVKit starts the native player's by itself; the page's is asked.
-        guard allowed, let webView, webView.window != nil else { return }
+        guard allowed else { return }
+        floatPage()
+    }
+
+    private func floatPage() {
+        guard let webView, webView.window != nil else { return }
         webActive = true
         webView.evaluateJavaScript("""
             (function () {

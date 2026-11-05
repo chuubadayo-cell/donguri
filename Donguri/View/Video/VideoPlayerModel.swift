@@ -358,6 +358,15 @@ final class VideoPlayerModel {
                 details = info.description
                 tracks = info.captionTracks
                 Task { await loadSubtitles(track: YouTubeClient.defaultTrack(in: info.captionTracks)) }
+                if info.publishDate == nil || info.transcriptParams == nil {
+                    // Later: it's a large page, and the video comes first.
+                    Task {
+                        try? await Task.sleep(for: .seconds(4))
+                        guard let page = await YouTubeClient.shared.watchPageDetails(id) else { return }
+                        publishDate = page.publishDate ?? publishDate
+                        self.info?.transcriptParams = page.transcriptParams
+                    }
+                }
             }
             Task {
                 guard let next = try? await YouTubeClient.shared.watchNext(id) else { return }

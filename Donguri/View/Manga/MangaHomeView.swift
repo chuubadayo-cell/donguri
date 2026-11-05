@@ -126,8 +126,7 @@ struct MangaGrid: View {
                             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                         Text(verbatim: item.manga.title)
                             .font(.caption.weight(.medium))
-                            .lineLimit(2)
-                            .multilineTextAlignment(.leading)
+                            .lineLimit(1)
                             .foregroundStyle(.primary)
                     }
                 }
@@ -150,18 +149,21 @@ struct MangaCover: View {
     @State private var image: UIImage?
 
     var body: some View {
-        ZStack {
-            Rectangle().fill(Color.secondary.opacity(0.15))
-            if let image {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                Image(systemName: "book.closed")
-                    .foregroundStyle(.secondary)
+        // In an overlay: a filled image in the ZStack itself took its own
+        // size, so wide covers came out bigger than their neighbours.
+        Rectangle()
+            .fill(Color.secondary.opacity(0.15))
+            .overlay {
+                if let image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    Image(systemName: "book.closed")
+                        .foregroundStyle(.secondary)
+                }
             }
-        }
-        .clipped()
+            .clipped()
         .task(id: url) {
             guard let url, let link = URL(string: url) else { return }
             image = await MangaCovers.image(for: link, source: MangaSources.shared.installed[sourceKey])

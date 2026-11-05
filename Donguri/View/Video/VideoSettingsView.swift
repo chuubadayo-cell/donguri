@@ -42,7 +42,7 @@ struct VideoSettingsView: View {
                 Toggle("ダブルタップで前後の字幕へ", isOn: $settings.doubleTapSeeksLines)
                 Toggle("字幕ごとに一時停止", isOn: $settings.autoPause)
                 Toggle("バックグラウンド再生", isOn: $settings.backgroundPlayback)
-                Toggle("全画面からアプリを離れたらピクチャ・イン・ピクチャ", isOn: $autoPiP)
+                Toggle("アプリを離れたらピクチャ・イン・ピクチャ", isOn: $autoPiP)
                     .onChange(of: autoPiP) { _, on in PictureInPicture.shared.enabled = on }
             } header: {
                 Text("操作")

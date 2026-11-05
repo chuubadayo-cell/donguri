@@ -165,16 +165,17 @@ struct LocalCover: View {
     @State private var image: UIImage?
 
     var body: some View {
-        ZStack {
-            Rectangle().fill(Color.secondary.opacity(0.15))
-            if let image {
-                Image(uiImage: image).resizable().scaledToFill()
-            } else if let volume {
-                Image(systemName: volume.kind.systemImage)
-                    .foregroundStyle(.secondary)
+        Rectangle()
+            .fill(Color.secondary.opacity(0.15))
+            .overlay {
+                if let image {
+                    Image(uiImage: image).resizable().scaledToFill()
+                } else if let volume {
+                    Image(systemName: volume.kind.systemImage)
+                        .foregroundStyle(.secondary)
+                }
             }
-        }
-        .clipped()
+            .clipped()
         .task(id: volume?.id) {
             guard let volume else { return }
             image = await LocalCovers.cover(for: volume)

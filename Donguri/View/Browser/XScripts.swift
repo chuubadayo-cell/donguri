@@ -13,6 +13,8 @@ import Foundation
 enum XScripts {
     static let homeURL = URL(string: "https://x.com/home")!
     static let japaneseOnlyKey = "iroha.x.japaneseOnly"
+    /// The signed-in account's @handle, once seen.
+    static let handleKey = "iroha.x.handle"
 
     static var japaneseOnly: Bool {
         get { UserDefaults.standard.object(forKey: japaneseOnlyKey) as? Bool ?? true }
@@ -142,10 +144,12 @@ enum XScripts {
           // No sticky container found: hide the tabs themselves.
           (node && node !== column ? node : tablist).classList.add('iroha-x-header');
         }
-        const first = tablist.querySelector('[role="tab"]');
-        if (first && first.getAttribute('aria-selected') !== 'true' && Date.now() - lastTabClick > 2000) {
+        // おすすめ, or フォロー中 when that was chosen from the app's menu.
+        const tabs = tablist.querySelectorAll('[role="tab"]');
+        const wanted = tabs[window.__irohaFollowingFeed ? 1 : 0];
+        if (wanted && wanted.getAttribute('aria-selected') !== 'true' && Date.now() - lastTabClick > 2000) {
           lastTabClick = Date.now();
-          first.click();
+          wanted.click();
         }
       }
       // Other pages' top bar (back arrow and title): the column's first
@@ -209,7 +213,64 @@ enum XScripts {
           }, true);
           slot.appendChild(button);
           group.appendChild(slot);
+          if (location.pathname === '/home') { addNotInterested(group); }
         });
+      }
+      // X's own 興味がない, from the post's ⋯ menu (hidden here): the menu is
+      // opened out of sight, its item pressed, and the post leaves the page.
+      function menusHidden(on) {
+        let style = document.getElementById('iroha-x-menu');
+        if (on && !style) {
+          style = document.createElement('style');
+          style.id = 'iroha-x-menu';
+          style.textContent = '[role="menu"], [data-testid="Dropdown"], [data-testid="mask"] { opacity: 0 !important; }';
+          document.head.appendChild(style);
+        } else if (!on && style) {
+          style.remove();
+        }
+      }
+      function notInterested(article, button) {
+        const caret = article.querySelector('[data-testid="caret"]');
+        if (!caret) { return; }
+        menusHidden(true);
+        caret.click();
+        let tries = 0;
+        const timer = setInterval(function () {
+          tries += 1;
+          const items = Array.prototype.slice.call(document.querySelectorAll('[role="menuitem"]'));
+          const item = items.filter(function (i) { return /興味がない|Not interested/i.test(i.textContent); })[0];
+          if (!item && tries < 20) { return; }
+          clearInterval(timer);
+          if (item) {
+            item.click();
+            cellOf(article).classList.add('iroha-x-gone');
+          } else {
+            // Not offered here: the menu closes unseen, the button says so.
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+            const mask = document.querySelector('[data-testid="mask"]');
+            if (mask) { mask.click(); }
+            button.style.opacity = '0.3';
+          }
+          setTimeout(function () { menusHidden(false); }, 300);
+        }, 50);
+      }
+      function addNotInterested(group) {
+        const slot = document.createElement('div');
+        slot.style.cssText = 'display:flex;align-items:center;justify-content:flex-start;flex:1 1 0;';
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.setAttribute('aria-label', '興味がない');
+        button.dataset.irohaT = '0';
+        button.style.cssText = 'display:flex;align-items:center;justify-content:center;background:none;border:0;padding:0;margin:0;height:34px;min-width:34px;color:rgb(113,118,123);cursor:pointer;-webkit-tap-highlight-color:transparent;';
+        button.innerHTML = '<svg viewBox="0 0 24 24" width="18.75" height="18.75" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>';
+        button.addEventListener('click', function (event) {
+          event.preventDefault();
+          event.stopPropagation();
+          const article = group.closest('article');
+          if (article) { notInterested(article, button); }
+        }, true);
+        slot.appendChild(button);
+        group.appendChild(slot);
       }
       function tidyActions(column) {
         column.querySelectorAll('[role="group"]').forEach(function (group) {
@@ -263,7 +324,8 @@ enum XScripts {
           if (home) { homeHeader(column); } else { pageHeader(column); }
           hideComposer(column);
         }
-        const on = !!window.__irohaJapaneseOnly;
+        // The account's own likes show as they are: they were chosen.
+        const on = !!window.__irohaJapaneseOnly && !/\\/likes\\/?$/.test(location.pathname);
         // Filter off and nothing left hidden: nothing to do.
         if (!on && !document.querySelector('[data-iroha-hidden]')) { return; }
         // The post a page is about (opened by tapping it) always shows.
