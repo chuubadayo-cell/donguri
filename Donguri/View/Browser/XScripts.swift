@@ -21,6 +21,41 @@ enum XScripts {
         set { UserDefaults.standard.set(newValue, forKey: japaneseOnlyKey) }
     }
 
+    /// Finds the signed-in account's handle (a callAsyncJavaScript body,
+    /// run in the page's world for X's own state).
+    static let handleScript = """
+    function fromState(state) {
+      try {
+        const id = state.session.user_id;
+        return state.entities.users.entities[id].screen_name;
+      } catch (e) { return null; }
+    }
+    function fromText(text) {
+      const session = text.match(/"session":\\{[^]*?"user_id":"(\\d+)"/);
+      if (session) {
+        const at = text.indexOf('"id_str":"' + session[1] + '"');
+        if (at >= 0) {
+          const near = text.slice(at, at + 4000).match(/"screen_name":"([A-Za-z0-9_]{1,15})"/);
+          if (near) { return near[1]; }
+        }
+      }
+      return null;
+    }
+    const link = document.querySelector('a[data-testid="AppTabBar_Profile_Link"]');
+    if (link) { return link.getAttribute('href').slice(1); }
+    const state = fromState(window.__INITIAL_STATE__);
+    if (state) { return state; }
+    for (const script of document.scripts) {
+      if (script.textContent.indexOf('__INITIAL_STATE__') < 0) { continue; }
+      const found = fromText(script.textContent);
+      if (found) { return found; }
+    }
+    try {
+      const page = await fetch('/home', { credentials: 'include' });
+      return fromText(await page.text());
+    } catch (e) { return null; }
+    """
+
     /// The filter, with the setting it starts with.
     static var source: String {
         "window.__irohaJapaneseOnly = \(japaneseOnly);\n" + filter

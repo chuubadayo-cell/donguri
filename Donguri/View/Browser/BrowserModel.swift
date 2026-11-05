@@ -283,25 +283,28 @@ final class BrowserModel: NSObject {
         }
     }
 
-    /// Opens one of the account's pages. The handle comes from X's own
-    /// (hidden) profile link, and is remembered for pages that lack it.
+    /// Opens one of the account's pages.
     func xOpen(_ page: XAccountPage) {
-        let script = "var link = document.querySelector('a[data-testid=\"AppTabBar_Profile_Link\"]'); link ? link.getAttribute('href') : null"
-        webView.evaluateJavaScript(script, in: nil, in: BrowserScripts.world) { [weak self] result in
-            MainActor.assumeIsolated {
-                guard let self else { return }
-                var handle = UserDefaults.standard.string(forKey: XScripts.handleKey)
-                if case .success(let value) = result, let path = value as? String, path.count > 1 {
-                    handle = String(path.dropFirst())
-                    UserDefaults.standard.set(handle, forKey: XScripts.handleKey)
-                }
-                guard let handle, let url = URL(string: "https://x.com/\(handle)\(page.suffix)") else {
-                    self.showToast(String(localized: "Xにログインしてから開いてください"))
-                    return
-                }
-                self.load(url)
+        Task {
+            if let handle = await xHandle() {
+                UserDefaults.standard.set(handle, forKey: XScripts.handleKey)
             }
+            guard let handle = UserDefaults.standard.string(forKey: XScripts.handleKey),
+                  let url = URL(string: "https://x.com/\(handle)\(page.suffix)") else {
+                showToast(String(localized: "Xのアカウント名を取得できませんでした"))
+                return
+            }
+            load(url)
         }
+    }
+
+    /// The signed-in @handle. X's phone layout has no profile link to read
+    /// it from, so it comes from the session data X embeds in its pages,
+    /// or a fresh copy of the home page when that script is gone.
+    private func xHandle() async -> String? {
+        let result = try? await webView.callAsyncJavaScript(XScripts.handleScript, arguments: [:], in: nil, contentWorld: .page)
+        guard let handle = result as? String, !handle.isEmpty else { return nil }
+        return handle
     }
 
     /// The timeline of accounts followed (フォロー中) or X's picks (おすすめ).
