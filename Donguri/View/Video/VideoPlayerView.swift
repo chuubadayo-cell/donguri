@@ -45,7 +45,6 @@ struct VideoPlayerView: View {
     /// The last tap on the video, to tell a double tap without making
     /// single taps wait for it.
     @State private var lastTap: (time: Date, forward: Bool, controlsWereVisible: Bool)?
-    /// Sideways, full screen: leaving the app floats the video.
     /// A transcript line being corrected.
     @State private var editingCue: SubtitleCue?
 
@@ -62,31 +61,37 @@ struct VideoPlayerView: View {
     /// Space the miniplayer leaves for the tab bar.
     @State private var tabBarHeight: CGFloat = TabBarMetrics.heightAboveSafeArea()
 
-    // Minimizing and expanding. The full player isn't rebuilt each time:
-    // it slides down off the screen (from wherever a pull left it) and is
-    // let go of once there, and on expanding it's put back below the
-    // screen and slides up. The video moves to the miniplayer only when
-    // the slide has finished (a thumbnail stands in until then), and back
-    // to the full player before it starts sliding up.
-    /// The full player is on screen (or on its way there).
+    // Minimizing and expanding are one motion: a single number (`dock`)
+    // says how far the video has travelled between the full player and
+    // its place in the miniplayer, the finger or a spring moves it, and
+    // everything on screen is worked out from it. What travels is a copy
+    // of the video drawn above the player (`MovingVideo`), so the real one
+    // never has to be small: YouTube's web view can't be.
+    @State private var dock: VideoDock
+    /// A finger is on a drag. Resets by itself when iOS cancels the touch,
+    /// which `onEnded` never hears about.
+    @GestureState private var dragging = false
+    /// The full player is the form in charge of the screen.
     @State private var presentedFull: Bool
     /// The full player exists at all.
     @State private var fullMounted: Bool
-    /// The video is drawn in the miniplayer rather than the full player.
+    /// The real video has been let go of by the full player.
     @State private var surfaceInMini: Bool
-    @State private var containerHeight: CGFloat = 900
-    /// The latest minimize or expand, so a finished slide that has been
-    /// overtaken by the opposite one does nothing.
+    @State private var containerSize = CGSize(width: 390, height: 800)
+    /// Where the video lands in the miniplayer.
+    @State private var miniSlot = CGRect(x: 14, y: 640, width: 112, height: 63)
+    /// The latest move, so a finished one that has been overtaken does
+    /// nothing.
     @State private var formChange = 0
     /// Closing: the player animates itself away, then is removed with no
     /// animation of its own (two transitions at once left a grey ghost of
     /// the miniplayer behind and made closing stutter).
     @State private var closing = false
-    private static let slide = Animation.spring(response: 0.42, dampingFraction: 0.9)
 
     init(item: VideoItem, minimized: Bool = false, onMinimize: @escaping () -> Void = {},
          onExpand: @escaping () -> Void = {}, onClose: @escaping () -> Void) {
         _model = State(initialValue: VideoPlayerModel(item: item))
+        _dock = State(initialValue: VideoDock(minimized: minimized))
         _presentedFull = State(initialValue: !minimized)
         _fullMounted = State(initialValue: !minimized)
         _surfaceInMini = State(initialValue: minimized)
@@ -104,7 +109,7 @@ struct VideoPlayerView: View {
             // in the window (so it plays on), behind the whole app. Shown
             // small, WebKit drew it black or white, and on top at 1% opacity
             // it showed as a grey ghost over light screens; the miniplayer
-            // shows frames taken from its video instead (MiniFrames).
+            // shows frames taken from its video instead (VideoFrames).
             if surfaceInMini, model.engine == .web, let web = model.web {
                 WebPlayerParking(webView: web.webView)
                     .frame(width: 0, height: 0)
@@ -112,19 +117,23 @@ struct VideoPlayerView: View {
             }
             if fullMounted {
                 fullPlayer
-                    .offset(y: presentedFull ? 0 : containerHeight + 80)
+                    .modifier(FullPlayerDocking(dock: dock, height: containerSize.height))
                     .allowsHitTesting(presentedFull)
                     .accessibilityHidden(!presentedFull)
             }
-            if !presentedFull {
-                miniPlayer
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            miniPlayer
+                .modifier(MiniPlayerDocking(dock: dock))
+                .allowsHitTesting(!presentedFull)
+                .accessibilityHidden(presentedFull)
+            MovingVideo(dock: dock, size: containerSize, slot: miniSlot) {
+                movingSurface
             }
         }
-        .offset(y: closing ? (presentedFull ? containerHeight : 140) : 0)
+        .coordinateSpace(name: Self.space)
+        .offset(y: closing ? (presentedFull ? containerSize.height : 140) : 0)
         .opacity(closing ? 0 : 1)
         .allowsHitTesting(!closing)
-        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { containerHeight = $0 }
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { containerSize = $0 }
         .task {
             await model.start()
             scheduleHide()
@@ -147,31 +156,115 @@ struct VideoPlayerView: View {
         .onChange(of: model.engine) { model.refreshNowPlaying() }
         .onChange(of: model.title) { model.refreshNowPlaying() }
         .onChange(of: minimized) { _, isMinimized in
-            formChange += 1
-            let change = formChange
-            if isMinimized {
-                model.popups.closeAll()
-                OrientationLock.returnToPortrait()
-                withAnimation(Self.slide) {
-                    presentedFull = false
-                    pull.set(0)
-                } completion: {
-                    guard formChange == change else { return }
-                    surfaceInMini = true
-                    fullMounted = false
-                }
-            } else {
-                surfaceInMini = false
-                let wasMounted = fullMounted
-                fullMounted = true
-                Task {
-                    // Laid out below the screen first, then slid up.
-                    if !wasMounted { try? await Task.sleep(for: .milliseconds(20)) }
-                    guard formChange == change else { return }
-                    withAnimation(Self.slide) { presentedFull = true }
-                    showControls(autoHide: true)
-                }
+            if isMinimized { collapse() } else { expand() }
+        }
+        .onChange(of: dragging) { _, isDragging in
+            guard !isDragging else { return }
+            Task {
+                // `onEnded` comes around now too, and goes first if it comes.
+                try? await Task.sleep(for: .milliseconds(60))
+                guard dock.dragStart != nil else { return }
+                dock.dragStart = nil
+                settle(to: presentedFull ? 0 : 1)
             }
+        }
+    }
+
+    private static let space = "videoDock"
+
+    /// How far the finger has to bring the video, in points.
+    private var dockDistance: CGFloat { max(miniSlot.minY, 100) }
+
+    /// The full player to the miniplayer, wherever the motion has got to.
+    private func collapse() {
+        model.popups.closeAll()
+        OrientationLock.returnToPortrait()
+        formChange += 1
+        let change = formChange
+        guard containerSize.width > containerSize.height else {
+            finishCollapse()
+            return
+        }
+        // Sideways: the screen turns first, then the video leaves.
+        Task {
+            for _ in 0..<60 where containerSize.width > containerSize.height {
+                try? await Task.sleep(for: .milliseconds(25))
+            }
+            guard formChange == change else { return }
+            finishCollapse()
+        }
+    }
+
+    private func finishCollapse() {
+        // Measured now: the miniplayer has been waiting since it was
+        // built, perhaps sideways, where the tab bar is shorter.
+        tabBarHeight = TabBarMetrics.heightAboveSafeArea()
+        dock.begin()
+        presentedFull = false
+        settle(to: 1)
+    }
+
+    /// The miniplayer to the full player. A drag up has already mounted it.
+    private func expand() {
+        let wasMounted = fullMounted
+        prepareFull()
+        presentedFull = true
+        let change = formChange
+        Task {
+            // Laid out behind the moving video first.
+            if !wasMounted { try? await Task.sleep(for: .milliseconds(20)) }
+            guard formChange == change else { return }
+            settle(to: 0)
+        }
+    }
+
+    /// The real video goes back to the full player, under the moving copy.
+    private func prepareFull() {
+        formChange += 1
+        dock.begin()
+        dock.surfaceReturning = true
+        surfaceInMini = false
+        fullMounted = true
+    }
+
+    /// The spring that finishes the motion, starting at the finger's speed
+    /// so there is no join where the hand lets go.
+    private func settle(to target: CGFloat) {
+        formChange += 1
+        let change = formChange
+        let remaining = abs(target - dock.progress) * dockDistance
+        let velocity = min(max(remaining > 1 ? dock.takeVelocity() / remaining : 0, -4), 8)
+        withAnimation(.interpolatingSpring(duration: 0.4, bounce: 0, initialVelocity: velocity)) {
+            dock.progress = target
+        } completion: {
+            guard formChange == change else { return }
+            if target == 1 {
+                surfaceInMini = true
+                fullMounted = false
+                dock.surfaceReturning = false
+            } else {
+                land()
+            }
+        }
+    }
+
+    /// Back at full size: the copy gives way to the real video, which is
+    /// the same picture in the same place.
+    private func land() {
+        let change = formChange
+        Task {
+            if dock.surfaceReturning {
+                dock.surfaceReturning = false
+                try? await Task.sleep(for: .milliseconds(200))
+            }
+            guard formChange == change else { return }
+            withAnimation(.easeOut(duration: 0.14)) {
+                dock.fading = true
+            } completion: {
+                guard formChange == change else { return }
+                dock.end()
+            }
+            showControls(autoHide: true)
         }
     }
 
@@ -209,14 +302,13 @@ struct VideoPlayerView: View {
                     .frame(height: landscape ? nil : geometry.size.width * 9 / 16)
                     .frame(maxWidth: .infinity, maxHeight: landscape ? .infinity : nil)
                     .background(Color.black)
-                    .modifier(PullDownOffset(pull: pull, fades: false, active: landscape))
+                    .modifier(PullDownOffset(pull: pull))
                     .simultaneousGesture(pullDownGesture(fullScreen: landscape))
                 if !landscape {
                     portraitBody
                 }
             }
             .background(landscape ? Color.black : Color(.systemBackground))
-            .modifier(PullDownOffset(pull: pull, fades: true, active: !landscape))
             .statusBarHidden(landscape)
             .persistentSystemOverlays(landscape ? .hidden : .automatic)
             // On its own view: a sheet and a file importer on the same
@@ -281,11 +373,10 @@ struct VideoPlayerView: View {
 
     private var miniBar: some View {
         HStack(spacing: 10) {
-            videoSurface(inMini: true)
+            // The moving video lands here.
+            Color.clear
                 .frame(width: 112, height: 63)
-                .background(Color.black)
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .allowsHitTesting(false)
+                .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(Self.space)) } action: { miniSlot = $0 }
             VStack(alignment: .leading, spacing: 3) {
                 Text(verbatim: model.title.isEmpty ? String(localized: "動画") : model.title)
                     .font(.subheadline.weight(.semibold))
@@ -330,41 +421,59 @@ struct VideoPlayerView: View {
         }
         .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .onTapGesture { onExpand() }
-        .gesture(
-            DragGesture(minimumDistance: 12)
-                .onEnded { value in
-                    if value.translation.height < -20 {
-                        onExpand()
-                    } else if value.translation.height > 40 {
-                        close()
-                    }
-                }
-        )
+        .gesture(miniDrag)
     }
 
-    /// YouTube's player or AVPlayer, wherever it's shown. Only one place
-    /// draws it at a time; the miniplayer shows the thumbnail meanwhile.
-    @ViewBuilder
-    private func videoSurface(inMini: Bool) -> some View {
-        let active = inMini == surfaceInMini
+    /// Up: the video follows the finger back to full size. Down: closes.
+    private var miniDrag: some Gesture {
+        DragGesture(minimumDistance: 12)
+            .updating($dragging) { _, state, _ in state = true }
+            .onChanged { value in
+                let height = value.translation.height
+                if dock.dragStart == nil, height < 0, -height > abs(value.translation.width) {
+                    dock.dragStart = height
+                    prepareFull()
+                }
+                guard let start = dock.dragStart else { return }
+                dock.setProgress(1 + (height - start) / dockDistance)
+            }
+            .onEnded { value in
+                guard dock.dragStart != nil else {
+                    if value.translation.height > 40 { close() }
+                    return
+                }
+                dock.dragStart = nil
+                dock.velocity = -value.velocity.height
+                if dock.progress < 0.75 || value.velocity.height < -500 {
+                    onExpand()
+                } else {
+                    dock.velocity = value.velocity.height
+                    settle(to: 1)
+                }
+            }
+    }
+
+    /// The real video, in the full player. A black cover hides it while
+    /// its copy is travelling.
+    private var fullSurface: some View {
         ZStack {
             if model.engine == .web, let web = model.web {
-                if inMini {
-                    if active { MiniFrames(web: web) }
-                } else {
-                    WebPlayerSurface(webView: web.webView, active: active)
-                }
+                WebPlayerSurface(webView: web.webView, active: !surfaceInMini)
             } else {
-                PlayerSurface(player: model.player, active: active)
+                PlayerSurface(player: model.player, active: !surfaceInMini)
             }
-            if inMini, !active, let id = model.videoID,
-               let url = URL(string: "https://i.ytimg.com/vi/\(id)/mqdefault.jpg") {
-                AsyncImage(url: url) { image in
-                    image.resizable().scaledToFill()
-                } placeholder: {
-                    Color.black
-                }
-            }
+            VideoCover(dock: dock)
+        }
+    }
+
+    /// What travels, and what the miniplayer shows: a second layer of the
+    /// same AVPlayer, or frames from YouTube's page.
+    @ViewBuilder
+    private var movingSurface: some View {
+        if model.engine == .web, let web = model.web {
+            VideoFrames(web: web, dock: dock)
+        } else {
+            PlayerSurface(player: model.player, active: surfaceInMini, mirror: true)
         }
     }
 
@@ -372,7 +481,7 @@ struct VideoPlayerView: View {
 
     private func videoArea(fullScreen: Bool) -> some View {
         ZStack {
-            videoSurface(inMini: false)
+            fullSurface
 
             // Taps: one shows or hides the controls; two on either side
             // jump a line (or ten seconds) back or forward.
@@ -440,21 +549,46 @@ struct VideoPlayerView: View {
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { videoHeight = $0 }
     }
 
-    /// Swipe down on the video: in portrait it minimizes (closes) the
-    /// player, in full screen it leaves full screen, as in the YouTube app.
+    /// Swipe down on the video: in portrait the video follows the finger
+    /// into the miniplayer, in full screen it leaves full screen, as in the
+    /// YouTube app.
     /// Swipe left or right: the next or previous subtitle line.
     private func pullDownGesture(fullScreen: Bool) -> some Gesture {
         DragGesture(minimumDistance: 18)
+            .updating($dragging) { _, state, _ in state = true }
             .onChanged { value in
                 let down = value.translation.height
+                if !fullScreen, let start = dock.dragStart {
+                    dock.setProgress((down - start) / dockDistance)
+                    return
+                }
                 // Only a mostly vertical, downward drag (not scrubbing).
                 guard down > 0, down > abs(value.translation.width) * 1.4 else {
                     pull.set(0)
                     return
                 }
-                pull.set(fullScreen ? min(down * 0.5, 120) : down)
+                if fullScreen {
+                    pull.set(min(down * 0.5, 120))
+                } else {
+                    // Measured from here, so the video doesn't jump.
+                    formChange += 1
+                    dock.dragStart = down
+                    model.popups.closeAll()
+                    dock.begin()
+                }
             }
             .onEnded { value in
+                if !fullScreen, dock.dragStart != nil {
+                    dock.dragStart = nil
+                    dock.velocity = value.velocity.height
+                    if dock.progress > 0.2 || value.velocity.height > 700 {
+                        onMinimize()
+                    } else {
+                        dock.velocity = -value.velocity.height
+                        settle(to: 0)
+                    }
+                    return
+                }
                 let down = value.translation.height
                 let across = value.translation.width
                 // Sideways: a line forward (swipe left) or back (swipe
@@ -474,14 +608,9 @@ struct VideoPlayerView: View {
                 }
                 let flicked = value.predictedEndTranslation.height > 260
                 let vertical = down > abs(value.translation.width) * 1.4
-                if vertical, down > 110 || (flicked && down > 30) {
-                    if fullScreen {
-                        withAnimation(.snappy) { pull.set(0) }
-                        OrientationLock.rotate(to: .portrait)
-                    } else {
-                        // Carries on down from where the finger let go.
-                        minimize()
-                    }
+                if fullScreen, vertical, down > 110 || (flicked && down > 30) {
+                    withAnimation(.snappy) { pull.set(0) }
+                    OrientationLock.rotate(to: .portrait)
                 } else {
                     withAnimation(.snappy) { pull.set(0) }
                 }
@@ -1401,8 +1530,9 @@ private struct TranscriptRow: View, Equatable {
 /// The miniplayer's picture for YouTube's page: frames drawn from its
 /// video element about 30 times a second (the same drawing a card's
 /// screenshot uses, smaller and lighter).
-private struct MiniFrames: View {
+private struct VideoFrames: View {
     let web: YouTubeWebPlayer
+    let dock: VideoDock
     @State private var image: UIImage?
 
     var body: some View {
@@ -1411,19 +1541,26 @@ private struct MiniFrames: View {
             if let image {
                 Image(uiImage: image)
                     .resizable()
-                    .scaledToFill()
+                    .scaledToFit()
             }
         }
         .task {
             let clock = ContinuousClock()
             while !Task.isCancelled {
                 let started = clock.now
-                if let frame = await web.miniFrame(maxWidth: 240) {
+                // Resting at full size, a frame now and then, so one is
+                // ready the moment a drag starts. Sharper while it travels,
+                // since it starts out as wide as the screen.
+                let resting = !dock.moving && dock.progress == 0
+                let parked = !dock.moving && dock.progress == 1
+                let visible = UIApplication.shared.applicationState == .active
+                if visible, let frame = await web.miniFrame(maxWidth: parked ? 240 : 480) {
                     image = frame
                 }
-                // About 30 a second while playing (the time spent fetching
-                // counts), slower while paused: the picture doesn't change.
-                let interval: Duration = web.state.paused ? .milliseconds(500) : .milliseconds(33)
+                // About 30 a second while it shows and plays (the time spent
+                // fetching counts), slower otherwise: nothing is watching,
+                // or the picture doesn't change.
+                let interval: Duration = resting ? .milliseconds(400) : web.state.paused ? .milliseconds(250) : .milliseconds(33)
                 let wait = interval - (clock.now - started)
                 if wait > .zero { try? await Task.sleep(for: wait) } else { await Task.yield() }
             }
@@ -1670,8 +1807,165 @@ private struct WebPlayerSurface: UIViewRepresentable {
     }
 }
 
-/// How far the full player is pulled down, kept out of the player's own
-/// state so a pull redraws only what moves.
+/// The one number behind minimizing and expanding: 0 is the full player, 1
+/// the miniplayer. Kept out of the player's own state so a drag redraws
+/// only what moves.
+@Observable
+private final class VideoDock {
+    var progress: CGFloat
+    /// The copy is above the player, in motion or about to be.
+    private(set) var moving = false
+    /// The copy is fading into the real video underneath.
+    var fading = false
+    /// Where the finger started counting from, during a drag.
+    @ObservationIgnored var dragStart: CGFloat?
+    /// The finger's speed as it let go, points a second towards the form
+    /// being moved to.
+    @ObservationIgnored var velocity: CGFloat = 0
+    /// The real video has just gone back to the full player and needs a
+    /// moment to draw.
+    @ObservationIgnored var surfaceReturning = false
+
+    init(minimized: Bool) {
+        progress = minimized ? 1 : 0
+    }
+
+    func begin() {
+        fading = false
+        if !moving { moving = true }
+    }
+
+    func end() {
+        moving = false
+        fading = false
+    }
+
+    /// Follows the finger, with no animation.
+    func setProgress(_ value: CGFloat) {
+        progress = min(max(value, 0), 1)
+    }
+
+    func takeVelocity() -> CGFloat {
+        defer { velocity = 0 }
+        return velocity
+    }
+}
+
+/// Places the moving video: as wide as the screen at 0, on the miniplayer's
+/// slot at 1. A transform of a view laid out once, so nothing is laid out
+/// again as it moves. Animatable, so a spring goes through every step of
+/// the same path the finger would.
+private struct VideoDockPlacement: ViewModifier, Animatable {
+    var progress: CGFloat
+    let size: CGSize
+    let slot: CGRect
+
+    var animatableData: CGFloat {
+        get { progress }
+        set { progress = newValue }
+    }
+
+    func body(content: Content) -> some View {
+        let p = min(max(progress, 0), 1)
+        let width = max(size.width, 1)
+        let scale = 1 + (slot.width / width - 1) * p
+        content
+            .frame(width: width, height: width * 9 / 16)
+            // Counter-scaled, so it ends as the slot's own 8-point corners.
+            .clipShape(RoundedRectangle(cornerRadius: 8 * p / scale, style: .continuous))
+            .scaleEffect(scale, anchor: .topLeading)
+            .offset(x: slot.minX * p, y: slot.minY * p)
+            // With the zero minimums: sideways it's taller than the screen,
+            // and without them it stretched the whole player past it.
+            .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .topLeading)
+    }
+}
+
+/// The video that travels. At rest in the full player it waits underneath,
+/// already drawing, so a drag has a picture from its first moment.
+private struct MovingVideo<Content: View>: View {
+    let dock: VideoDock
+    let size: CGSize
+    let slot: CGRect
+    @ViewBuilder let content: () -> Content
+
+    private var showing: Bool { dock.moving || dock.progress > 0 }
+
+    var body: some View {
+        content()
+            .modifier(VideoDockPlacement(progress: dock.progress, size: size, slot: slot))
+            .opacity(dock.fading ? 0 : 1)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+            .zIndex(showing ? 2 : -1)
+    }
+}
+
+/// Hides the real video in the full player while its copy is away.
+private struct VideoCover: View {
+    let dock: VideoDock
+
+    var body: some View {
+        if dock.moving || dock.progress > 0 {
+            Color.black.allowsHitTesting(false)
+        }
+    }
+}
+
+/// The full player sinks and fades as the video leaves it.
+private struct FullPlayerDocking: ViewModifier {
+    let dock: VideoDock
+    let height: CGFloat
+
+    func body(content: Content) -> some View {
+        content.modifier(Fade(progress: dock.progress, height: height))
+    }
+
+    struct Fade: ViewModifier, Animatable {
+        var progress: CGFloat
+        let height: CGFloat
+
+        var animatableData: CGFloat {
+            get { progress }
+            set { progress = newValue }
+        }
+
+        func body(content: Content) -> some View {
+            let p = min(max(progress, 0), 1)
+            content
+                .opacity(1 - min(p / 0.45, 1))
+                .offset(y: p * height * 0.3)
+        }
+    }
+}
+
+/// The miniplayer's bar comes in under the video as it arrives.
+private struct MiniPlayerDocking: ViewModifier {
+    let dock: VideoDock
+
+    func body(content: Content) -> some View {
+        content.modifier(Fade(progress: dock.progress))
+    }
+
+    struct Fade: ViewModifier, Animatable {
+        var progress: CGFloat
+
+        var animatableData: CGFloat {
+            get { progress }
+            set { progress = newValue }
+        }
+
+        func body(content: Content) -> some View {
+            let p = min(max(progress, 0), 1)
+            content
+                .opacity(max((p - 0.6) / 0.4, 0))
+                .offset(y: (1 - p) * 20)
+        }
+    }
+}
+
+/// How far the full-screen player is pulled down, kept out of the player's
+/// own state so a pull redraws only what moves.
 @Observable
 private final class PullDown {
     private(set) var value: CGFloat = 0
@@ -1684,13 +1978,9 @@ private final class PullDown {
 
 private struct PullDownOffset: ViewModifier {
     let pull: PullDown
-    let fades: Bool
-    var active = true
 
     func body(content: Content) -> some View {
-        content
-            .offset(y: active ? pull.value : 0)
-            .opacity(active && fades ? 1 - Double(min(pull.value / 600, 0.4)) : 1)
+        content.offset(y: pull.value)
     }
 }
 
@@ -1734,6 +2024,8 @@ private struct PlayerSurface: UIViewRepresentable {
     let player: AVPlayer
     /// This is the place the video is drawn now.
     var active = true
+    /// Keeps drawing the player even while another layer is the main one.
+    var mirror = false
 
     func makeUIView(context: Context) -> PlayerLayerView {
         let view = PlayerLayerView()
@@ -1746,10 +2038,11 @@ private struct PlayerSurface: UIViewRepresentable {
     func updateUIView(_ view: PlayerLayerView, context: Context) {
         // Not while parked in the background (see PlayerLayerView).
         guard UIApplication.shared.applicationState != .background else { return }
-        let wanted: AVPlayer? = active ? player : nil
-        guard view.playerLayer.player !== wanted else { return }
-        view.playerLayer.player = wanted
-        if active {
+        let wanted: AVPlayer? = active || mirror ? player : nil
+        if view.playerLayer.player !== wanted { view.playerLayer.player = wanted }
+        let becameActive = active && !view.isMain
+        view.isMain = active
+        if becameActive {
             if view.pictureInPicture == nil {
                 view.pictureInPicture = PictureInPicture.shared.attach(view.playerLayer)
             } else {
@@ -1763,6 +2056,8 @@ private struct PlayerSurface: UIViewRepresentable {
         var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
         /// iOS's floating player, started by AVKit when the app is left.
         var pictureInPicture: AVPictureInPictureController?
+        /// The layer Picture in Picture goes through.
+        var isMain = false
         private var parked: AVPlayer?
         private var observers: [NSObjectProtocol] = []
 
