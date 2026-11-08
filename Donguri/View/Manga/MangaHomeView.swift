@@ -97,6 +97,8 @@ struct MangaHomeView: View {
             }
             .background(FullSwipeBack())
         }
+        // Over the whole stack, so a rename started on any screen shows.
+        .modifier(LibraryRenameAlert())
         .task {
             await sources.loadInstalled()
         }
@@ -164,6 +166,9 @@ struct MangaCover: View {
                 }
             }
             .clipped()
+            // Clipping doesn't clip taps: a wide cover's hidden edges took
+            // the taps meant for the title next to it.
+            .contentShape(Rectangle())
         .task(id: url) {
             guard let url, let link = URL(string: url) else { return }
             image = await MangaCovers.image(for: link, source: MangaSources.shared.installed[sourceKey])

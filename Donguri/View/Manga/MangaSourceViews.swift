@@ -438,7 +438,7 @@ struct MangaDetailView: View {
             }
         }
         .listStyle(.insetGrouped)
-        .navigationTitle(Text(verbatim: manga.title))
+        .navigationTitle(Text(verbatim: library.name(mangaID) ?? manga.title))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -464,7 +464,7 @@ struct MangaDetailView: View {
                 .frame(width: 96, height: 144)
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             VStack(alignment: .leading, spacing: 6) {
-                Text(verbatim: manga.title)
+                Text(verbatim: library.name(mangaID) ?? manga.title)
                     .font(.headline)
                 if let authors = manga.authors, !authors.isEmpty {
                     Text(verbatim: authors.joined(separator: ", "))

@@ -359,10 +359,12 @@ final class PagerCollectionView: UICollectionView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        if bounds.size != lastSize {
-            let first = lastSize == .zero
+        // The first size too: the jump to where reading stopped comes
+        // before the pager has one and is refused, which left it at the
+        // start of the row (right to left, the end card).
+        if bounds.size != lastSize, bounds.width > 0 {
             lastSize = bounds.size
-            if !first { onResize?() }
+            onResize?()
         }
     }
 

@@ -5407,6 +5407,22 @@
         }
       }
     },
+    "元の名前に戻す" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restore Original Name"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "元の名前に戻す"
+          }
+        }
+      }
+    },
     "先読み" : {
       "localizations" : {
         "en" : {
@@ -9059,6 +9075,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "種類"
+          }
+        }
+      }
+    },
+    "空にすると元の名前に戻ります。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Leave it empty to restore the original name."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "空にすると元の名前に戻ります。"
           }
         }
       }

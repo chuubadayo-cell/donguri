@@ -41,7 +41,7 @@ struct LocalHomeList: View {
                                 .frame(width: 44, height: 64)
                                 .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(verbatim: series.title)
+                                Text(verbatim: MangaLibrary.shared.name(MangaLibrary.localID(series.id)) ?? series.title)
                                     .lineLimit(2)
                                 Group {
                                     if series.volumes.count == 1 {
@@ -176,6 +176,9 @@ struct LocalCover: View {
                 }
             }
             .clipped()
+            // Clipping doesn't clip taps: a wide cover's hidden edges took
+            // the taps meant for the title next to it.
+            .contentShape(Rectangle())
         .task(id: volume?.id) {
             guard let volume else { return }
             image = await LocalCovers.cover(for: volume)
@@ -256,7 +259,7 @@ struct LocalSeriesView: View {
                 }
             }
         }
-        .navigationTitle(Text(verbatim: series?.title ?? ""))
+        .navigationTitle(Text(verbatim: MangaLibrary.shared.name(MangaLibrary.localID(seriesID)) ?? series?.title ?? ""))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if let series {

@@ -233,6 +233,18 @@ struct LibraryMenuItems: View {
                     Text("棚")
                 }
             }
+            Button {
+                LibraryRenamer.shared.start(id: entryID, current: library.name(entryID) ?? originalTitle)
+            } label: {
+                Label("名前を変更", systemImage: "pencil")
+            }
+            if library.name(entryID) != nil {
+                Button {
+                    library.rename(entryID, to: "")
+                } label: {
+                    Label("元の名前に戻す", systemImage: "arrow.uturn.backward")
+                }
+            }
             Button(role: .destructive) {
                 toggle()
             } label: {
@@ -248,6 +260,13 @@ struct LibraryMenuItems: View {
         }
     }
 
+    private var originalTitle: String {
+        switch target {
+        case .source(_, let manga): manga.title
+        case .local(_, let title): title
+        }
+    }
+
     private func toggle() {
         switch target {
         case .source(let key, let manga):
@@ -258,6 +277,39 @@ struct LibraryMenuItems: View {
             } else {
                 library.toggleSaved(local: LocalSeries(id: id, title: title, volumes: []))
             }
+        }
+    }
+}
+
+/// Asks for a title's new name. The long-press menu can't hold an alert,
+/// so it starts one here and the tab shows it (`LibraryRenameAlert`).
+@Observable
+final class LibraryRenamer {
+    static let shared = LibraryRenamer()
+    var id: String?
+    var text = ""
+    private init() {}
+
+    func start(id: String, current: String) {
+        text = current
+        self.id = id
+    }
+}
+
+struct LibraryRenameAlert: ViewModifier {
+    @State private var renamer = LibraryRenamer.shared
+
+    func body(content: Content) -> some View {
+        content.alert(Text("名前を変更"), isPresented: Binding(get: { renamer.id != nil },
+                                                          set: { if !$0 { renamer.id = nil } })) {
+            TextField(text: $renamer.text) { Text("名前") }
+            Button("変更") {
+                if let id = renamer.id { MangaLibrary.shared.rename(id, to: renamer.text) }
+                renamer.id = nil
+            }
+            Button("キャンセル", role: .cancel) { renamer.id = nil }
+        } message: {
+            Text("空にすると元の名前に戻ります。")
         }
     }
 }

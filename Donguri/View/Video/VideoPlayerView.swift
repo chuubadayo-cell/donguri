@@ -1975,7 +1975,9 @@ private struct FullPlayerDocking: ViewModifier {
     }
 }
 
-/// The miniplayer's bar comes in under the video as it arrives.
+/// The miniplayer's bar fades in under the video as it arrives. It doesn't
+/// move: the video aims for a spot measured inside it, and a sliding bar
+/// moved that spot mid-flight (the video landed low, then jumped up).
 private struct MiniPlayerDocking: ViewModifier {
     let dock: VideoDock
 
@@ -1995,7 +1997,6 @@ private struct MiniPlayerDocking: ViewModifier {
             let p = min(max(progress, 0), 1)
             content
                 .opacity(max((p - 0.6) / 0.4, 0))
-                .offset(y: (1 - p) * 20)
         }
     }
 }

@@ -73,6 +73,8 @@ final class MangaLibrary {
         var finished: Set<String> = []
         /// Library entry id → when it was last read.
         var lastRead: [String: Date]?
+        /// Library entry id → the name the user gave it.
+        var names: [String: String]?
     }
 
     private var stored = Stored()
@@ -104,11 +106,11 @@ final class MangaLibrary {
     var entries: [LibraryEntry] {
         let lastRead = stored.lastRead ?? [:]
         let fromSources = stored.saved.map { item in
-            LibraryEntry(id: item.id, title: item.manga.title, kind: .source(key: item.sourceKey, manga: item.manga),
+            LibraryEntry(id: item.id, title: name(item.id) ?? item.manga.title, kind: .source(key: item.sourceKey, manga: item.manga),
                          added: item.added, lastRead: lastRead[item.id], shelves: item.shelves ?? [])
         }
         let local = (stored.localSaved ?? []).map { item in
-            LibraryEntry(id: item.id, title: item.title, kind: .local(seriesID: item.seriesID),
+            LibraryEntry(id: item.id, title: name(item.id) ?? item.title, kind: .local(seriesID: item.seriesID),
                          added: item.added, lastRead: lastRead[item.id], shelves: item.shelves ?? [])
         }
         return (fromSources + local).sorted { ($0.lastRead ?? $0.added) > ($1.lastRead ?? $1.added) }
@@ -168,6 +170,20 @@ final class MangaLibrary {
             changed = true
         }
         if changed { scheduleSave() }
+    }
+
+    // MARK: Names
+
+    /// The name the user gave a title (by library entry id), if any.
+    func name(_ id: String) -> String? { stored.names?[id] }
+
+    /// Renames a title; an empty name gives it back its own.
+    func rename(_ id: String, to name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        var names = stored.names ?? [:]
+        names[id] = trimmed.isEmpty ? nil : trimmed
+        stored.names = names
+        scheduleSave()
     }
 
     // MARK: Shelves
